@@ -78,8 +78,10 @@ const DECK_VIEW_FALLBACK_H = 1100;
 /** resize でレイアウト/再描画を走らせない。停止後 1 回だけ。 */
 const RESIZE_DEBOUNCE_MS = 120;
 
-/** Addicted型: この幅未満を 1 カラム（上 Deck / 下 Inventory）、以上を 2 カラム。 */
-const DECK_LAYOUT_BREAKPOINT = 820;
+/** デッキレイアウトのヒステリシス: 幅が狭い→縦並びに切り替えるしきい値。これ未満で縦並び。 */
+const DECK_LAYOUT_MOBILE_MAX = 820;
+/** 幅が広い→横並びに戻すしきい値。これ以上で横並び。MOBILE_MAX と WIDE_MIN の間では前回のレイアウトを維持し、ギリギリでチラつかないようにする。 */
+const DECK_LAYOUT_WIDE_MIN = 880;
 const DECK_PANEL_PADDING = 24;
 const DECK_PANEL_GAP = 16;
 const DECK_BOTTOM_PADDING = 24;
@@ -132,6 +134,8 @@ export class GameScene extends Phaser.Scene {
   /** Deck 時のみ: 前回 setParentSize した親サイズ。ループ防止＋Summon 復帰時は 0 にして再取得させる */
   private lastDeckParentW = 0;
   private lastDeckParentH = 0;
+  /** 前回の Deck レイアウトが横並びだったか。ヒステリシス用。null は未確定。 */
+  private lastDeckLayoutWide: boolean | null = null;
   private slotPickerObjects: Phaser.GameObjects.GameObject[] = [];
   private unlockModalObjects: Phaser.GameObjects.GameObject[] = [];
   private leftPanelContainer!: Phaser.GameObjects.Container;
@@ -545,19 +549,19 @@ export class GameScene extends Phaser.Scene {
     if (DEBUG_LAYOUT) {
       const canvas = this.scale.game?.canvas;
       const parent = canvas?.parentElement;
-      const rect = parent?.getBoundingClientRect?.();
+      const deckRect = this.screen === 'deck' ? this.getDeckParentRect() : null;
       const scaleW = this.scale.width;
       const scaleH = this.scale.height;
       console.log('[BirdGame] forceLayoutAndRender', {
         screen: this.screen,
-        'canvas.parent.getBoundingClientRect': rect ? { width: rect.width, height: rect.height } : null,
-        'this.scale.width': scaleW,
-        'this.scale.height': scaleH,
+        deckParentRect: deckRect,
+        'this.scale': { width: scaleW, height: scaleH },
         canvasHidden: parent?.classList?.contains('canvas-card-hidden') ?? null,
         canvasDisplay: canvas ? getComputedStyle(canvas).display : null,
       });
     }
     if (this.screen === 'deck') {
+      this.clearDeckParentSizeCache();
       this.syncDeckScaleFromParent();
       this.applyDeckLayout();
       this.renderDeckUI();
@@ -575,8 +579,32 @@ export class GameScene extends Phaser.Scene {
     revokeWalletPermissions().catch(() => {}); // 次回 Connect でダイアログが出るようにするだけ。UI は待たない
   }
 
+  /** Deck 時の親サイズ。幅は canvas に引きずられない shell-content-inner から取り、狭い幅で縦並びに切り替わるようにする。高さはカードから。 */
+  private getDeckParentRect(): { w: number; h: number } {
+    if (this.useDomShell() && typeof document !== 'undefined') {
+      const inner = document.getElementById('shell-content-inner');
+      const card = document.getElementById('shell-canvas-card');
+      const innerR = inner?.getBoundingClientRect?.();
+      const cardR = card?.getBoundingClientRect?.();
+      if (innerR && innerR.width > 0) {
+        const h = cardR && cardR.height > 0 ? Math.floor(cardR.height) : DECK_VIEW_FALLBACK_H;
+        return {
+          w: Math.max(1, Math.floor(innerR.width)),
+          h: Math.max(1, h),
+        };
+      }
+    }
+    const parent = this.scale.game?.canvas?.parentElement;
+    const rect = parent?.getBoundingClientRect?.();
+    return {
+      w: Math.max(1, Math.floor(rect?.width ?? 800)),
+      h: Math.max(1, Math.floor(rect?.height ?? DECK_VIEW_FALLBACK_H)),
+    };
+  }
+
   private showDeck(): void {
     this.screen = 'deck';
+    this.lastDeckLayoutWide = null;
     this.setDrawerOpen(false);
     this.mainPanel.setVisible(false);
     this.deckPanel.setVisible(true);
@@ -585,10 +613,7 @@ export class GameScene extends Phaser.Scene {
 
     const scale = this.scale as Phaser.Scale.ScaleManager & { scaleMode: number };
     scale.scaleMode = Phaser.Scale.RESIZE;
-    const parent = this.scale.game?.canvas?.parentElement;
-    const rect = parent?.getBoundingClientRect?.();
-    const w = Math.max(1, Math.floor(rect?.width ?? 800));
-    const h = Math.max(1, Math.floor(rect?.height ?? DECK_VIEW_FALLBACK_H));
+    const { w, h } = this.getDeckParentRect();
     this.scale.setParentSize(w, h);
     try {
       this.scale.refresh();
@@ -789,10 +814,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Deck 表示中のみ: 親 DOM サイズを再取得して setParentSize + refresh。lastDeckParent* と異なる時だけ更新してループ防止。 */
   private syncDeckScaleFromParent(): void {
-    const parent = this.scale.game?.canvas?.parentElement;
-    const rect = parent?.getBoundingClientRect?.();
-    const w = Math.max(1, Math.floor(rect?.width ?? 800));
-    const h = Math.max(1, Math.floor(rect?.height ?? DECK_VIEW_FALLBACK_H));
+    const { w, h } = this.getDeckParentRect();
     if (w === this.lastDeckParentW && h === this.lastDeckParentH) return;
     this.lastDeckParentW = w;
     this.lastDeckParentH = h;
@@ -815,10 +837,7 @@ export class GameScene extends Phaser.Scene {
     const scale = this.scale as Phaser.Scale.ScaleManager & { scaleMode: number };
     if (tabId === 'deck') {
       scale.scaleMode = Phaser.Scale.RESIZE;
-      const parent = this.scale.game?.canvas?.parentElement;
-      const rect = parent?.getBoundingClientRect?.();
-      const w = Math.max(1, rect && rect.width > 0 ? Math.floor(rect.width) : 800);
-      const h = Math.max(1, rect && rect.height > 0 ? Math.floor(rect.height) : DECK_VIEW_FALLBACK_H);
+      const { w, h } = this.getDeckParentRect();
       this.scale.setParentSize(w, h);
     } else if (tabId === 'farming') {
       scale.scaleMode = Phaser.Scale.FIT;
@@ -831,7 +850,23 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Addicted型ブレークポイントレイアウト。w < 820 = 1カラム、以上 = 2カラム。scale.width/height 使用。 */
+  /** ヒステリシス付きで「縦並びか」を決める。820px 未満で縦、880px 以上で横、その間は前回を維持。 */
+  private resolveDeckLayoutMobile(w: number): boolean {
+    if (w >= DECK_LAYOUT_WIDE_MIN) {
+      this.lastDeckLayoutWide = true;
+      return false;
+    }
+    if (w <= DECK_LAYOUT_MOBILE_MAX) {
+      this.lastDeckLayoutWide = false;
+      return true;
+    }
+    if (this.lastDeckLayoutWide === null) {
+      this.lastDeckLayoutWide = w >= (DECK_LAYOUT_MOBILE_MAX + DECK_LAYOUT_WIDE_MIN) / 2;
+    }
+    return !this.lastDeckLayoutWide;
+  }
+
+  /** デッキ枠・インベントリ枠の配置ルール。ヒステリシスで横並び⇔縦並びを切り替え。 */
   private getDeckLayout(): {
     w: number;
     h: number;
@@ -865,7 +900,7 @@ export class GameScene extends Phaser.Scene {
   } {
     const w = this.scale.width;
     const h = this.scale.height;
-    const isMobile = w < DECK_LAYOUT_BREAKPOINT;
+    const isMobile = this.resolveDeckLayoutMobile(w);
     const padding = DECK_PANEL_PADDING;
     const gap = DECK_PANEL_GAP;
     const bottomPadding = DECK_BOTTOM_PADDING;
@@ -891,14 +926,14 @@ export class GameScene extends Phaser.Scene {
     if (isMobile) {
       leftW = w - padding * 2;
       rightW = w - padding * 2;
-      deckCols = 2;
-      deckRows = 4;
-      slotGap = 6;
-      slotSize = Math.min(76, Math.floor((leftW - padding * 2 - slotGap) / 2));
-      standbyCols = 3;
+      deckCols = 4;
+      deckRows = 2;
+      slotGap = 8;
+      const maxDeckGridWidth = Math.max(1, leftW - padding * 2);
+      slotSize = Math.min(72, Math.floor((maxDeckGridWidth - (deckCols - 1) * slotGap) / deckCols));
+      standbyCols = 4;
       standbyGap = 6;
-      const baseStandbyCell = Math.min(72, Math.max(48, Math.floor((rightW - padding * 2 - (3 - 1) * standbyGap) / 3)));
-      // Inventory の鳥アイコンがデッキより大きくならないように、セルサイズを deck の slotSize 以下に抑える
+      const baseStandbyCell = Math.min(72, Math.max(48, Math.floor((rightW - padding * 2 - (standbyCols - 1) * standbyGap) / standbyCols)));
       standbyCell = Math.min(baseStandbyCell, slotSize);
       const deckGridH = deckRows * slotSize + (deckRows - 1) * slotGap;
       leftPanelH = 28 + deckGridH + 24;
@@ -906,9 +941,11 @@ export class GameScene extends Phaser.Scene {
       leftPanelY = top;
       rightPanelX = padding;
       rightPanelY = top + leftPanelH + gap;
-      rightPanelH = h - rightPanelY - bottomPadding;
+      rightPanelH = Math.max(200, h - rightPanelY - bottomPadding);
     } else {
-      leftW = Math.max(360, Math.min(420, Math.floor(w * 0.32)));
+      // 狭い幅では左パネルを小さくして Inventory に余裕を持たせる
+      const targetLeft = Math.floor(w * (w < 900 ? 0.34 : 0.32));
+      leftW = Math.max(300, Math.min(420, targetLeft));
       rightW = w - leftW - padding * 3;
       leftPanelX = padding;
       leftPanelY = top;
@@ -1052,8 +1089,9 @@ export class GameScene extends Phaser.Scene {
     if (needsStandbyScroll) {
       if (this.standbyMaskGraphics && this.deckStandbyWrapper) {
         this.standbyMaskGraphics.clear();
+        this.standbyMaskGraphics.setPosition(inventoryLocalLeft, inventoryLocalTop);
         this.standbyMaskGraphics.fillStyle(0xffffff, 1);
-        this.standbyMaskGraphics.fillRect(inventoryLocalLeft, inventoryLocalTop, standbyGridW, standbyVisibleH);
+        this.standbyMaskGraphics.fillRect(0, 0, standbyGridW, standbyVisibleH);
         const mask = this.standbyMaskGraphics.createGeometryMask();
         this.deckStandbyWrapper.setMask(mask);
       }

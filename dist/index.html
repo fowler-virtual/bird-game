@@ -32,7 +32,14 @@
       }
 
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html { -webkit-tap-highlight-color: transparent; }
+      html {
+        -webkit-tap-highlight-color: transparent;
+        /* Prevent global centering shift when page scrollbar toggles (Title ↔ Shell). */
+        scrollbar-gutter: stable;
+      }
+      @supports not (scrollbar-gutter: stable) {
+        html { overflow-y: scroll; }
+      }
       body {
         width: 100%;
         min-height: 100vh;
@@ -206,14 +213,27 @@
         border-bottom-color: var(--accent);
       }
 
+      /* ----- Status row (status cards + tab intro share same container width) ----- */
+      .status-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
       /* ----- Content ----- */
       .shell-content {
         flex: 1;
         padding: var(--content-pad);
         overflow: auto;
+        /* Prevent layout shift when scrollbar appears/disappears (tab content height differs). */
+        scrollbar-gutter: stable;
         display: flex;
         flex-direction: column;
         gap: 16px;
+      }
+      /* Fallback for browsers without scrollbar-gutter: always reserve scrollbar width. */
+      @supports not (scrollbar-gutter: stable) {
+        .shell-content { overflow-y: scroll; }
       }
       .shell-content-inner {
         max-width: var(--content-max);
@@ -225,23 +245,38 @@
       }
       .tab-pane { display: none; flex-direction: column; gap: 16px; }
       .tab-pane.active { display: flex; }
-      .deck-tab-hint {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin: 0;
+      /* 各タブ上部の帯（Farming風の枠）＋タイトル/説明 */
+      .summon-pane-body {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
       }
-      .gacha-heading {
+      .tab-intro {
+        display: none;
+        padding: 16px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      @media (min-width: 768px) {
+        .tab-intro { padding: 20px 16px; }
+      }
+      .tab-intro.active {
+        display: block;
+      }
+      .tab-intro-title {
         font-size: 18px;
         font-weight: 600;
         letter-spacing: 0.02em;
         color: var(--text);
-        margin: 0 0 8px 0;
+        margin: 0 0 6px 0;
       }
-      .gacha-intro {
+      .tab-intro-text {
         font-size: 13px;
         color: var(--text-muted);
         line-height: 1.5;
-        margin: 0 0 20px 0;
+        margin: 0;
       }
       .gacha-cta {
         display: flex;
@@ -297,16 +332,271 @@
         border-radius: var(--radius);
       }
 
-      /* ----- Status cards (Addicted: flat, bordered, small radius) ----- */
+      /* ----- Farming pane (HTML+CSS) ----- */
+      .farming-pane-body { padding: 0; display: flex; flex-direction: column; gap: 16px; }
+      .loft-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+      }
+      .loft-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 16px 0;
+      }
+      .loft-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        max-width: 420px;
+        margin: 0 auto 20px;
+      }
+      .loft-cell {
+        aspect-ratio: 1;
+        max-width: 88px;
+        max-height: 88px;
+        margin: 0 auto;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .loft-cell.locked { opacity: 0.5; pointer-events: none; }
+      .loft-cell img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .loft-actions { display: flex; justify-content: center; }
+      .loft-upgrade-btn {
+        min-height: 44px;
+        padding: 0 24px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .loft-upgrade-btn:hover:not(:disabled) {
+        background: var(--bg-card);
+        border-color: var(--text-muted);
+      }
+      .loft-upgrade-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      .farming-accrual-hint {
+        min-height: 24px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--accent);
+        text-align: center;
+              }
+
+      /* ----- Deck pane (HTML+CSS) ----- */
+      .deck-pane-body {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      @media (min-width: 768px) {
+        .deck-pane-body { flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+      }
+      .deck-section, .inventory-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        flex: 1;
+        min-width: 0;
+      }
+      @media (min-width: 768px) {
+        .deck-section { max-width: 380px; }
+        .inventory-section { flex: 2; min-width: 280px; }
+      }
+      .deck-section-title, .inventory-section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 12px 0;
+      }
+      .deck-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+      }
+      .deck-slot {
+        aspect-ratio: 1;
+        min-height: 64px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .deck-slot:hover:not(.locked) { background: var(--bg-card); border-color: var(--text-muted); }
+      .deck-slot.locked { opacity: 0.5; cursor: not-allowed; }
+      .deck-slot.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+      .deck-slot .deck-slot-id { font-size: 11px; color: var(--text-muted); position: absolute; top: 4px; left: 6px; }
+      .deck-slot .deck-slot-bird { width: 100%; height: 100%; object-fit: contain; }
+      .deck-slot { position: relative; }
+      .inventory-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin: 0 0 12px 0;
+      }
+      .inventory-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 8px;
+              }
+      .inventory-cell {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+        min-width: 0;
+      }
+      .inventory-cell:hover { background: var(--bg-card); border-color: var(--text-muted); }
+      .inventory-cell.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+      .inventory-cell:disabled { opacity: 0.5; cursor: not-allowed; }
+      .inventory-cell img { width: 100%; max-width: 56px; height: auto; aspect-ratio: 1; object-fit: contain; }
+      .inventory-cell .inventory-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--accent); }
+
+      /* ----- Loft upgrade modal ----- */
+      .loft-modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .loft-modal-backdrop.visible { display: flex; }
+      .loft-modal {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        max-width: 360px;
+        width: 100%;
+      }
+      .loft-modal-title { font-size: 18px; margin: 0 0 12px 0; color: var(--text); }
+      .loft-modal-cost { font-size: 14px; color: var(--text-muted); margin: 0 0 20px 0; }
+      .loft-modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+      .loft-modal-cancel, .loft-modal-confirm {
+        min-height: 40px;
+        padding: 0 20px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: var(--radius);
+        cursor: pointer;
+      }
+      .loft-modal-cancel {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      .loft-modal-confirm {
+        background: var(--accent);
+        border: none;
+        color: #fff;
+      }
+      .loft-modal-confirm:hover:not(:disabled) { opacity: 0.95; }
+      .loft-modal-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+      .debug-pane-body { padding: 0; display: flex; flex-direction: column; gap: 16px; }
+      .debug-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+      }
+      .debug-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 40px;
+        flex-wrap: wrap;
+      }
+      .debug-row + .debug-row { margin-top: 12px; }
+      .debug-row-readonly { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+      .debug-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-muted);
+        min-width: 72px;
+      }
+      .debug-value {
+        font-size: 16px;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent);
+        min-width: 60px;
+      }
+      .debug-set-btn {
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+      }
+      .debug-set-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+      .debug-loft-btns { display: flex; gap: 8px; }
+      .debug-loft-btn {
+        width: 32px;
+        height: 28px;
+        padding: 0;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+      }
+      .debug-loft-btn:hover { background: var(--bg-hover); }
+
+      /* ----- Status cards: fixed on all tabs (sticky in scroll area) ----- */
       .status-cards {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
+        /* 下の tab-intro と左右の位置を完全に揃えるため、コンテナ幅いっぱいまで広げる */
+        width: 100%;
       }
       @media (min-width: 480px) {
         .status-cards { grid-template-columns: repeat(4, 1fr); }
       }
+      .status-cards-global {
+        /* No sticky: status bar is outside scroll area, so position is always the same */
+      }
       .status-card {
+        display: flex;
+        flex-direction: column;
         padding: 14px 16px;
         background: var(--bg-card);
         border: 1px solid var(--border);
@@ -318,6 +608,9 @@
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.06em;
+        line-height: 1.2;
+        /* Reserve 2 lines so values align even when a label wraps (e.g. CURRENT SEED). */
+        min-height: 2.4em;
         margin-bottom: 6px;
       }
       .status-card-value {
@@ -325,15 +618,23 @@
         font-weight: 600;
         font-variant-numeric: tabular-nums;
         color: var(--accent);
+        margin-top: auto;
       }
       @media (min-width: 768px) {
         .status-card-value { font-size: 20px; }
       }
 
-      /* ----- Canvas card (hidden on Gacha tab) ----- */
-      .canvas-card-hidden { display: none !important; }
+      /* ----- Canvas card (Summon 時は画面外に移すだけ。display:none にすると親が 0x0 になり Phaser の scale が壊れる) ----- */
+      .canvas-card-hidden {
+        position: absolute !important;
+        left: -9999px !important;
+        top: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
       .canvas-card {
         flex: 1;
+        min-width: 0; /* flex で幅が子(canvas)に引きずられないようにする。これがないと狭い幅で横スクロールのままになる */
         min-height: 320px;
         background: var(--bg-card);
         border: 1px solid var(--border);
@@ -348,6 +649,7 @@
       }
       .canvas-card #app {
         flex: 1;
+        min-width: 0; /* 同上。Phaser の getParentBounds() が #app の幅を読むため、ここが縮まらないと狭い幅でレイアウトが切り替わらない */
         min-height: 280px;
         position: relative;
         display: flex;
@@ -386,7 +688,7 @@
         .shell-header { padding-left: calc(var(--content-pad) + env(safe-area-inset-left)); padding-right: calc(var(--content-pad) + env(safe-area-inset-right)); }
       }
     </style>
-    <script type="module" crossorigin src="./assets/index-Dlln5qAM.js"></script>
+    <script type="module" crossorigin src="./assets/index-CCOUpBgt.js"></script>
   </head>
   <body>
     <div id="title-ui" aria-hidden="true">
@@ -415,11 +717,12 @@
         <button type="button" class="shell-tab active" data-tab="farming">Farming</button>
         <button type="button" class="shell-tab" data-tab="summon">Summon</button>
         <button type="button" class="shell-tab" data-tab="deck">Deck</button>
+        <button type="button" class="shell-tab" data-tab="debug">Debug</button>
       </nav>
       <main class="shell-content">
-        <div class="shell-content-inner">
-          <div id="pane-farming" class="tab-pane active">
-            <div class="status-cards">
+        <div class="shell-content-inner" id="shell-content-inner">
+          <div class="status-panel">
+            <div class="status-cards status-cards-global">
               <div class="status-card">
                 <div class="status-card-label">Current SEED</div>
                 <div class="status-card-value" id="dom-seed">0</div>
@@ -437,27 +740,109 @@
                 <div class="status-card-value" id="dom-loft-slots">2/8</div>
               </div>
             </div>
-            <div class="placeholder-pane">Place birds in the Loft to earn SEED over time. Unlock more slots by upgrading Loft level.</div>
+          </div>
+          <div class="tab-intro active" data-tab="farming">
+            <h2 class="tab-intro-title">Farming</h2>
+            <p class="tab-intro-text">Place birds in the Loft to earn SEED over time. Unlock more slots by upgrading Loft level.</p>
+          </div>
+          <div class="tab-intro" data-tab="summon">
+            <h2 class="tab-intro-title">Summon</h2>
+            <p class="tab-intro-text">Use SEED or $BIRD to summon new birds. Summoned birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
+          </div>
+          <div class="tab-intro" data-tab="deck">
+            <h2 class="tab-intro-title">Deck</h2>
+            <p class="tab-intro-text">Assign birds from your active deck (top) and inventory (bottom).</p>
+          </div>
+          <div class="tab-intro" data-tab="debug">
+            <h2 class="tab-intro-title">Debug</h2>
+            <p class="tab-intro-text">Adjust SEED, $Bird, and Loft level for testing.</p>
+          </div>
+
+          <div id="pane-farming" class="tab-pane active">
+            <div class="farming-pane-body">
+              <div class="loft-section">
+                <h3 class="loft-section-title">Loft</h3>
+                <div class="loft-grid" id="loft-grid" role="grid" aria-label="Loft slots">
+                  <!-- 4x2 cells filled by JS -->
+                </div>
+                <div class="loft-actions">
+                  <button type="button" class="loft-upgrade-btn" id="loft-upgrade-btn">Upgrade Loft</button>
+                </div>
+              </div>
+              <div class="farming-accrual-hint" id="farming-accrual-hint" aria-live="polite"></div>
+            </div>
           </div>
           <div id="pane-summon" class="tab-pane">
-            <h2 class="gacha-heading">Summon</h2>
-            <p class="gacha-intro">Use SEED or $BIRD to summon new birds. Summoned birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
-            <div class="gacha-cta">
-              <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Summon 1x</button>
-              <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Summon 10x</button>
-            </div>
-            <div class="gacha-results-section">
-              <div class="gacha-results-label">Summoned birds</div>
-              <div class="gacha-results-area" id="gacha-results-area">
-                <p class="gacha-results-empty" id="gacha-results-empty">No summons yet.</p>
+            <div class="summon-pane-body">
+              <div class="gacha-cta">
+                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Summon 1x</button>
+                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Summon 10x</button>
+              </div>
+              <div class="gacha-results-section">
+                <div class="gacha-results-label">Summoned birds</div>
+                <div class="gacha-results-area" id="gacha-results-area">
+                  <p class="gacha-results-empty" id="gacha-results-empty">No summons yet.</p>
+                </div>
               </div>
             </div>
           </div>
           <div id="pane-deck" class="tab-pane">
-            <p class="deck-tab-hint">Assign birds from your active deck (top) and inventory (bottom).</p>
+            <div class="deck-pane-body">
+              <section class="deck-section" aria-label="Deck">
+                <h3 class="deck-section-title">Deck</h3>
+                <div class="deck-grid" id="deck-grid" role="grid">
+                  <!-- 8 slots filled by JS -->
+                </div>
+              </section>
+              <section class="inventory-section" aria-label="Inventory">
+                <h3 class="inventory-section-title">Inventory</h3>
+                <p class="inventory-hint" id="deck-inventory-hint">Tap a bird below to assign to deck.</p>
+                <div class="inventory-grid" id="inventory-grid" role="grid">
+                  <!-- cells filled by JS -->
+                </div>
+              </section>
+            </div>
+          </div>
+          <div id="pane-debug" class="tab-pane">
+            <div class="debug-pane-body">
+              <div class="debug-section">
+                <div class="debug-row">
+                  <span class="debug-label">SEED</span>
+                  <span class="debug-value" id="dom-debug-seed">0</span>
+                  <button type="button" class="debug-set-btn" id="dom-debug-seed-set">Set</button>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">$Bird</span>
+                  <span class="debug-value" id="dom-debug-bird">0</span>
+                  <button type="button" class="debug-set-btn" id="dom-debug-bird-set">Set</button>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">Loft Level</span>
+                  <span class="debug-value" id="dom-debug-loft">1</span>
+                  <div class="debug-loft-btns">
+                    <button type="button" class="debug-loft-btn" data-level="1">1</button>
+                    <button type="button" class="debug-loft-btn" data-level="2">2</button>
+                    <button type="button" class="debug-loft-btn" data-level="3">3</button>
+                    <button type="button" class="debug-loft-btn" data-level="4">4</button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="canvas-card" id="shell-canvas-card">
             <div id="app"></div>
+          </div>
+
+          <!-- Loft upgrade confirm modal (DOM-driven) -->
+          <div class="loft-modal-backdrop" id="loft-modal-backdrop" aria-hidden="true">
+            <div class="loft-modal" id="loft-modal" role="dialog" aria-labelledby="loft-modal-title">
+              <h2 class="loft-modal-title" id="loft-modal-title">Upgrade Loft</h2>
+              <p class="loft-modal-cost" id="loft-modal-cost"></p>
+              <div class="loft-modal-actions">
+                <button type="button" class="loft-modal-cancel" id="loft-modal-cancel">Cancel</button>
+                <button type="button" class="loft-modal-confirm" id="loft-modal-confirm">Upgrade</button>
+              </div>
+            </div>
           </div>
         </div>
       </main>

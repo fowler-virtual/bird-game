@@ -5,6 +5,8 @@
 
 import { GameStore } from './store/GameStore';
 import type { BirdRarity } from './types';
+import * as farmingView from './views/farmingView';
+import * as deckView from './views/deckView';
 
 const SHELL_ID = 'game-shell';
 
@@ -18,8 +20,8 @@ const ASSET_BASE =
     }
   })();
 
-/** レアリティ → public の画像パス（Summon 結果・Vite base 対応） */
-const RARITY_IMAGE_SRC: Record<BirdRarity, string> = {
+/** レアリティ → public の画像パス（Summon 結果・Farming/Deck DOM 表示・Vite base 対応） */
+export const RARITY_IMAGE_SRC: Record<BirdRarity, string> = {
   Common: ASSET_BASE + 'common.png',
   Uncommon: ASSET_BASE + 'uncommon.png',
   Rare: ASSET_BASE + 'rare.png',
@@ -55,34 +57,7 @@ export function setCanvasCardDeckView(deck: boolean): void {
   else el.classList.remove(CANVAS_DECK_VIEW_CLASS);
 }
 
-/** タブ切替用: 2 フレーム待って DOM リフローを確定させてから Phaser を更新し、アイコンサイズが初回と復帰時でずれないようにする。 */
-function runPhaserAfterTabSwitch(tabId: string): void {
-  const scene = (window as unknown as {
-    __gameScene?: {
-      showMain: () => void;
-      showDeck: () => void;
-      clearDeckParentSizeCache?: () => void;
-      ensureScaleModeForTab?: (tabId: string) => void;
-      forceLayoutAndRender?: () => void;
-    };
-  }).__gameScene;
-  if (!scene) return;
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      if (tabId === 'farming') scene.showMain?.();
-      else if (tabId === 'deck') {
-        scene.clearDeckParentSizeCache?.();
-        scene.showDeck?.();
-      }
-      scene.ensureScaleModeForTab?.(tabId);
-      requestAnimationFrame(() => {
-        scene.forceLayoutAndRender?.();
-      });
-    });
-  });
-}
-
-/** 初回表示などで呼ぶ。タブ切替では runPhaserAfterTabSwitch を使う。refresh で Phaser が undefined.width を読む場合があるため try/catch で保護。 */
+/** 初回表示などで呼ぶ。refresh で Phaser が undefined.width を読む場合があるため try/catch で保護。 */
 export function refreshPhaserScale(): void {
   const game = (window as unknown as { __phaserGame?: { scale?: { refresh?: () => void } } }).__phaserGame;
   const refresh = game?.scale?.refresh;
@@ -98,7 +73,7 @@ export function refreshPhaserScale(): void {
   });
 }
 
-/** リサイズ終了後に1回だけ refresh。連続 fire で毎フレーム refresh するとジリジリするため、短い debounce で止まってから即反映。 */
+/** リサイズ終了後に1回だけ Phaser scale を refresh（Farming/Deck は DOM のため不要）。 */
 const RESIZE_DEBOUNCE_MS = 16;
 let resizeTimeoutId = 0;
 function onWindowResize(): void {
@@ -131,7 +106,8 @@ export function switchToTab(tabId: string): void {
   if (intro) intro.classList.add(TAB_ACTIVE);
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
-  const hideCanvas = tabId === 'summon' || tabId === 'debug';
+  /* Farming / Deck は HTML ビューなのでキャンバスを非表示にし、下に Phaser の名残が出ないようにする */
+  const hideCanvas = tabId === 'summon' || tabId === 'debug' || tabId === 'farming' || tabId === 'deck';
   if (canvasCard) {
     if (hideCanvas) {
       const r = canvasCard.getBoundingClientRect();
@@ -167,9 +143,12 @@ export function switchToTab(tabId: string): void {
     });
   }
 
+  if (lastTabId === 'farming' && tabId !== 'farming') farmingView.stop();
   lastTabId = tabId;
+
   if (tabId === 'debug') refreshDebugPane();
-  if (tabId === 'farming' || tabId === 'deck') runPhaserAfterTabSwitch(tabId);
+  if (tabId === 'farming') farmingView.refresh();
+  if (tabId === 'deck') deckView.refresh();
 }
 
 function onTabClick(e: Event): void {
@@ -288,6 +267,8 @@ function initTabListeners(): void {
   const disconnectBtn = document.getElementById('shell-disconnect-btn');
   if (disconnectBtn) disconnectBtn.addEventListener('click', () => disconnectCallback?.());
   initDebugPaneListeners();
+  farmingView.init();
+  deckView.init();
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', onWindowResize);
   }
@@ -317,6 +298,9 @@ export function showGameShell(): void {
   if (networkEl) networkEl.textContent = '—';
 
   initTabListeners();
+
+  /* 初回表示でも switchToTab を通すことでキャンバスを非表示にし、下に名残が出ないようにする */
+  switchToTab('farming');
 
   refreshPhaserScale();
 }
