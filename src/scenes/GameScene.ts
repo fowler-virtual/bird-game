@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GameStore } from '../store/GameStore';
 import { hideTitleUI, showTitleUI } from '../titleUI';
 import { destroyPhaserGame } from '../phaserBoot';
-import { isShellVisible, updateShellStatus, switchToTab, setCanvasCardDeckView, setDisconnectCallback, getLastCanvasCardSize } from '../domShell';
+import { isShellVisible, updateShellStatus, setCanvasCardDeckView, setDisconnectCallback, getLastCanvasCardSize } from '../domShell';
 import { revokeWalletPermissions } from '../wallet';
 import {
   getBirdById,
@@ -392,8 +392,8 @@ export class GameScene extends Phaser.Scene {
   /** ビューポート幅のみで判定。Farming 復帰時は scale.displaySize が未更新だとずれるため、DOM シェル時はキャンバス親の幅で判定。 */
   private isNarrowViewport(): boolean {
     if (this.useDomShell() && this.screen === 'main') {
-      const el = typeof document !== 'undefined' && document.getElementById('shell-canvas-card');
-      const w = el?.getBoundingClientRect?.()?.width;
+      const el = typeof document !== 'undefined' ? document.getElementById('shell-canvas-card') : null;
+      const w = el?.getBoundingClientRect()?.width;
       if (typeof w === 'number' && w > 0) return w < MOBILE_BREAKPOINT;
     }
     return this.scale.displaySize.width < MOBILE_BREAKPOINT;
@@ -598,8 +598,8 @@ export class GameScene extends Phaser.Scene {
       if (saved && saved.width > 0 && saved.height > 0) {
         this.scale.setParentSize(saved.width, saved.height);
       } else {
-        const card = typeof document !== 'undefined' && document.getElementById('shell-canvas-card');
-        const r = card?.getBoundingClientRect?.();
+        const card = typeof document !== 'undefined' ? document.getElementById('shell-canvas-card') : null;
+        const r = card?.getBoundingClientRect();
         if (r && r.width > 0 && r.height > 0) {
           this.scale.setParentSize(Math.floor(r.width), Math.floor(r.height));
         } else {
@@ -1115,10 +1115,10 @@ export class GameScene extends Phaser.Scene {
         birdSpritesLength: this.birdSprites.length,
         firstChild: first
           ? {
-              visible: (first as Phaser.GameObjects.Components.Visible).visible,
-              alpha: (first as Phaser.GameObjects.Components.Alpha).alpha,
-              x: (first as Phaser.GameObjects.Components.Transform).x,
-              y: (first as Phaser.GameObjects.Components.Transform).y,
+              visible: (first as unknown as Phaser.GameObjects.Components.Visible).visible,
+              alpha: (first as unknown as Phaser.GameObjects.Components.Alpha).alpha,
+              x: (first as unknown as Phaser.GameObjects.Components.Transform).x,
+              y: (first as unknown as Phaser.GameObjects.Components.Transform).y,
             }
           : null,
       });
