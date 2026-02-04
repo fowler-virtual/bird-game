@@ -131,8 +131,9 @@ export function switchToTab(tabId: string): void {
   if (intro) intro.classList.add(TAB_ACTIVE);
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
+  const hideCanvas = tabId === 'summon' || tabId === 'debug';
   if (canvasCard) {
-    if (tabId === 'summon') {
+    if (hideCanvas) {
       const r = canvasCard.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) {
         lastCanvasCardSize = { width: Math.floor(r.width), height: Math.floor(r.height) };
@@ -167,6 +168,7 @@ export function switchToTab(tabId: string): void {
   }
 
   lastTabId = tabId;
+  if (tabId === 'debug') refreshDebugPane();
   if (tabId === 'farming' || tabId === 'deck') runPhaserAfterTabSwitch(tabId);
 }
 
@@ -210,6 +212,62 @@ function runGachaFromDom(count: 1 | 10): void {
   game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
 }
 
+function emitGameRefresh(): void {
+  const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
+  game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
+}
+
+function refreshDebugPane(): void {
+  const seedEl = document.getElementById('dom-debug-seed');
+  const birdEl = document.getElementById('dom-debug-bird');
+  const loftEl = document.getElementById('dom-debug-loft');
+  if (seedEl) seedEl.textContent = String(GameStore.state.seed);
+  if (birdEl) birdEl.textContent = String(GameStore.birdCurrency);
+  if (loftEl) loftEl.textContent = String(GameStore.state.loftLevel);
+}
+
+function initDebugPaneListeners(): void {
+  const seedSetBtn = document.getElementById('dom-debug-seed-set');
+  const birdSetBtn = document.getElementById('dom-debug-bird-set');
+  if (seedSetBtn) {
+    seedSetBtn.addEventListener('click', () => {
+      const v = window.prompt('SEED', String(GameStore.state.seed));
+      if (v == null) return;
+      const n = Math.floor(Number(v));
+      if (!Number.isFinite(n) || n < 0) return;
+      GameStore.setState({ seed: n });
+      GameStore.save();
+      refreshDebugPane();
+      emitGameRefresh();
+    });
+  }
+  if (birdSetBtn) {
+    birdSetBtn.addEventListener('click', () => {
+      const v = window.prompt('$Bird', String(GameStore.birdCurrency));
+      if (v == null) return;
+      const n = Math.floor(Number(v));
+      if (!Number.isFinite(n) || n < 0) return;
+      GameStore.birdCurrency = n;
+      GameStore.save();
+      refreshDebugPane();
+      emitGameRefresh();
+    });
+  }
+  document.querySelectorAll('.debug-loft-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const level = Number((btn as HTMLElement).getAttribute('data-level'));
+      if (level < 1 || level > 4) return;
+      GameStore.setState({
+        loftLevel: level,
+        unlockedDeckCount: (level * 2) as 2 | 4 | 6 | 8,
+      });
+      GameStore.save();
+      refreshDebugPane();
+      emitGameRefresh();
+    });
+  });
+}
+
 let tabListenersInited = false;
 let disconnectCallback: (() => void) | null = null;
 
@@ -229,6 +287,7 @@ function initTabListeners(): void {
   if (gacha10Btn) gacha10Btn.addEventListener('click', () => runGachaFromDom(10));
   const disconnectBtn = document.getElementById('shell-disconnect-btn');
   if (disconnectBtn) disconnectBtn.addEventListener('click', () => disconnectCallback?.());
+  initDebugPaneListeners();
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', onWindowResize);
   }

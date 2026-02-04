@@ -29,11 +29,29 @@ export class DebugScene extends Phaser.Scene {
     super({ key: 'DebugScene' });
   }
 
+  /** ブラウザで見えているキャンバス領域の中央をシーン座標で返す（パネルを画面中央に出すため） */
+  private getViewportCenter(): { x: number; y: number } {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    if (typeof window === 'undefined') return { x: w / 2, y: h / 2 };
+    const canvas = this.scale.game?.canvas;
+    const rect = canvas?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return { x: w / 2, y: h / 2 };
+    const viewX = window.innerWidth / 2;
+    const viewY = window.innerHeight / 2;
+    const tx = (viewX - rect.left) / rect.width;
+    const ty = (viewY - rect.top) / rect.height;
+    const cx = Phaser.Math.Clamp(tx, 0.2, 0.8) * w;
+    const cy = Phaser.Math.Clamp(ty, 0.2, 0.8) * h;
+    return { x: cx, y: cy };
+  }
+
   create(): void {
     const w = this.scale.width;
     const h = this.scale.height;
-    const cx = w / 2;
-    const cy = h / 2;
+    const vp = this.getViewportCenter();
+    const cx = vp.x;
+    const cy = vp.y;
     const left = cx - PANEL_W / 2 + PAD;
     const valueX = cx - 60;
     const btnX = cx + 70;

@@ -146,6 +146,23 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
+  /** 現在ブラウザに見えているキャンバス領域の「画面中央」に近いシーン座標を返す（モーダル配置用） */
+  private getViewportCenter(): { x: number; y: number } {
+    const w = this.scale.width;
+    const h = this.scale.height;
+    if (typeof window === 'undefined') return { x: w / 2, y: h / 2 };
+    const canvas = this.scale.game?.canvas;
+    const rect = canvas?.getBoundingClientRect();
+    if (!rect || rect.height <= 0) {
+      return { x: w / 2, y: h / 2 };
+    }
+    const viewCenterY = window.innerHeight / 2;
+    const t = (viewCenterY - rect.top) / rect.height;
+    // 画面外すぎないように 20%〜80% の範囲にクランプ
+    const ty = Phaser.Math.Clamp(t, 0.2, 0.8);
+    return { x: w / 2, y: ty * h };
+  }
+
   preload(): void {
     let base = '/';
     try {
@@ -1406,8 +1423,9 @@ export class GameScene extends Phaser.Scene {
     this.hideUnlockConfirm();
     const w = this.scale.width;
     const h = this.scale.height;
-    // Deck 画面ではキャンバス高さが大きく（1100px 以上）なりやすく、単純な h/2 だとモーダルが下寄せに見えるため、少し上に寄せる
-    const centerY = this.screen === 'deck' ? h / 2 - 120 : h / 2;
+    // ブラウザで実際に見えているキャンバス領域の中央付近にモーダルを出す
+    const vp = this.getViewportCenter();
+    const centerY = vp.y;
     const depth = 1001;
     const bg = this.add
       .rectangle(w / 2, h / 2, w, h, 0x000000, 0.5)

@@ -332,6 +332,60 @@
         border-radius: var(--radius);
       }
 
+      .debug-pane-body { padding: 0; display: flex; flex-direction: column; gap: 16px; }
+      .debug-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+      }
+      .debug-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 40px;
+        flex-wrap: wrap;
+      }
+      .debug-row + .debug-row { margin-top: 12px; }
+      .debug-row-readonly { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+      .debug-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text-muted);
+        min-width: 72px;
+      }
+      .debug-value {
+        font-size: 16px;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent);
+        min-width: 60px;
+      }
+      .debug-set-btn {
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+      }
+      .debug-set-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+      .debug-loft-btns { display: flex; gap: 8px; }
+      .debug-loft-btn {
+        width: 32px;
+        height: 28px;
+        padding: 0;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+      }
+      .debug-loft-btn:hover { background: var(--bg-hover); }
+
       /* ----- Status cards: fixed on all tabs (sticky in scroll area) ----- */
       .status-cards {
         display: grid;
@@ -466,6 +520,7 @@
         <button type="button" class="shell-tab active" data-tab="farming">Farming</button>
         <button type="button" class="shell-tab" data-tab="summon">Summon</button>
         <button type="button" class="shell-tab" data-tab="deck">Deck</button>
+        <button type="button" class="shell-tab" data-tab="debug">Debug</button>
       </nav>
       <main class="shell-content">
         <div class="shell-content-inner">
@@ -501,6 +556,10 @@
             <h2 class="tab-intro-title">Deck</h2>
             <p class="tab-intro-text">Assign birds from your active deck (top) and inventory (bottom).</p>
           </div>
+          <div class="tab-intro" data-tab="debug">
+            <h2 class="tab-intro-title">Debug</h2>
+            <p class="tab-intro-text">Adjust SEED, $Bird, and Loft level for testing.</p>
+          </div>
 
           <div id="pane-farming" class="tab-pane active"></div>
           <div id="pane-summon" class="tab-pane">
@@ -518,6 +577,32 @@
             </div>
           </div>
           <div id="pane-deck" class="tab-pane"></div>
+          <div id="pane-debug" class="tab-pane">
+            <div class="debug-pane-body">
+              <div class="debug-section">
+                <div class="debug-row">
+                  <span class="debug-label">SEED</span>
+                  <span class="debug-value" id="dom-debug-seed">0</span>
+                  <button type="button" class="debug-set-btn" id="dom-debug-seed-set">Set</button>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">$Bird</span>
+                  <span class="debug-value" id="dom-debug-bird">0</span>
+                  <button type="button" class="debug-set-btn" id="dom-debug-bird-set">Set</button>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">Loft Level</span>
+                  <span class="debug-value" id="dom-debug-loft">1</span>
+                  <div class="debug-loft-btns">
+                    <button type="button" class="debug-loft-btn" data-level="1">1</button>
+                    <button type="button" class="debug-loft-btn" data-level="2">2</button>
+                    <button type="button" class="debug-loft-btn" data-level="3">3</button>
+                    <button type="button" class="debug-loft-btn" data-level="4">4</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="canvas-card" id="shell-canvas-card">
             <div id="app"></div>
           </div>
