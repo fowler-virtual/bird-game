@@ -122,10 +122,13 @@ export function switchToTab(tabId: string): void {
   }
   document.querySelectorAll('.shell-tab').forEach((el) => el.classList.remove(TAB_ACTIVE));
   document.querySelectorAll('.tab-pane').forEach((el) => el.classList.remove(TAB_ACTIVE));
+  document.querySelectorAll('.tab-intro').forEach((el) => el.classList.remove(TAB_ACTIVE));
   const tab = document.querySelector(`.shell-tab[data-tab="${tabId}"]`);
   const pane = document.getElementById(`pane-${tabId}`);
+  const intro = document.querySelector(`.tab-intro[data-tab="${tabId}"]`);
   if (tab) tab.classList.add(TAB_ACTIVE);
   if (pane) pane.classList.add(TAB_ACTIVE);
+  if (intro) intro.classList.add(TAB_ACTIVE);
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
   if (canvasCard) {

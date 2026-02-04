@@ -638,24 +638,32 @@ export class GameScene extends Phaser.Scene {
 
     this.deckHeaderBar = this.add
       .rectangle(w / 2, headerCenterY, w, DECK_HEADER_H, BG_ELEVATED, 1)
-      .setStrokeStyle(0).setOrigin(0.5, 0.5);
+      .setStrokeStyle(0)
+      .setOrigin(0.5, 0.5)
+      .setVisible(false); // 上部の帯は不要なので非表示
     this.deckHeaderLine = this.add
       .rectangle(w / 2, DECK_HEADER_H, w, 1, BORDER, 1)
-      .setOrigin(0.5, 0);
+      .setOrigin(0.5, 0)
+      .setVisible(false);
     this.deckPanel.add([this.deckHeaderBar, this.deckHeaderLine]);
 
+    // Deck 画面上部の SEED / $BIRD 表示は DOM 側のステータスカードと重複するため非表示にする
     const seedLabel = this.add
       .text(DECK_PANEL_PADDING, headerCenterY, 'SEED', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setVisible(false);
     this.deckSeedText = this.add
       .text(DECK_PANEL_PADDING + 42, headerCenterY, '0', { resolution: TEXT_RESOLUTION, fontSize: FONT_H3, color: ACCENT_HEX })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setVisible(false);
     const birdLabel = this.add
       .text(DECK_PANEL_PADDING + 110, headerCenterY, '$BIRD', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setVisible(false);
     this.birdText = this.add
       .text(DECK_PANEL_PADDING + 168, headerCenterY, '0', { resolution: TEXT_RESOLUTION, fontSize: FONT_H3, color: TEXT_PRIMARY })
-      .setOrigin(0, 0.5);
+      .setOrigin(0, 0.5)
+      .setVisible(false);
     this.deckPanel.add([seedLabel, this.deckSeedText, birdLabel, this.birdText]);
 
     const sectionTitleStyle = { resolution: TEXT_RESOLUTION, fontSize: FONT_H2, color: TEXT_PRIMARY };
@@ -868,11 +876,13 @@ export class GameScene extends Phaser.Scene {
       rightW = w - padding * 2;
       deckCols = 2;
       deckRows = 4;
-      slotSize = Math.min(76, Math.floor((leftW - padding * 2 - 6) / 2));
       slotGap = 6;
+      slotSize = Math.min(76, Math.floor((leftW - padding * 2 - slotGap) / 2));
       standbyCols = 3;
-      standbyCell = Math.min(72, Math.max(48, Math.floor((rightW - padding * 2 - (3 - 1) * 6) / 3)));
       standbyGap = 6;
+      const baseStandbyCell = Math.min(72, Math.max(48, Math.floor((rightW - padding * 2 - (3 - 1) * standbyGap) / 3)));
+      // Inventory の鳥アイコンがデッキより大きくならないように、セルサイズを deck の slotSize 以下に抑える
+      standbyCell = Math.min(baseStandbyCell, slotSize);
       const deckGridH = deckRows * slotSize + (deckRows - 1) * slotGap;
       leftPanelH = 28 + deckGridH + 24;
       leftPanelX = padding;
@@ -890,11 +900,15 @@ export class GameScene extends Phaser.Scene {
       rightPanelH = h - top - bottomPadding;
       deckCols = 4;
       deckRows = 2;
-      slotSize = 100;
+      // 左パネル幅に収まるようにスロットサイズを調整（4体並べても Inventory 側にはみ出さない）
       slotGap = 10;
+      const maxDeckGridWidth = Math.max(1, leftW - padding * 2);
+      slotSize = Math.min(100, Math.floor((maxDeckGridWidth - (deckCols - 1) * slotGap) / deckCols));
       standbyCols = 5;
-      standbyCell = Math.min(80, Math.max(64, Math.floor((rightW - padding * 2 - (5 - 1) * 8) / 5)));
       standbyGap = 8;
+      const baseStandbyCell = Math.min(80, Math.max(64, Math.floor((rightW - padding * 2 - (5 - 1) * standbyGap) / 5)));
+      // Inventory の鳥アイコンがデッキより大きくならないように、セルサイズを deck の slotSize 以下に抑える
+      standbyCell = Math.min(baseStandbyCell, slotSize);
       const deckGridH = deckRows * slotSize + (deckRows - 1) * slotGap;
       leftPanelH = 28 + deckGridH + 24;
     }
@@ -1392,6 +1406,8 @@ export class GameScene extends Phaser.Scene {
     this.hideUnlockConfirm();
     const w = this.scale.width;
     const h = this.scale.height;
+    // Deck 画面ではキャンバス高さが大きく（1100px 以上）なりやすく、単純な h/2 だとモーダルが下寄せに見えるため、少し上に寄せる
+    const centerY = this.screen === 'deck' ? h / 2 - 120 : h / 2;
     const depth = 1001;
     const bg = this.add
       .rectangle(w / 2, h / 2, w, h, 0x000000, 0.5)
@@ -1400,20 +1416,20 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => this.hideUnlockConfirm());
     this.unlockModalObjects.push(bg);
     this.unlockModalObjects.push(
-      this.add.rectangle(w / 2, h / 2, 280, 140, BG_CARD, 1).setStrokeStyle(1, BORDER).setDepth(depth + 1),
-      this.add.text(w / 2, h / 2 - 40, 'Upgrade Loft?', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2),
-      this.add.text(w / 2, h / 2 - 14, '2 slots will be unlocked.', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0.5).setDepth(depth + 2),
-      this.add.text(w / 2, h / 2 + 10, `${cost.seed} SEED + ${cost.bird} $B`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: canAfford ? TEXT_PRIMARY : '#f87171' }).setOrigin(0.5).setDepth(depth + 2),
-      this.add.text(w / 2, h / 2 + 32, shortageMsg, { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: '#f87171' }).setOrigin(0.5).setDepth(depth + 2).setVisible(!canAfford)
+      this.add.rectangle(w / 2, centerY, 280, 140, BG_CARD, 1).setStrokeStyle(1, BORDER).setDepth(depth + 1),
+      this.add.text(w / 2, centerY - 40, 'Upgrade Loft?', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2),
+      this.add.text(w / 2, centerY - 14, '2 slots will be unlocked.', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0.5).setDepth(depth + 2),
+      this.add.text(w / 2, centerY + 10, `${cost.seed} SEED + ${cost.bird} $B`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: canAfford ? TEXT_PRIMARY : '#f87171' }).setOrigin(0.5).setDepth(depth + 2),
+      this.add.text(w / 2, centerY + 32, shortageMsg, { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: '#f87171' }).setOrigin(0.5).setDepth(depth + 2).setVisible(!canAfford)
     );
     const cancelBtn = this.add
-      .rectangle(w / 2 - 52, h / 2 + 54, 64, 26, BG_ELEVATED)
+      .rectangle(w / 2 - 52, centerY + 54, 64, 26, BG_ELEVATED)
       .setDepth(depth + 2)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.hideUnlockConfirm());
-    this.unlockModalObjects.push(cancelBtn, this.add.text(w / 2 - 52, h / 2 + 54, 'Cancel', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
+    this.unlockModalObjects.push(cancelBtn, this.add.text(w / 2 - 52, centerY + 54, 'Cancel', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
     const upgradeBtn = this.add
-      .rectangle(w / 2 + 52, h / 2 + 54, 64, 26, canAfford ? SUCCESS : BG_HOVER)
+      .rectangle(w / 2 + 52, centerY + 54, 64, 26, canAfford ? SUCCESS : BG_HOVER)
       .setDepth(depth + 2)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
@@ -1423,7 +1439,7 @@ export class GameScene extends Phaser.Scene {
         this.renderMainUI();
         this.events.emit('refresh');
       });
-    this.unlockModalObjects.push(upgradeBtn, this.add.text(w / 2 + 52, h / 2 + 54, 'Upgrade', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
+    this.unlockModalObjects.push(upgradeBtn, this.add.text(w / 2 + 52, centerY + 54, 'Upgrade', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
   }
 
   private hideUnlockConfirm(): void {

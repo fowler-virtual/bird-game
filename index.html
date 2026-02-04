@@ -213,17 +213,11 @@
         border-bottom-color: var(--accent);
       }
 
-      /* ----- Status bar: fixed between tabs and content (same position on all tabs) ----- */
-      .shell-status-bar {
-        flex-shrink: 0;
-        padding: 12px var(--content-pad);
-        background: var(--bg-surface);
-        border-bottom: 1px solid var(--border);
-      }
-      .shell-status-bar-inner {
-        max-width: var(--content-max);
-        margin: 0 auto;
-        width: 100%;
+      /* ----- Status row (status cards + tab intro share same container width) ----- */
+      .status-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
       }
 
       /* ----- Content ----- */
@@ -251,30 +245,38 @@
       }
       .tab-pane { display: none; flex-direction: column; gap: 16px; }
       .tab-pane.active { display: flex; }
-      /* Summon: same horizontal padding as placeholder-pane so position matches Farming/Deck */
+      /* 各タブ上部の帯（Farming風の枠）＋タイトル/説明 */
       .summon-pane-body {
-        padding: 0 20px;
+        padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 0;
+        gap: 16px;
       }
-      .deck-tab-hint {
-        font-size: 12px;
-        color: var(--text-muted);
-        margin: 0;
+      .tab-intro {
+        display: none;
+        padding: 16px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
       }
-      .gacha-heading {
+      @media (min-width: 768px) {
+        .tab-intro { padding: 20px 16px; }
+      }
+      .tab-intro.active {
+        display: block;
+      }
+      .tab-intro-title {
         font-size: 18px;
         font-weight: 600;
         letter-spacing: 0.02em;
         color: var(--text);
-        margin: 0 0 8px 0;
+        margin: 0 0 6px 0;
       }
-      .gacha-intro {
+      .tab-intro-text {
         font-size: 13px;
         color: var(--text-muted);
         line-height: 1.5;
-        margin: 0 0 20px 0;
+        margin: 0;
       }
       .gacha-cta {
         display: flex;
@@ -335,6 +337,8 @@
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
+        /* 下の tab-intro と左右の位置を完全に揃えるため、コンテナ幅いっぱいまで広げる */
+        width: 100%;
       }
       @media (min-width: 480px) {
         .status-cards { grid-template-columns: repeat(4, 1fr); }
@@ -432,7 +436,6 @@
         .shell-content { padding-bottom: calc(var(--content-pad) + env(safe-area-inset-bottom)); }
         .shell-tabs { padding-left: calc(var(--content-pad) + env(safe-area-inset-left)); padding-right: calc(var(--content-pad) + env(safe-area-inset-right)); }
         .shell-header { padding-left: calc(var(--content-pad) + env(safe-area-inset-left)); padding-right: calc(var(--content-pad) + env(safe-area-inset-right)); }
-        .shell-status-bar { padding-left: calc(var(--content-pad) + env(safe-area-inset-left)); padding-right: calc(var(--content-pad) + env(safe-area-inset-right)); }
       }
     </style>
   </head>
@@ -464,37 +467,44 @@
         <button type="button" class="shell-tab" data-tab="summon">Summon</button>
         <button type="button" class="shell-tab" data-tab="deck">Deck</button>
       </nav>
-      <section class="shell-status-bar" aria-label="Game status">
-        <div class="shell-status-bar-inner">
-          <div class="status-cards status-cards-global">
-            <div class="status-card">
-              <div class="status-card-label">Current SEED</div>
-              <div class="status-card-value" id="dom-seed">0</div>
-            </div>
-            <div class="status-card">
-              <div class="status-card-label">SEED/day</div>
-              <div class="status-card-value" id="dom-seed-per-day">0</div>
-            </div>
-            <div class="status-card">
-              <div class="status-card-label">Loft Lv</div>
-              <div class="status-card-value" id="dom-loft-level">1</div>
-            </div>
-            <div class="status-card">
-              <div class="status-card-label">Slots</div>
-              <div class="status-card-value" id="dom-loft-slots">2/8</div>
-            </div>
-          </div>
-        </div>
-      </section>
       <main class="shell-content">
         <div class="shell-content-inner">
-          <div id="pane-farming" class="tab-pane active">
-            <div class="placeholder-pane">Place birds in the Loft to earn SEED over time. Unlock more slots by upgrading Loft level.</div>
+          <div class="status-panel">
+            <div class="status-cards status-cards-global">
+              <div class="status-card">
+                <div class="status-card-label">Current SEED</div>
+                <div class="status-card-value" id="dom-seed">0</div>
+              </div>
+              <div class="status-card">
+                <div class="status-card-label">SEED/day</div>
+                <div class="status-card-value" id="dom-seed-per-day">0</div>
+              </div>
+              <div class="status-card">
+                <div class="status-card-label">Loft Lv</div>
+                <div class="status-card-value" id="dom-loft-level">1</div>
+              </div>
+              <div class="status-card">
+                <div class="status-card-label">Slots</div>
+                <div class="status-card-value" id="dom-loft-slots">2/8</div>
+              </div>
+            </div>
           </div>
+          <div class="tab-intro active" data-tab="farming">
+            <h2 class="tab-intro-title">Farming</h2>
+            <p class="tab-intro-text">Place birds in the Loft to earn SEED over time. Unlock more slots by upgrading Loft level.</p>
+          </div>
+          <div class="tab-intro" data-tab="summon">
+            <h2 class="tab-intro-title">Summon</h2>
+            <p class="tab-intro-text">Use SEED or $BIRD to summon new birds. Summoned birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
+          </div>
+          <div class="tab-intro" data-tab="deck">
+            <h2 class="tab-intro-title">Deck</h2>
+            <p class="tab-intro-text">Assign birds from your active deck (top) and inventory (bottom).</p>
+          </div>
+
+          <div id="pane-farming" class="tab-pane active"></div>
           <div id="pane-summon" class="tab-pane">
             <div class="summon-pane-body">
-              <h2 class="gacha-heading">Summon</h2>
-              <p class="gacha-intro">Use SEED or $BIRD to summon new birds. Summoned birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
               <div class="gacha-cta">
                 <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Summon 1x</button>
                 <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Summon 10x</button>
@@ -507,9 +517,7 @@
               </div>
             </div>
           </div>
-          <div id="pane-deck" class="tab-pane">
-            <p class="deck-tab-hint">Assign birds from your active deck (top) and inventory (bottom).</p>
-          </div>
+          <div id="pane-deck" class="tab-pane"></div>
           <div class="canvas-card" id="shell-canvas-card">
             <div id="app"></div>
           </div>
