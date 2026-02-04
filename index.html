@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Bird Game</title>
+    <style>
+      /* ========== Addicted-style design tokens (responsive-first) ========== */
+      :root {
+        --bg-deep: #08080a;
+        --bg-surface: #0e0e10;
+        --bg-card: #12121a;
+        --bg-elevated: #18181f;
+        --border: #1e1e24;
+        --border-subtle: #1a1a1f;
+        --text: #f4f4f5;
+        --text-muted: #6b6b75;
+        --accent: #10b981;
+        --accent-dim: rgba(16, 185, 129, 0.15);
+        --radius: 4px;
+        --header-h: 56px;
+        --tabs-h: 44px;
+        --touch-min: 44px;
+        --content-pad: 16px;
+        --content-max: 960px;
+      }
+
+      @media (min-width: 768px) {
+        :root {
+          --content-pad: 20px;
+        }
+      }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html {
+        -webkit-tap-highlight-color: transparent;
+        /* Prevent global centering shift when page scrollbar toggles (Title ↔ Shell). */
+        scrollbar-gutter: stable;
+      }
+      @supports not (scrollbar-gutter: stable) {
+        html { overflow-y: scroll; }
+      }
+      body {
+        width: 100%;
+        min-height: 100vh;
+        background: var(--bg-deep);
+        color: var(--text);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.4;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ========== Title (Connect) screen — Addicted tone ========== */
+      #title-ui {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        background: var(--bg-deep);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        padding: 24px;
+      }
+      #title-ui.visible { display: flex; }
+      #title-ui .title-text {
+        font-size: clamp(22px, 5vw, 28px);
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        color: var(--text);
+      }
+      #title-ui .subtitle {
+        font-size: 13px;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+      }
+      #connect-wallet-btn {
+        min-height: var(--touch-min);
+        padding: 0 28px;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        background: var(--bg-elevated);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      #connect-wallet-btn:hover {
+        background: var(--bg-card);
+        border-color: var(--text-muted);
+      }
+      #connect-wallet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+      /* ========== Game shell ========== */
+      #game-shell {
+        display: none;
+        flex: 1;
+        flex-direction: column;
+        min-height: 100vh;
+        z-index: 0;
+      }
+      #game-shell.visible { display: flex; }
+
+      /* ----- Header ----- */
+      .shell-header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        min-height: var(--header-h);
+        padding: 0 var(--content-pad);
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .shell-header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: var(--touch-min);
+      }
+      .shell-logo {
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--text);
+      }
+      .shell-subtitle {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .shell-wallet-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .shell-wallet {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: var(--touch-min);
+        padding: 0 14px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .shell-wallet-address { color: var(--text-muted); }
+      .shell-network { font-size: 11px; color: var(--text-muted); opacity: 0.8; }
+      .shell-disconnect-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s, border-color 0.15s;
+      }
+      .shell-disconnect-btn:hover {
+        color: var(--text);
+        background: var(--bg-elevated);
+        border-color: var(--text-muted);
+      }
+      .shell-disconnect-btn svg { width: 18px; height: 18px; }
+
+      /* ----- Tabs (sticky + z-index so one tap always switches from Summon tab) ----- */
+      .shell-tabs {
+        flex-shrink: 0;
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        gap: 0;
+        min-height: var(--tabs-h);
+        padding: 0 var(--content-pad);
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .shell-tabs::-webkit-scrollbar { height: 0; }
+      .shell-tab {
+        flex-shrink: 0;
+        min-height: var(--touch-min);
+        min-width: 80px;
+        padding: 0 16px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-muted);
+        background: none;
+        border: none;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        transition: color 0.15s, border-color 0.15s;
+        touch-action: manipulation;
+      }
+      .shell-tab:hover { color: var(--text); }
+      .shell-tab.active {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+
+      /* ----- Status bar: fixed between tabs and content (same position on all tabs) ----- */
+      .shell-status-bar {
+        flex-shrink: 0;
+        padding: 12px var(--content-pad);
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
+      }
+      .shell-status-bar-inner {
+        max-width: var(--content-max);
+        margin: 0 auto;
+        width: 100%;
+      }
+
+      /* ----- Content ----- */
+      .shell-content {
+        flex: 1;
+        padding: var(--content-pad);
+        overflow: auto;
+        /* Prevent layout shift when scrollbar appears/disappears (tab content height differs). */
+        scrollbar-gutter: stable;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      /* Fallback for browsers without scrollbar-gutter: always reserve scrollbar width. */
+      @supports not (scrollbar-gutter: stable) {
+        .shell-content { overflow-y: scroll; }
+      }
+      .shell-content-inner {
+        max-width: var(--content-max);
+        margin: 0 auto;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .tab-pane { display: none; flex-direction: column; gap: 16px; }
+      .tab-pane.active { display: flex; }
+      /* Summon: same horizontal padding as placeholder-pane so position matches Farming/Deck */
+      .summon-pane-body {
+        padding: 0 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .deck-tab-hint {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin: 0;
+      }
+      .gacha-heading {
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--text);
+        margin: 0 0 8px 0;
+      }
+      .gacha-intro {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.5;
+        margin: 0 0 20px 0;
+      }
+      .gacha-cta {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .shell-gacha-spin-btn {
+        flex: 1;
+        min-width: 120px;
+        min-height: 48px;
+        padding: 0 16px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.15s;
+        box-shadow: 0 2px 8px var(--accent-dim);
+      }
+      .shell-gacha-spin-btn:hover { opacity: 0.95; transform: scale(1.02); }
+      .shell-gacha-spin-btn:active { transform: scale(0.98); }
+      @media (min-width: 400px) {
+        .shell-gacha-spin-btn { min-height: 52px; font-size: 16px; }
+      }
+      .gacha-results-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+      }
+      .gacha-results-label {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 12px;
+      }
+      .gacha-results-area { min-height: 80px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+      .gacha-results-empty {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin: 0;
+      }
+      .gacha-results-item {
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+
+      /* ----- Status cards: fixed on all tabs (sticky in scroll area) ----- */
+      .status-cards {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+      }
+      @media (min-width: 480px) {
+        .status-cards { grid-template-columns: repeat(4, 1fr); }
+      }
+      .status-cards-global {
+        /* No sticky: status bar is outside scroll area, so position is always the same */
+      }
+      .status-card {
+        display: flex;
+        flex-direction: column;
+        padding: 14px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+      }
+      .status-card-label {
+        font-size: 10px;
+        font-weight: 500;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        line-height: 1.2;
+        /* Reserve 2 lines so values align even when a label wraps (e.g. CURRENT SEED). */
+        min-height: 2.4em;
+        margin-bottom: 6px;
+      }
+      .status-card-value {
+        font-size: 18px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        color: var(--accent);
+        margin-top: auto;
+      }
+      @media (min-width: 768px) {
+        .status-card-value { font-size: 20px; }
+      }
+
+      /* ----- Canvas card (Summon 時は画面外に移すだけ。display:none にすると親が 0x0 になり Phaser の scale が壊れる) ----- */
+      .canvas-card-hidden {
+        position: absolute !important;
+        left: -9999px !important;
+        top: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+      }
+      .canvas-card {
+        flex: 1;
+        min-height: 320px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        display: flex;
+        align-items: stretch;
+        justify-content: stretch;
+      }
+      @media (min-width: 768px) {
+        .canvas-card { min-height: 560px; }
+      }
+      .canvas-card #app {
+        flex: 1;
+        min-height: 280px;
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      @media (min-width: 768px) {
+        .canvas-card #app { min-height: 360px; }
+      }
+      /* Canvas: let Phaser control size (FIT = fixed aspect). Align to top so deck content starts under tabs. */
+      .canvas-card #app canvas { display: block; margin-top: 0 !important; }
+      .canvas-card.canvas-card-deck-view {
+        min-height: 1100px;
+        /* ゲーム背景(BG_CARD)と揃え、下部の色の違和感を防ぐ */
+        background: #12121a;
+      }
+
+      /* ----- Placeholder / tip ----- */
+      .placeholder-pane {
+        padding: 16px 20px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.5;
+      }
+      @media (min-width: 768px) {
+        .placeholder-pane { padding: 20px 24px; }
+      }
+
+      /* ----- Safe area (notch / home indicator) ----- */
+      @supports (padding-bottom: env(safe-area-inset-bottom)) {
+        .shell-content { padding-bottom: calc(var(--content-pad) + env(safe-area-inset-bottom)); }
+        .shell-tabs { padding-left: calc(var(--content-pad) + env(safe-area-inset-left)); padding-right: calc(var(--content-pad) + env(safe-area-inset-right)); }
+        .shell-header { padding-left: calc(var(--content-pad) + env(safe-area-inset-left)); padding-right: calc(var(--content-pad) + env(safe-area-inset-right)); }
+        .shell-status-bar { padding-left: calc(var(--content-pad) + env(safe-area-inset-left)); padding-right: calc(var(--content-pad) + env(safe-area-inset-right)); }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="title-ui" aria-hidden="true">
+      <span class="title-text">Bird Game</span>
+      <span class="subtitle">Connect your wallet to play</span>
+      <button type="button" id="connect-wallet-btn">Connect Wallet</button>
+    </div>
+
+    <div id="game-shell" aria-hidden="true">
+      <header class="shell-header">
+        <div class="shell-header-left">
+          <span class="shell-logo">Bird Game</span>
+          <span class="shell-subtitle">Play-to-Earn Bird Game</span>
+        </div>
+        <div class="shell-wallet-row">
+          <div class="shell-wallet">
+            <span class="shell-wallet-address" id="shell-wallet-address">0x1234…abcd</span>
+            <span class="shell-network" id="shell-network">—</span>
+          </div>
+          <button type="button" class="shell-disconnect-btn" id="shell-disconnect-btn" title="Disconnect wallet" aria-label="Disconnect wallet">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
+      </header>
+      <nav class="shell-tabs">
+        <button type="button" class="shell-tab active" data-tab="farming">Farming</button>
+        <button type="button" class="shell-tab" data-tab="summon">Summon</button>
+        <button type="button" class="shell-tab" data-tab="deck">Deck</button>
+      </nav>
+      <section class="shell-status-bar" aria-label="Game status">
+        <div class="shell-status-bar-inner">
+          <div class="status-cards status-cards-global">
+            <div class="status-card">
+              <div class="status-card-label">Current SEED</div>
+              <div class="status-card-value" id="dom-seed">0</div>
+            </div>
+            <div class="status-card">
+              <div class="status-card-label">SEED/day</div>
+              <div class="status-card-value" id="dom-seed-per-day">0</div>
+            </div>
+            <div class="status-card">
+              <div class="status-card-label">Loft Lv</div>
+              <div class="status-card-value" id="dom-loft-level">1</div>
+            </div>
+            <div class="status-card">
+              <div class="status-card-label">Slots</div>
+              <div class="status-card-value" id="dom-loft-slots">2/8</div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <main class="shell-content">
+        <div class="shell-content-inner">
+          <div id="pane-farming" class="tab-pane active">
+            <div class="placeholder-pane">Place birds in the Loft to earn SEED over time. Unlock more slots by upgrading Loft level.</div>
+          </div>
+          <div id="pane-summon" class="tab-pane">
+            <div class="summon-pane-body">
+              <h2 class="gacha-heading">Summon</h2>
+              <p class="gacha-intro">Use SEED or $BIRD to summon new birds. Summoned birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
+              <div class="gacha-cta">
+                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Summon 1x</button>
+                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Summon 10x</button>
+              </div>
+              <div class="gacha-results-section">
+                <div class="gacha-results-label">Summoned birds</div>
+                <div class="gacha-results-area" id="gacha-results-area">
+                  <p class="gacha-results-empty" id="gacha-results-empty">No summons yet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="pane-deck" class="tab-pane">
+            <p class="deck-tab-hint">Assign birds from your active deck (top) and inventory (bottom).</p>
+          </div>
+          <div class="canvas-card" id="shell-canvas-card">
+            <div id="app"></div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
