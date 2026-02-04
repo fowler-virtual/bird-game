@@ -25,7 +25,7 @@ const DECK_INVENTORY_HINT_ID = 'deck-inventory-hint';
 const INVENTORY_COLS = 5;
 const INVENTORY_ROWS = 8;
 
-let selectedBirdTypeKey: BirdTypeKey | null = null;
+let deckFullHintTimer = 0;
 
 function getEl(id: string): HTMLElement | null {
   return document.getElementById(id);
