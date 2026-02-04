@@ -14,7 +14,6 @@ import {
   getProductionRatePerHour,
   getActiveSlotsByLoftLevel,
   MAX_LOFT_LEVEL,
-  type BirdTypeKey,
 } from '../types';
 import { RARITY_IMAGE_SRC, updateShellStatus } from '../domShell';
 
