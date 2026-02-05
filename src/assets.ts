@@ -21,12 +21,13 @@ export const RARITY_IMAGE_SRC: Record<BirdRarity, string> = {
   Legendary: ASSET_BASE + 'legendary.png',
 };
 
-/** Farming Loft 用: Common の4コマフレーム画像 */
+/** Farming Loft 用: Common のフレーム画像（1〜6） */
 export const COMMON_FRAME_SRCS: string[] = [
   ASSET_BASE + 'common-frame1.png',
   ASSET_BASE + 'common-frame2.png',
   ASSET_BASE + 'common-frame3.png',
   ASSET_BASE + 'common-frame4.png',
   ASSET_BASE + 'common-frame5.png',
+  ASSET_BASE + 'common-frame6.png',
 ];
 

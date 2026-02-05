@@ -13,7 +13,7 @@ import {
   rollGachaRarity,
 } from '../types';
 
-const GACHA_COST = 10;
+export const GACHA_COST = 10;
 
 const GAME_STATE_KEY = 'bird-game-state';
 const BIRD_CURRENCY_KEY = 'bird-game-currency';

@@ -24,6 +24,9 @@ const SPRITE_FRAME_COUNT = COMMON_FRAME_SRCS.length;
 const SPRITE_FRAME_MS = 500;
 // 各鳥ごとにスタートまでのラグ（何tick待つか）をランダムに付与
 const SPRITE_MAX_LAG_TICKS = 6;
+// アニメーションシーケンス: 1→2→3→4→5→6→1→…
+// 画像インデックスで表現（0-based）
+const SPRITE_SEQUENCE: number[] = [0, 1, 2, 3, 4, 5];
 
 function getEl(id: string): HTMLElement | null {
   return document.getElementById(id);
@@ -57,9 +60,9 @@ function renderLoft(): void {
             // Common は frame1 から 1→2→3→4 の順番で進む。
             // startLagTick によって「飛び始めるタイミング」だけランダムにずらす。
             const lag = Math.floor(Math.random() * SPRITE_MAX_LAG_TICKS);
-            img.src = COMMON_FRAME_SRCS[0];
+            img.src = COMMON_FRAME_SRCS[SPRITE_SEQUENCE[0]];
             img.dataset.commonLagTick = String(lag);
-            img.dataset.commonFrameIndex = '0';
+            img.dataset.commonSeqIndex = '0';
             img.className = 'loft-bird-img loft-bird-anim-common';
           } else {
             img.src = RARITY_IMAGE_SRC[bird.rarity];
@@ -178,7 +181,7 @@ export function refresh(): void {
     spriteIntervalId = 0;
   }
   spriteIntervalId = window.setInterval(() => {
-    if (SPRITE_FRAME_COUNT <= 0) return;
+    if (SPRITE_FRAME_COUNT <= 0 || SPRITE_SEQUENCE.length === 0) return;
     spriteTick += 1;
     document.querySelectorAll<HTMLImageElement>('.loft-bird-anim-common').forEach((img) => {
       const lag = Number(img.dataset.commonLagTick ?? '0');
@@ -187,18 +190,20 @@ export function refresh(): void {
         // ラグ分だけ待機。超えたら frame1 からスタート。
         if (spriteTick >= lag) {
           img.dataset.commonStarted = '1';
-          img.dataset.commonFrameIndex = '0';
-          img.src = COMMON_FRAME_SRCS[0];
+          img.dataset.commonSeqIndex = '0';
+          img.src = COMMON_FRAME_SRCS[SPRITE_SEQUENCE[0]];
         } else {
-          img.src = COMMON_FRAME_SRCS[0];
+          img.src = COMMON_FRAME_SRCS[SPRITE_SEQUENCE[0]];
         }
         return;
       }
-      // 開始後は各鳥ごとに 0→1→2→3→0… と進める
-      const current = Number(img.dataset.commonFrameIndex ?? '0');
-      const next = (current + 1) % SPRITE_FRAME_COUNT;
-      img.dataset.commonFrameIndex = String(next);
-      img.src = COMMON_FRAME_SRCS[next];
+      // 開始後はシーケンスに従って 1→2→3→4→5→6→2→1→… の順に進める
+      const seqLen = SPRITE_SEQUENCE.length;
+      const prevSeq = Number(img.dataset.commonSeqIndex ?? '0');
+      const nextSeq = (prevSeq + 1) % seqLen;
+      img.dataset.commonSeqIndex = String(nextSeq);
+      const frameIndex = SPRITE_SEQUENCE[nextSeq];
+      img.src = COMMON_FRAME_SRCS[frameIndex];
     });
   }, SPRITE_FRAME_MS);
 }

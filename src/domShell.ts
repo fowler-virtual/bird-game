@@ -3,7 +3,7 @@
  * Shown after wallet connect; tab clicks drive Phaser scene/screen.
  */
 
-import { GameStore } from './store/GameStore';
+import { GameStore, GACHA_COST } from './store/GameStore';
 import { getProductionRatePerHour, getNetworkSharePercent } from './types';
 import * as farmingView from './views/farmingView';
 import * as deckView from './views/deckView';
@@ -126,6 +126,7 @@ export function switchToTab(tabId: string): void {
   }
 
   if (lastTabId === 'farming' && tabId !== 'farming') farmingView.stop();
+  if (lastTabId === 'adopt' && tabId !== 'adopt') clearGachaResultsArea();
   lastTabId = tabId;
 
   if (tabId === 'debug') refreshDebugPane();
@@ -136,8 +137,14 @@ export function switchToTab(tabId: string): void {
     }
     farmingView.refresh();
   }
-  if (tabId === 'adopt') updateAdoptPaneForOnboarding();
-  if (tabId === 'deck') deckView.refresh();
+  if (tabId === 'adopt') {
+    hideGachaResultsSection();
+    updateAdoptPaneForOnboarding();
+  }
+  if (tabId === 'deck') {
+    updateDeckPaneVisibility();
+    deckView.refresh();
+  }
   updateTabsForOnboarding();
 }
 
@@ -164,7 +171,44 @@ function onTabClick(e: Event): void {
   switchToTab(tabId);
 }
 
-/** オンボーディング中は Adopt で 10x を無効化 */
+/** Adoptタブでは普段「Adopted birds」枠を非表示。タブ表示時は非表示にしておく。 */
+function hideGachaResultsSection(): void {
+  const section = document.getElementById('gacha-results-section');
+  if (!section) return;
+  section.classList.add('gacha-results-section--hidden');
+}
+
+/** ガチャ成功時だけ結果枠を表示する */
+function showGachaResultsSection(): void {
+  const section = document.getElementById('gacha-results-section');
+  if (!section) return;
+  section.classList.remove('gacha-results-section--hidden');
+}
+
+/** Adoptタブを離れたときにガチャ結果エリアを空にし、枠も非表示に戻す */
+function clearGachaResultsArea(): void {
+  const area = document.getElementById('gacha-results-area');
+  if (!area) return;
+  area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
+  area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
+  const empty = document.createElement('p');
+  empty.className = 'gacha-results-empty';
+  empty.id = 'gacha-results-empty';
+  empty.textContent = 'No birds adopted yet.';
+  area.appendChild(empty);
+  hideGachaResultsSection();
+}
+
+/** Deckタブ: 鳥を1羽も持っていない間はデッキ・インベントリを非表示にし、文言だけ表示 */
+function updateDeckPaneVisibility(): void {
+  const hasAnyBird = GameStore.state.birdsOwned.length > 0;
+  const emptyHint = document.getElementById('deck-empty-hint');
+  const contentWrap = document.getElementById('deck-content-with-birds');
+  if (emptyHint) emptyHint.classList.toggle('deck-empty-hint--hidden', hasAnyBird);
+  if (contentWrap) contentWrap.classList.toggle('deck-content-with-birds--hidden', !hasAnyBird);
+}
+
+/** オンボーディング中は Adopt で 10x を無効化（結果枠の表示は switchToTab / runGachaFromDom で制御） */
 function updateAdoptPaneForOnboarding(): void {
   const step = GameStore.state.onboardingStep;
   const gacha10Btn = document.getElementById('shell-gacha-10');
@@ -175,10 +219,73 @@ function updateAdoptPaneForOnboarding(): void {
   }
 }
 
+function updateGachaButtonsAndCosts(): void {
+  const state = GameStore.state;
+  const freePulls = state.hasFreeGacha ? 1 : 0;
+  const cost1 = Math.max(0, 1 - freePulls) * GACHA_COST;
+  const cost10 = Math.max(0, 10 - freePulls) * GACHA_COST;
+  const bal = GameStore.birdCurrency;
+
+  const btn1 = document.getElementById('shell-gacha-1') as HTMLButtonElement | null;
+  const btn10 = document.getElementById('shell-gacha-10') as HTMLButtonElement | null;
+  const cost1El = document.getElementById('gacha-cost-1');
+  const cost10El = document.getElementById('gacha-cost-10');
+
+  if (btn1) {
+    if (state.hasFreeGacha) btn1.textContent = 'Adopt 1x (Free)';
+    else btn1.textContent = `Adopt 1x (${cost1} $BIRD)`;
+  }
+  if (btn10) {
+    btn10.textContent = `Adopt 10x (${cost10} $BIRD)`;
+  }
+
+  if (cost1El) {
+    if (state.hasFreeGacha) cost1El.textContent = 'Cost: Free (first adoption)';
+    else cost1El.textContent = `Cost: ${cost1} $BIRD`;
+    cost1El.classList.toggle('gacha-cost-insufficient', bal < cost1);
+  }
+  if (cost10El) {
+    cost10El.textContent = `Cost: ${cost10} $BIRD`;
+    cost10El.classList.toggle('gacha-cost-insufficient', bal < cost10);
+  }
+}
+
 /** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥を「ガチャで出た鳥」に表示する。 */
 function runGachaFromDom(count: 1 | 10): void {
   const step = GameStore.state.onboardingStep;
   if (step === 'need_gacha' && count !== 1) return;
+
+  // ウォレット接続とコストを確認してから実行
+  if (!GameStore.walletConnected) {
+    const area = document.getElementById('gacha-results-area');
+    if (area) {
+      area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
+      const msg = document.createElement('p');
+      msg.className = 'gacha-results-empty';
+      msg.textContent = 'Please connect your wallet first.';
+      area.appendChild(msg);
+    }
+    return;
+  }
+
+  const state = GameStore.state;
+  const freePulls = state.hasFreeGacha ? 1 : 0;
+  const paidPulls = Math.max(0, count - freePulls);
+  const cost = paidPulls * GACHA_COST;
+  const bal = GameStore.birdCurrency;
+
+  if (cost > 0 && bal < cost) {
+    window.alert(`Insufficient $BIRD balance. You need ${cost} $BIRD. (Balance: ${bal} $BIRD)`);
+    return;
+  }
+
+  let ok = true;
+  if (cost === 0) {
+    ok = window.confirm(`Use your free adoption to adopt ${count === 1 ? '1 bird' : `${count} birds`}?`);
+  } else {
+    ok = window.confirm(`Spend ${cost} $BIRD to adopt ${count === 1 ? '1 bird' : `${count} birds`}? (Balance: ${bal} $BIRD)`);
+  }
+  if (!ok) return;
 
   const result = GameStore.pullGacha(count);
   const area = document.getElementById('gacha-results-area');
@@ -211,8 +318,11 @@ function runGachaFromDom(count: 1 | 10): void {
     img.loading = 'lazy';
     area.appendChild(img);
   }
+  showGachaResultsSection();
 
   updateAdoptPaneForOnboarding();
+  updateGachaButtonsAndCosts();
+  updateDeckPaneVisibility();
   const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
   game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
 }
@@ -229,6 +339,7 @@ function refreshDebugPane(): void {
   if (seedEl) seedEl.textContent = String(GameStore.state.seed);
   if (birdEl) birdEl.textContent = String(GameStore.birdCurrency);
   if (loftEl) loftEl.textContent = String(GameStore.state.loftLevel);
+  updateGachaButtonsAndCosts();
 }
 
 function initDebugPaneListeners(): void {
@@ -325,6 +436,8 @@ function initTabListeners(): void {
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', onWindowResize);
   }
+  updateAdoptPaneForOnboarding();
+  updateGachaButtonsAndCosts();
   tabListenersInited = true;
 }
 
@@ -355,6 +468,8 @@ export function showGameShell(): void {
   const firstTab = step === 'need_gacha' ? 'adopt' : 'farming';
   switchToTab(firstTab);
   updateTabsForOnboarding();
+  hideGachaResultsSection();
+  updateDeckPaneVisibility();
 
   refreshPhaserScale();
 }

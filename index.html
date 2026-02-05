@@ -322,13 +322,24 @@
         line-height: 1.5;
         margin: 0;
       }
+      .tab-intro-hint {
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.4;
+        margin: 8px 0 0 0;
+      }
       .gacha-cta {
         display: flex;
         gap: 12px;
         margin-bottom: 24px;
       }
-      .shell-gacha-spin-btn {
+      .gacha-option {
         flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .shell-gacha-spin-btn {
         min-width: 120px;
         min-height: 48px;
         padding: 0 16px;
@@ -349,11 +360,22 @@
       @media (min-width: 400px) {
         .shell-gacha-spin-btn { min-height: 52px; font-size: 16px; }
       }
+      .gacha-cost {
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+      .gacha-cost.gacha-cost-insufficient {
+        color: #f97373;
+      }
       .gacha-results-section {
         background: var(--bg-card);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: 16px;
+      }
+      /* ガチャを1回も回していない間は「Adopted birds」ブロックを非表示 */
+      .gacha-results-section.gacha-results-section--hidden {
+        display: none !important;
       }
       .gacha-results-label {
         font-size: 11px;
@@ -466,8 +488,22 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 24px;
+        gap: 16px;
       }
+      .deck-empty-hint {
+        font-size: 14px;
+        color: var(--text-muted);
+        text-align: center;
+        padding: 24px 16px;
+        margin: 0;
+      }
+      .deck-empty-hint.deck-empty-hint--hidden { display: none !important; }
+      .deck-content-with-birds {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .deck-content-with-birds.deck-content-with-birds--hidden { display: none !important; }
       .deck-onboarding-cta {
         padding: 16px;
         margin-bottom: 16px;
@@ -537,6 +573,10 @@
         font-size: 12px;
         color: var(--text-muted);
         margin: 0 0 12px 0;
+      }
+      .inventory-hint.deck-section-hint {
+        margin-top: 12px;
+        margin-bottom: 0;
       }
       .inventory-grid {
         display: grid;
@@ -668,7 +708,7 @@
         cursor: pointer;
       }
       .debug-loft-btn:hover { background: var(--bg-hover); }
-      .debug-section-reset { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+      .debug-section-reset { margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); }
       .debug-reset-btn {
         width: 100%;
         min-height: 44px;
@@ -682,6 +722,67 @@
         transition: background 0.15s, border-color 0.15s;
       }
       .debug-reset-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+
+      /* ----- Gacha confirm modal ----- */
+      .gacha-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+      }
+      .gacha-modal-backdrop.visible { display: flex; }
+      .gacha-modal {
+        max-width: 360px;
+        width: calc(100% - 40px);
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      }
+      .gacha-modal-title {
+        margin: 0 0 12px 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .gacha-modal-text {
+        margin: 0 0 16px 0;
+        font-size: 14px;
+        color: var(--text-muted);
+      }
+      .gacha-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .gacha-modal-cancel,
+      .gacha-modal-confirm {
+        min-height: 40px;
+        padding: 0 16px;
+        font-size: 14px;
+        font-weight: 500;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        cursor: pointer;
+      }
+      .gacha-modal-cancel {
+        background: transparent;
+        color: var(--text-muted);
+      }
+      .gacha-modal-cancel:hover { background: var(--bg-hover); }
+      .gacha-modal-confirm {
+        background: var(--accent);
+        color: #fff;
+        border-color: transparent;
+      }
+      .gacha-modal-confirm[disabled] {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
 
       /* ----- Status cards: fixed on all tabs (sticky in scroll area) ----- */
       .status-cards {
@@ -857,6 +958,7 @@
           <div class="tab-intro" data-tab="deck">
             <h2 class="tab-intro-title">Deck</h2>
             <p class="tab-intro-text">Assign birds from your active deck (top) and inventory (bottom).</p>
+            <p class="tab-intro-hint" id="deck-inventory-hint">Tap a bird to add to deck (A→H in order). Tap a deck slot to remove.</p>
           </div>
           <div class="tab-intro" data-tab="debug">
             <h2 class="tab-intro-title">Debug</h2>
@@ -880,10 +982,16 @@
           <div id="pane-adopt" class="tab-pane">
             <div class="adopt-pane-body">
               <div class="gacha-cta">
-                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Adopt 1x</button>
-                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Adopt 10x</button>
+                <div class="gacha-option">
+                  <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Adopt 1x</button>
+                  <div class="gacha-cost" id="gacha-cost-1"></div>
+                </div>
+                <div class="gacha-option">
+                  <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Adopt 10x</button>
+                  <div class="gacha-cost" id="gacha-cost-10"></div>
+                </div>
               </div>
-              <div class="gacha-results-section">
+              <div class="gacha-results-section gacha-results-section--hidden" id="gacha-results-section">
                 <div class="gacha-results-label">Adopted birds</div>
                 <div class="gacha-results-area" id="gacha-results-area">
                   <p class="gacha-results-empty" id="gacha-results-empty">No birds adopted yet.</p>
@@ -893,23 +1001,25 @@
           </div>
           <div id="pane-deck" class="tab-pane">
             <div class="deck-pane-body">
-              <div class="deck-onboarding-cta" id="deck-onboarding-cta" style="display: none;">
-                <p class="deck-onboarding-cta-text">Bird placed! Go to Farming to start earning SEED.</p>
-                <button type="button" class="shell-gacha-spin-btn" id="deck-onboarding-goto-farming">Go to Farming</button>
+              <p class="deck-empty-hint" id="deck-empty-hint">Adopt a bird first in the Adopt tab.</p>
+              <div class="deck-content-with-birds deck-content-with-birds--hidden" id="deck-content-with-birds">
+                <div class="deck-onboarding-cta" id="deck-onboarding-cta" style="display: none;">
+                  <p class="deck-onboarding-cta-text">Bird placed! Go to Farming to start earning SEED.</p>
+                  <button type="button" class="shell-gacha-spin-btn" id="deck-onboarding-goto-farming">Go to Farming</button>
+                </div>
+                <section class="deck-section" aria-label="Deck">
+                  <h3 class="deck-section-title">Deck</h3>
+                  <div class="deck-grid" id="deck-grid" role="grid">
+                    <!-- 8 slots filled by JS -->
+                  </div>
+                </section>
+                <section class="inventory-section" aria-label="Inventory">
+                  <h3 class="inventory-section-title">Inventory</h3>
+                  <div class="inventory-grid" id="inventory-grid" role="grid">
+                    <!-- cells filled by JS -->
+                  </div>
+                </section>
               </div>
-              <section class="deck-section" aria-label="Deck">
-                <h3 class="deck-section-title">Deck</h3>
-                <div class="deck-grid" id="deck-grid" role="grid">
-                  <!-- 8 slots filled by JS -->
-                </div>
-              </section>
-              <section class="inventory-section" aria-label="Inventory">
-                <h3 class="inventory-section-title">Inventory</h3>
-                <p class="inventory-hint" id="deck-inventory-hint">Tap a bird to add to deck (A→H in order). Tap a deck slot to remove.</p>
-                <div class="inventory-grid" id="inventory-grid" role="grid">
-                  <!-- cells filled by JS -->
-                </div>
-              </section>
             </div>
           </div>
           <div id="pane-debug" class="tab-pane">
@@ -937,7 +1047,18 @@
                 </div>
               </div>
               <div class="debug-section debug-section-reset">
-                <button type="button" class="debug-reset-btn" id="dom-debug-reset">Reset (オンボーディングに戻す)</button>
+                <button type="button" class="debug-reset-btn" id="dom-debug-reset">Reset (return to onboarding)</button>
+              </div>
+            </div>
+          </div>
+          <!-- Gacha confirm modal -->
+          <div class="gacha-modal-backdrop" id="gacha-modal-backdrop" aria-hidden="true">
+            <div class="gacha-modal" role="dialog" aria-labelledby="gacha-modal-title">
+              <h2 class="gacha-modal-title" id="gacha-modal-title">Confirm Adoption</h2>
+              <p class="gacha-modal-text" id="gacha-modal-text"></p>
+              <div class="gacha-modal-actions">
+                <button type="button" class="gacha-modal-cancel" id="gacha-modal-cancel">Cancel</button>
+                <button type="button" class="gacha-modal-confirm" id="gacha-modal-confirm">Confirm</button>
               </div>
             </div>
           </div>
