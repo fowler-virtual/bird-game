@@ -4,33 +4,12 @@
  */
 
 import { GameStore } from './store/GameStore';
-import type { BirdRarity } from './types';
+import { getProductionRatePerHour, getNetworkSharePercent } from './types';
 import * as farmingView from './views/farmingView';
 import * as deckView from './views/deckView';
+import { RARITY_IMAGE_SRC } from './assets';
 
 const SHELL_ID = 'game-shell';
-
-const ASSET_BASE =
-  (() => {
-    try {
-      const env = (import.meta as unknown as { env?: { BASE_URL?: string } }).env;
-      return typeof env?.BASE_URL === 'string' ? env.BASE_URL : '/';
-    } catch {
-      return '/';
-    }
-  })();
-
-/** レアリティ → public の画像パス（Adopt 結果・Farming/Deck DOM 表示・Vite base 対応） */
-export const RARITY_IMAGE_SRC: Record<BirdRarity, string> = {
-  Common: ASSET_BASE + 'common.png',
-  Uncommon: ASSET_BASE + 'uncommon.png',
-  Rare: ASSET_BASE + 'rare.png',
-  Epic: ASSET_BASE + 'epic.png',
-  Legendary: ASSET_BASE + 'legendary.png',
-};
-
-/** Common 用 5 コマ横一列スプライト（Farming Loft のアニメーション用） */
-export const COMMON_SPRITE_SHEET_SRC = ASSET_BASE + 'common-sprite.png';
 const TAB_ACTIVE = 'active';
 
 function getShell(): HTMLElement | null {
@@ -150,8 +129,27 @@ export function switchToTab(tabId: string): void {
   lastTabId = tabId;
 
   if (tabId === 'debug') refreshDebugPane();
-  if (tabId === 'farming') farmingView.refresh();
+  if (tabId === 'farming') {
+    if (GameStore.state.onboardingStep === 'need_farming') {
+      GameStore.setState({ onboardingStep: 'done' });
+      GameStore.save();
+    }
+    farmingView.refresh();
+  }
+  if (tabId === 'adopt') updateAdoptPaneForOnboarding();
   if (tabId === 'deck') deckView.refresh();
+  updateTabsForOnboarding();
+}
+
+/** オンボーディング状態に応じてタブのロックを更新。Deck で鳥を置いた直後にも呼ぶ */
+export function updateTabsForOnboarding(): void {
+  const step = GameStore.state.onboardingStep;
+  const lockFarming = step === 'need_gacha' || step === 'need_place';
+  const farmingTab = document.querySelector('.shell-tab[data-tab="farming"]');
+  if (farmingTab) {
+    farmingTab.classList.toggle('onboarding-tab-locked', lockFarming);
+    farmingTab.setAttribute('aria-disabled', lockFarming ? 'true' : 'false');
+  }
 }
 
 function onTabClick(e: Event): void {
@@ -159,11 +157,29 @@ function onTabClick(e: Event): void {
   if (!target) return;
   const tabId = target.getAttribute('data-tab');
   if (!tabId) return;
+  const step = GameStore.state.onboardingStep;
+  if (tabId === 'farming' && (step === 'need_gacha' || step === 'need_place')) {
+    return;
+  }
   switchToTab(tabId);
+}
+
+/** オンボーディング中は Adopt で 10x を無効化 */
+function updateAdoptPaneForOnboarding(): void {
+  const step = GameStore.state.onboardingStep;
+  const gacha10Btn = document.getElementById('shell-gacha-10');
+  if (gacha10Btn) {
+    const disabled = step === 'need_gacha';
+    (gacha10Btn as HTMLButtonElement).disabled = disabled;
+    gacha10Btn.classList.toggle('onboarding-locked', disabled);
+  }
 }
 
 /** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥を「ガチャで出た鳥」に表示する。 */
 function runGachaFromDom(count: 1 | 10): void {
+  const step = GameStore.state.onboardingStep;
+  if (step === 'need_gacha' && count !== 1) return;
+
   const result = GameStore.pullGacha(count);
   const area = document.getElementById('gacha-results-area');
   const emptyEl = document.getElementById('gacha-results-empty');
@@ -180,6 +196,12 @@ function runGachaFromDom(count: 1 | 10): void {
     return;
   }
 
+  if (step === 'need_gacha' && count === 1) {
+    GameStore.setState({ onboardingStep: 'need_place' });
+    GameStore.save();
+    switchToTab('deck');
+  }
+
   area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
   for (const bird of result.birds) {
     const img = document.createElement('img');
@@ -190,6 +212,7 @@ function runGachaFromDom(count: 1 | 10): void {
     area.appendChild(img);
   }
 
+  updateAdoptPaneForOnboarding();
   const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
   game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
 }
@@ -248,6 +271,25 @@ function initDebugPaneListeners(): void {
       emitGameRefresh();
     });
   });
+  const resetBtn = document.getElementById('dom-debug-reset');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      if (!window.confirm('Reset game state and return to onboarding? (SEED, $Bird, birds, deck will be cleared.)')) return;
+      GameStore.resetToInitial();
+      refreshDebugPane();
+      emitGameRefresh();
+      const state = GameStore.state;
+      updateShellStatus({
+        seed: state.seed,
+        seedPerDay: getProductionRatePerHour(state) * 24,
+        loftLevel: state.loftLevel,
+        networkSharePercent: getNetworkSharePercent(state),
+      });
+      switchToTab('adopt');
+      farmingView.refresh();
+      deckView.refresh();
+    });
+  }
 }
 
 let tabListenersInited = false;
@@ -308,8 +350,11 @@ export function showGameShell(): void {
 
   initTabListeners();
 
-  /* 初回表示でも switchToTab を通すことでキャンバスを非表示にし、下に名残が出ないようにする */
-  switchToTab('farming');
+  /* 初回表示: オンボーディング中は Adopt から、そうでなければ Farming */
+  const step = GameStore.state.onboardingStep;
+  const firstTab = step === 'need_gacha' ? 'adopt' : 'farming';
+  switchToTab(firstTab);
+  updateTabsForOnboarding();
 
   refreshPhaserScale();
 }
@@ -321,21 +366,21 @@ export function hideGameShell(): void {
   shell.setAttribute('aria-hidden', 'true');
 }
 
-/** Update DOM status cards (Current SEED, SEED/day, Loft Lv, Slots). Called from GameScene when shell is visible. */
+/** Update DOM status cards (Current SEED, SEED/day, Network Share, Loft Lv). Called from GameScene when shell is visible. */
 export function updateShellStatus(payload: {
   seed: number;
   seedPerDay: number;
   loftLevel: number;
-  slots: string;
+  networkSharePercent: number;
 }): void {
   const seedEl = document.getElementById('dom-seed');
   const seedPerDayEl = document.getElementById('dom-seed-per-day');
+  const networkEl = document.getElementById('dom-network-share');
   const loftEl = document.getElementById('dom-loft-level');
-  const slotsEl = document.getElementById('dom-loft-slots');
   if (seedEl) seedEl.textContent = String(payload.seed);
   if (seedPerDayEl) seedPerDayEl.textContent = String(Math.floor(payload.seedPerDay));
+  if (networkEl) networkEl.textContent = `${payload.networkSharePercent.toFixed(5)}%`;
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
-  if (slotsEl) slotsEl.textContent = payload.slots;
 }
 
 export function isShellVisible(): boolean {

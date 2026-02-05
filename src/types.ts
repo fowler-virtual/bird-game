@@ -135,6 +135,8 @@ export interface GameState {
   hasShownPlacementHint: boolean;
   /** 放置で増える通貨（持ち帰り報酬） */
   seed: number;
+  /** 初回プレイ導線: need_gacha → need_place → need_farming → done */
+  onboardingStep?: 'need_gacha' | 'need_place' | 'need_farming' | 'done';
 }
 
 const DECK_SLOT_IDS: DeckSlotId[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
@@ -251,7 +253,18 @@ export function applyAccrualPure(
   const sumRate = BASE_RATE_PER_HOUR * rarityCoeffSum * multiplier;
 
   const delta = Math.floor(elapsedHours * sumRate);
-  return { state: { ...state, seed: state.seed + delta, lastAccrualAt: now.toISOString() }, delta };
+  if (delta <= 0) {
+    // 端数が溜まるまで lastAccrualAt は更新しない（次回の経過時間が伸びる）
+    return { state: { ...state }, delta: 0 };
+  }
+  // 加算した SEED に対応する時間だけ lastAccrualAt を進める（端数を残す）
+  const consumedHours = delta / sumRate;
+  const newLastMs = lastMs + consumedHours * 3600000;
+  const newLastAccrualAt = new Date(newLastMs).toISOString();
+  return {
+    state: { ...state, seed: state.seed + delta, lastAccrualAt: newLastAccrualAt },
+    delta,
+  };
 }
 
 /** 現在の生産レート（SEED/時）。デッキ構成から算出 */

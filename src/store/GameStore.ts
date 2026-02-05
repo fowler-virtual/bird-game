@@ -52,6 +52,7 @@ function defaultGameState(): GameState {
     hasFreeGacha: true,
     hasShownPlacementHint: false,
     seed: 0,
+    onboardingStep: 'need_gacha',
   };
 }
 
@@ -108,6 +109,11 @@ function parseGameState(raw: string | null): GameState {
       typeof (parsed as GameState).seed === 'number' && (parsed as GameState).seed >= 0
         ? (parsed as GameState).seed
         : Number(parsed.gems?.diamond) || 0;
+    const rawStep = (parsed as GameState).onboardingStep;
+    const onboardingStep =
+      rawStep === 'need_gacha' || rawStep === 'need_place' || rawStep === 'need_farming' || rawStep === 'done'
+        ? rawStep
+        : 'done';
 
     return {
       gems: g,
@@ -120,6 +126,7 @@ function parseGameState(raw: string | null): GameState {
       hasFreeGacha,
       hasShownPlacementHint,
       seed,
+      onboardingStep,
     };
   } catch {
     return defaultGameState();
@@ -180,6 +187,7 @@ export const GameStore = {
       this.state = parseGameState(rawState);
       this.birdCurrency = parseBirdCurrency(rawCurrency);
       this.rebuildInventory();
+      this.normalizeOnboardingStep();
       this.loadedFromStorage = true;
     } catch (e) {
       console.error('[Bird Game] loadStateForCurrentWallet failed:', e);
@@ -222,6 +230,23 @@ export const GameStore = {
     localStorage.setItem(currencyKeyFor(prefix), String(Math.max(0, Math.floor(this.birdCurrency))));
   },
 
+  /** 読み込み後: デッキに鳥がいればオンボーディング完了扱いにして Farming を押せるようにする */
+  normalizeOnboardingStep(): void {
+    const step = this.state.onboardingStep;
+    if (step === 'done') return;
+    const hasBirdOnDeck = this.state.deckSlots.some((id) => id != null);
+    if (hasBirdOnDeck) {
+      this.state = { ...this.state, onboardingStep: 'done' };
+    }
+  },
+
+  /** デバッグ用: ゲーム状態を初期化し、オンボーディングからやり直せるようにする */
+  resetToInitial(): void {
+    this.state = defaultGameState();
+    this.birdCurrency = 0;
+    if (this.loadedFromStorage) this.save();
+  },
+
   setState(patch: Partial<GameState>): void {
     this.state = { ...this.state, ...patch };
     if (patch.gems) this.state = { ...this.state, gems: { ...this.state.gems, ...patch.gems } };
@@ -233,6 +258,7 @@ export const GameStore = {
     if (patch.hasFreeGacha !== undefined) this.state = { ...this.state, hasFreeGacha: patch.hasFreeGacha };
     if (patch.hasShownPlacementHint !== undefined) this.state = { ...this.state, hasShownPlacementHint: patch.hasShownPlacementHint };
     if (patch.seed !== undefined) this.state = { ...this.state, seed: patch.seed };
+    if (patch.onboardingStep !== undefined) this.state = { ...this.state, onboardingStep: patch.onboardingStep };
   },
 
 

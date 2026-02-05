@@ -4,10 +4,9 @@
  */
 
 import { GameStore } from '../store/GameStore';
-import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getActiveSlotsByLoftLevel } from '../types';
-import { RARITY_IMAGE_SRC, COMMON_SPRITE_SHEET_SRC } from '../domShell';
+import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
+import { RARITY_IMAGE_SRC, COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus } from '../domShell';
-import { MAX_LOFT_LEVEL } from '../types';
 
 const LOFT_GRID_ID = 'loft-grid';
 const LOFT_UPGRADE_BTN_ID = 'loft-upgrade-btn';
@@ -19,10 +18,12 @@ const LOFT_MODAL_CONFIRM_ID = 'loft-modal-confirm';
 
 let accrualIntervalId = 0;
 let accrualHintTimer = 0;
-let spriteFrameIndex = 0;
+let spriteTick = 0;
 let spriteIntervalId = 0;
-const SPRITE_FRAME_COUNT = 5;
+const SPRITE_FRAME_COUNT = COMMON_FRAME_SRCS.length;
 const SPRITE_FRAME_MS = 500;
+// 各鳥ごとにスタートまでのラグ（何tick待つか）をランダムに付与
+const SPRITE_MAX_LAG_TICKS = 6;
 
 function getEl(id: string): HTMLElement | null {
   return document.getElementById(id);
@@ -51,19 +52,21 @@ function renderLoft(): void {
         if (bird) {
           cell.classList.add('has-bird');
           cell.dataset.slotIndex = String(slotIndex);
+          const img = document.createElement('img');
           if (bird.rarity === 'Common') {
-            const wrapper = document.createElement('div');
-            wrapper.className = `loft-bird-sprite frame-${spriteFrameIndex % SPRITE_FRAME_COUNT}`;
-            wrapper.style.setProperty('--sprite-url', `url(${COMMON_SPRITE_SHEET_SRC})`);
-            wrapper.setAttribute('aria-hidden', 'true');
-            cell.appendChild(wrapper);
+            // Common は frame1 から 1→2→3→4 の順番で進む。
+            // startLagTick によって「飛び始めるタイミング」だけランダムにずらす。
+            const lag = Math.floor(Math.random() * SPRITE_MAX_LAG_TICKS);
+            img.src = COMMON_FRAME_SRCS[0];
+            img.dataset.commonLagTick = String(lag);
+            img.dataset.commonFrameIndex = '0';
+            img.className = 'loft-bird-img loft-bird-anim-common';
           } else {
-            const img = document.createElement('img');
             img.src = RARITY_IMAGE_SRC[bird.rarity];
-            img.alt = bird.rarity;
             img.className = 'loft-bird-img';
-            cell.appendChild(img);
           }
+          img.alt = bird.rarity;
+          cell.appendChild(img);
           cell.setAttribute('aria-label', `Slot ${slotIndex + 1}: ${bird.rarity}`);
         }
       } else {
@@ -89,12 +92,11 @@ function updateUpgradeButton(): void {
 function refreshShellStatus(): void {
   const state = GameStore.state;
   const ratePerDay = getProductionRatePerHour(state) * 24;
-  const slots = getActiveSlotsByLoftLevel(state.loftLevel);
   updateShellStatus({
     seed: state.seed,
     seedPerDay: ratePerDay,
     loftLevel: state.loftLevel,
-    slots: `${slots}/${MAX_LOFT_LEVEL * 2}`,
+    networkSharePercent: getNetworkSharePercent(state),
   });
 }
 
@@ -114,7 +116,6 @@ function tickAccrual(): void {
   GameStore.save();
   if (delta > 0) showAccrualHint(delta);
   refreshShellStatus();
-  renderLoft();
 }
 
 function openUpgradeModal(): void {
@@ -177,9 +178,27 @@ export function refresh(): void {
     spriteIntervalId = 0;
   }
   spriteIntervalId = window.setInterval(() => {
-    spriteFrameIndex = (spriteFrameIndex + 1) % SPRITE_FRAME_COUNT;
-    document.querySelectorAll<HTMLElement>('.loft-bird-sprite').forEach((el) => {
-      el.className = `loft-bird-sprite frame-${spriteFrameIndex}`;
+    if (SPRITE_FRAME_COUNT <= 0) return;
+    spriteTick += 1;
+    document.querySelectorAll<HTMLImageElement>('.loft-bird-anim-common').forEach((img) => {
+      const lag = Number(img.dataset.commonLagTick ?? '0');
+      const started = img.dataset.commonStarted === '1';
+      if (!started) {
+        // ラグ分だけ待機。超えたら frame1 からスタート。
+        if (spriteTick >= lag) {
+          img.dataset.commonStarted = '1';
+          img.dataset.commonFrameIndex = '0';
+          img.src = COMMON_FRAME_SRCS[0];
+        } else {
+          img.src = COMMON_FRAME_SRCS[0];
+        }
+        return;
+      }
+      // 開始後は各鳥ごとに 0→1→2→3→0… と進める
+      const current = Number(img.dataset.commonFrameIndex ?? '0');
+      const next = (current + 1) % SPRITE_FRAME_COUNT;
+      img.dataset.commonFrameIndex = String(next);
+      img.src = COMMON_FRAME_SRCS[next];
     });
   }, SPRITE_FRAME_MS);
 }

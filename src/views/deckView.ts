@@ -12,10 +12,10 @@ import {
   getBirdTypeKeyForInventoryCell,
   parseBirdTypeKey,
   getProductionRatePerHour,
-  getActiveSlotsByLoftLevel,
-  MAX_LOFT_LEVEL,
+  getNetworkSharePercent,
 } from '../types';
-import { RARITY_IMAGE_SRC, updateShellStatus } from '../domShell';
+import { RARITY_IMAGE_SRC } from '../assets';
+import { updateShellStatus, switchToTab, updateTabsForOnboarding } from '../domShell';
 
 const DECK_GRID_ID = 'deck-grid';
 const INVENTORY_GRID_ID = 'inventory-grid';
@@ -33,22 +33,24 @@ function getEl(id: string): HTMLElement | null {
 function refreshShellStatus(): void {
   const state = GameStore.state;
   const ratePerDay = getProductionRatePerHour(state) * 24;
-  const slots = getActiveSlotsByLoftLevel(state.loftLevel);
   updateShellStatus({
     seed: state.seed,
     seedPerDay: ratePerDay,
     loftLevel: state.loftLevel,
-    slots: `${slots}/${MAX_LOFT_LEVEL * 2}`,
+    networkSharePercent: getNetworkSharePercent(state),
   });
 }
 
 const HINT_DEFAULT = 'Tap a bird to add to deck (A→H in order). Tap a deck slot to remove.';
 const HINT_DECK_FULL = 'No empty slot. Unlock more with Loft upgrade.';
+const HINT_ONBOARDING_PLACE = 'Tap your adopted bird below to place it on your deck.';
 
 function updateHint(text?: string): void {
   const hint = getEl(DECK_INVENTORY_HINT_ID);
   if (!hint) return;
-  hint.textContent = text ?? HINT_DEFAULT;
+  const step = GameStore.state.onboardingStep;
+  const defaultText = step === 'need_place' ? HINT_ONBOARDING_PLACE : HINT_DEFAULT;
+  hint.textContent = text ?? defaultText;
 }
 
 function renderDeck(): void {
@@ -151,6 +153,10 @@ function renderInventory(): void {
         }
         const ok = GameStore.placeBirdOnDeck(firstEmpty, key);
         if (ok) {
+          // オンボーディング中: 初めて鳥をデッキに置いたら Farming 解放ステップへ
+          if (GameStore.state.onboardingStep === 'need_place') {
+            GameStore.setState({ onboardingStep: 'need_farming' });
+          }
           GameStore.save();
           refresh();
         }
@@ -167,6 +173,16 @@ export function refresh(): void {
   renderInventory();
   updateHint();
   refreshShellStatus();
+
+  const step = GameStore.state.onboardingStep;
+  const ctaEl = document.getElementById('deck-onboarding-cta');
+  const gotoBtn = document.getElementById('deck-onboarding-goto-farming');
+  if (ctaEl) ctaEl.style.display = step === 'need_farming' ? 'block' : 'none';
+  if (gotoBtn && !(gotoBtn as HTMLButtonElement).dataset.listener) {
+    (gotoBtn as HTMLButtonElement).dataset.listener = '1';
+    gotoBtn.addEventListener('click', () => switchToTab('farming'));
+  }
+  updateTabsForOnboarding();
 }
 
 /** Call once when shell is shown. */

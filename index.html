@@ -138,9 +138,8 @@
         align-items: center;
         justify-content: space-between;
         flex-wrap: wrap;
-        gap: 12px;
-        min-height: var(--header-h);
-        padding: 0 var(--content-pad);
+        gap: 8px;
+        padding: 8px var(--content-pad);
         background: var(--bg-surface);
         border-bottom: 1px solid var(--border);
       }
@@ -148,7 +147,7 @@
         display: flex;
         align-items: center;
         gap: 12px;
-        min-height: var(--touch-min);
+        min-height: 40px;
       }
       .shell-logo {
         font-size: 16px;
@@ -163,14 +162,16 @@
       .shell-wallet-row {
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: 8px;
       }
       .shell-wallet {
         display: flex;
         align-items: center;
-        gap: 8px;
-        min-height: var(--touch-min);
+        height: 40px;
+        min-height: 40px;
         padding: 0 14px;
+        box-sizing: border-box;
         background: var(--bg-card);
         border: 1px solid var(--border);
         border-radius: var(--radius);
@@ -254,6 +255,7 @@
         color: var(--text);
         border-bottom-color: var(--accent);
       }
+      .shell-tab.onboarding-tab-locked { opacity: 0.5; pointer-events: none; cursor: not-allowed; }
 
       /* ----- Status row (status cards + tab intro share same container width) ----- */
       .status-panel {
@@ -342,6 +344,8 @@
       }
       .shell-gacha-spin-btn:hover { opacity: 0.95; transform: scale(1.02); }
       .shell-gacha-spin-btn:active { transform: scale(0.98); }
+      .shell-gacha-spin-btn:disabled,
+      .shell-gacha-spin-btn.onboarding-locked { opacity: 0.5; cursor: not-allowed; transform: none; pointer-events: none; }
       @media (min-width: 400px) {
         .shell-gacha-spin-btn { min-height: 52px; font-size: 16px; }
       }
@@ -430,20 +434,6 @@
         height: 100%;
         object-fit: contain;
       }
-      /* Common 用 5 コマ横一列スプライト（JS で frame-0〜4 を切り替え、補間なし） */
-      .loft-bird-sprite {
-        position: absolute;
-        inset: 0;
-        background-image: var(--sprite-url);
-        background-size: 500% 100%;
-        background-repeat: no-repeat;
-        background-position: 0 0;
-      }
-      .loft-bird-sprite.frame-0 { background-position-x: 0%; }
-      .loft-bird-sprite.frame-1 { background-position-x: 25%; }
-      .loft-bird-sprite.frame-2 { background-position-x: 50%; }
-      .loft-bird-sprite.frame-3 { background-position-x: 75%; }
-      .loft-bird-sprite.frame-4 { background-position-x: 100%; }
       .loft-actions { display: flex; justify-content: center; }
       .loft-upgrade-btn {
         min-height: 44px;
@@ -478,6 +468,15 @@
         flex-direction: column;
         gap: 24px;
       }
+      .deck-onboarding-cta {
+        padding: 16px;
+        margin-bottom: 16px;
+        background: var(--accent-dim);
+        border: 1px solid var(--accent);
+        border-radius: var(--radius);
+        text-align: center;
+      }
+      .deck-onboarding-cta-text { margin: 0 0 12px 0; font-size: 14px; color: var(--text); }
       .deck-section, .inventory-section {
         background: var(--bg-card);
         border: 1px solid var(--border);
@@ -669,6 +668,20 @@
         cursor: pointer;
       }
       .debug-loft-btn:hover { background: var(--bg-hover); }
+      .debug-section-reset { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+      .debug-reset-btn {
+        width: 100%;
+        min-height: 44px;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .debug-reset-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
 
       /* ----- Status cards: fixed on all tabs (sticky in scroll area) ----- */
       .status-cards {
@@ -824,12 +837,12 @@
                 <div class="status-card-value" id="dom-seed-per-day">0</div>
               </div>
               <div class="status-card">
-                <div class="status-card-label">Loft Lv</div>
-                <div class="status-card-value" id="dom-loft-level">1</div>
+                <div class="status-card-label">Network Share</div>
+                <div class="status-card-value" id="dom-network-share">—%</div>
               </div>
               <div class="status-card">
-                <div class="status-card-label">Slots</div>
-                <div class="status-card-value" id="dom-loft-slots">2/8</div>
+                <div class="status-card-label">Loft Lv</div>
+                <div class="status-card-value" id="dom-loft-level">1</div>
               </div>
             </div>
           </div>
@@ -880,6 +893,10 @@
           </div>
           <div id="pane-deck" class="tab-pane">
             <div class="deck-pane-body">
+              <div class="deck-onboarding-cta" id="deck-onboarding-cta" style="display: none;">
+                <p class="deck-onboarding-cta-text">Bird placed! Go to Farming to start earning SEED.</p>
+                <button type="button" class="shell-gacha-spin-btn" id="deck-onboarding-goto-farming">Go to Farming</button>
+              </div>
               <section class="deck-section" aria-label="Deck">
                 <h3 class="deck-section-title">Deck</h3>
                 <div class="deck-grid" id="deck-grid" role="grid">
@@ -918,6 +935,9 @@
                     <button type="button" class="debug-loft-btn" data-level="4">4</button>
                   </div>
                 </div>
+              </div>
+              <div class="debug-section debug-section-reset">
+                <button type="button" class="debug-reset-btn" id="dom-debug-reset">Reset (オンボーディングに戻す)</button>
               </div>
             </div>
           </div>

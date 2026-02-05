@@ -1126,7 +1126,7 @@ export class GameScene extends Phaser.Scene {
         seed: state.seed,
         seedPerDay: ratePerDay,
         loftLevel: state.loftLevel,
-        slots: `${slots}/${MAX_LOFT_LEVEL * 2}`,
+        networkSharePercent: share,
       });
     }
     const cost = getNextUnlockCost(state.unlockedDeckCount);
