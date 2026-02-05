@@ -5,7 +5,7 @@
 
 import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getActiveSlotsByLoftLevel } from '../types';
-import { RARITY_IMAGE_SRC } from '../domShell';
+import { RARITY_IMAGE_SRC, COMMON_SPRITE_SHEET_SRC } from '../domShell';
 import { updateShellStatus } from '../domShell';
 import { MAX_LOFT_LEVEL } from '../types';
 
@@ -19,6 +19,10 @@ const LOFT_MODAL_CONFIRM_ID = 'loft-modal-confirm';
 
 let accrualIntervalId = 0;
 let accrualHintTimer = 0;
+let spriteFrameIndex = 0;
+let spriteIntervalId = 0;
+const SPRITE_FRAME_COUNT = 5;
+const SPRITE_FRAME_MS = 500;
 
 function getEl(id: string): HTMLElement | null {
   return document.getElementById(id);
@@ -47,11 +51,19 @@ function renderLoft(): void {
         if (bird) {
           cell.classList.add('has-bird');
           cell.dataset.slotIndex = String(slotIndex);
-          const img = document.createElement('img');
-          img.src = RARITY_IMAGE_SRC[bird.rarity];
-          img.alt = bird.rarity;
-          img.className = 'loft-bird-img';
-          cell.appendChild(img);
+          if (bird.rarity === 'Common') {
+            const wrapper = document.createElement('div');
+            wrapper.className = `loft-bird-sprite frame-${spriteFrameIndex % SPRITE_FRAME_COUNT}`;
+            wrapper.style.setProperty('--sprite-url', `url(${COMMON_SPRITE_SHEET_SRC})`);
+            wrapper.setAttribute('aria-hidden', 'true');
+            cell.appendChild(wrapper);
+          } else {
+            const img = document.createElement('img');
+            img.src = RARITY_IMAGE_SRC[bird.rarity];
+            img.alt = bird.rarity;
+            img.className = 'loft-bird-img';
+            cell.appendChild(img);
+          }
           cell.setAttribute('aria-label', `Slot ${slotIndex + 1}: ${bird.rarity}`);
         }
       } else {
@@ -159,6 +171,17 @@ export function refresh(): void {
     accrualIntervalId = 0;
   }
   accrualIntervalId = window.setInterval(tickAccrual, 2000);
+
+  if (spriteIntervalId) {
+    clearInterval(spriteIntervalId);
+    spriteIntervalId = 0;
+  }
+  spriteIntervalId = window.setInterval(() => {
+    spriteFrameIndex = (spriteFrameIndex + 1) % SPRITE_FRAME_COUNT;
+    document.querySelectorAll<HTMLElement>('.loft-bird-sprite').forEach((el) => {
+      el.className = `loft-bird-sprite frame-${spriteFrameIndex}`;
+    });
+  }, SPRITE_FRAME_MS);
 }
 
 /** Call when leaving Farming tab. Stops accrual interval. */
@@ -170,6 +193,10 @@ export function stop(): void {
   if (accrualHintTimer) {
     clearTimeout(accrualHintTimer);
     accrualHintTimer = 0;
+  }
+  if (spriteIntervalId) {
+    clearInterval(spriteIntervalId);
+    spriteIntervalId = 0;
   }
 }
 

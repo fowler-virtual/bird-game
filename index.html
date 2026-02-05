@@ -2,6 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function(){
+        var saved = localStorage.getItem('bird-game-theme');
+        if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+        else if (saved === 'dark') document.documentElement.removeAttribute('data-theme');
+        else if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)
+          document.documentElement.setAttribute('data-theme', 'light');
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Bird Game</title>
     <style>
@@ -11,6 +20,7 @@
         --bg-surface: #0e0e10;
         --bg-card: #12121a;
         --bg-elevated: #18181f;
+        --bg-hover: #222228;
         --border: #1e1e24;
         --border-subtle: #1a1a1f;
         --text: #f4f4f5;
@@ -23,6 +33,20 @@
         --touch-min: 44px;
         --content-pad: 16px;
         --content-max: 960px;
+      }
+      /* ライトテーマ（data-theme="light" を html に付与で切り替え） */
+      [data-theme="light"] {
+        --bg-deep: #f4f4f5;
+        --bg-surface: #ffffff;
+        --bg-card: #ffffff;
+        --bg-elevated: #fafafa;
+        --bg-hover: #eeeeef;
+        --border: #e4e4e7;
+        --border-subtle: #eaeaea;
+        --text: #18181b;
+        --text-muted: #8b7355;
+        --accent: #059669;
+        --accent-dim: rgba(5, 150, 105, 0.12);
       }
 
       @media (min-width: 768px) {
@@ -154,7 +178,6 @@
         font-variant-numeric: tabular-nums;
       }
       .shell-wallet-address { color: var(--text-muted); }
-      .shell-network { font-size: 11px; color: var(--text-muted); opacity: 0.8; }
       .shell-disconnect-btn {
         display: flex;
         align-items: center;
@@ -175,8 +198,27 @@
         border-color: var(--text-muted);
       }
       .shell-disconnect-btn svg { width: 18px; height: 18px; }
+      .shell-theme-btn {
+        display: flex; align-items: center; justify-content: center;
+        width: 40px; height: 40px; padding: 0;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: color 0.15s, background 0.15s, border-color 0.15s;
+      }
+      .shell-theme-btn:hover { color: var(--text); background: var(--bg-hover); border-color: var(--text-muted); }
+      .shell-theme-btn svg { width: 20px; height: 20px; }
+      .shell-theme-btn .theme-icon-light { display: none; }
+      [data-theme="light"] .shell-theme-btn .theme-icon-dark { display: none; }
+      [data-theme="light"] .shell-theme-btn .theme-icon-light { display: block; }
+      [data-theme="light"] .shell-theme-btn,
+      [data-theme="light"] .shell-theme-btn svg { color: var(--text-muted); }
+      [data-theme="light"] .shell-theme-btn:hover,
+      [data-theme="light"] .shell-theme-btn:hover svg { color: var(--text-muted); }
 
-      /* ----- Tabs (sticky + z-index so one tap always switches from Summon tab) ----- */
+      /* ----- Tabs (sticky + z-index so one tap always switches from Adopt tab) ----- */
       .shell-tabs {
         flex-shrink: 0;
         position: sticky;
@@ -246,7 +288,7 @@
       .tab-pane { display: none; flex-direction: column; gap: 16px; }
       .tab-pane.active { display: flex; }
       /* 各タブ上部の帯（Farming風の枠）＋タイトル/説明 */
-      .summon-pane-body {
+      .adopt-pane-body {
         padding: 0;
         display: flex;
         flex-direction: column;
@@ -350,16 +392,24 @@
       }
       .loft-grid {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
-        max-width: 420px;
+        max-width: 100%;
+        width: 100%;
         margin: 0 auto 20px;
       }
+      @media (min-width: 420px) {
+        .loft-grid { max-width: 420px; }
+      }
+      @media (min-width: 768px) {
+        .loft-grid { max-width: 520px; gap: 16px; }
+      }
       .loft-cell {
+        position: relative;
         aspect-ratio: 1;
-        max-width: 88px;
-        max-height: 88px;
-        margin: 0 auto;
+        min-height: 0;
+        width: 100%;
+        max-width: 100%;
         background: var(--bg-elevated);
         border: 1px solid var(--border);
         border-radius: var(--radius);
@@ -368,31 +418,32 @@
         justify-content: center;
         overflow: hidden;
       }
+      @media (min-width: 480px) {
+        .loft-cell { min-height: 96px; }
+      }
+      @media (min-width: 768px) {
+        .loft-cell { min-height: 120px; }
+      }
       .loft-cell.locked { opacity: 0.5; pointer-events: none; }
       .loft-cell img {
         width: 100%;
         height: 100%;
         object-fit: contain;
       }
-      /* 鳥が SEED を取りに行くアニメーション（少し上に寄って戻る） */
-      @keyframes loft-bird-collect {
-        0%, 100% { transform: translateY(0) scale(1); }
-        25% { transform: translateY(-8px) scale(1.05); }
-        50% { transform: translateY(-4px) scale(1.02); }
-        75% { transform: translateY(-6px) scale(1.03); }
+      /* Common 用 5 コマ横一列スプライト（JS で frame-0〜4 を切り替え、補間なし） */
+      .loft-bird-sprite {
+        position: absolute;
+        inset: 0;
+        background-image: var(--sprite-url);
+        background-size: 500% 100%;
+        background-repeat: no-repeat;
+        background-position: 0 0;
       }
-      .loft-cell.has-bird .loft-bird-img {
-        animation: loft-bird-collect 2.4s ease-in-out infinite;
-      }
-      /* スロットごとに開始タイミングをずらして自然な動きに */
-      .loft-cell.has-bird[data-slot-index="0"] .loft-bird-img { animation-delay: 0s; }
-      .loft-cell.has-bird[data-slot-index="1"] .loft-bird-img { animation-delay: 0.3s; }
-      .loft-cell.has-bird[data-slot-index="2"] .loft-bird-img { animation-delay: 0.6s; }
-      .loft-cell.has-bird[data-slot-index="3"] .loft-bird-img { animation-delay: 0.9s; }
-      .loft-cell.has-bird[data-slot-index="4"] .loft-bird-img { animation-delay: 0.15s; }
-      .loft-cell.has-bird[data-slot-index="5"] .loft-bird-img { animation-delay: 0.45s; }
-      .loft-cell.has-bird[data-slot-index="6"] .loft-bird-img { animation-delay: 0.75s; }
-      .loft-cell.has-bird[data-slot-index="7"] .loft-bird-img { animation-delay: 1.05s; }
+      .loft-bird-sprite.frame-0 { background-position-x: 0%; }
+      .loft-bird-sprite.frame-1 { background-position-x: 25%; }
+      .loft-bird-sprite.frame-2 { background-position-x: 50%; }
+      .loft-bird-sprite.frame-3 { background-position-x: 75%; }
+      .loft-bird-sprite.frame-4 { background-position-x: 100%; }
       .loft-actions { display: flex; justify-content: center; }
       .loft-upgrade-btn {
         min-height: 44px;
@@ -453,6 +504,9 @@
       @media (min-width: 420px) {
         .deck-grid { max-width: 420px; }
       }
+      @media (min-width: 768px) {
+        .deck-grid { max-width: 520px; gap: 16px; }
+      }
       .deck-slot {
         aspect-ratio: 1;
         min-height: 0;
@@ -470,6 +524,9 @@
       /* 余裕がある幅のときだけスロットを大きく（狭い幅では min-height:0 で枠に収める） */
       @media (min-width: 480px) {
         .deck-slot { min-height: 96px; }
+      }
+      @media (min-width: 768px) {
+        .deck-slot { min-height: 120px; }
       }
       .deck-slot:hover:not(.locked) { background: var(--bg-card); border-color: var(--text-muted); }
       .deck-slot.locked { opacity: 0.5; cursor: not-allowed; }
@@ -505,6 +562,15 @@
       .inventory-cell:disabled { opacity: 0.5; cursor: not-allowed; }
       .inventory-cell img { width: 100%; max-width: 56px; height: auto; aspect-ratio: 1; object-fit: contain; }
       .inventory-cell .inventory-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--accent); }
+      .inventory-cell.unowned {
+        justify-content: center;
+      }
+      .inventory-cell.unowned .inventory-unowned {
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--text-muted);
+        line-height: 1;
+      }
 
       /* ----- Loft upgrade modal ----- */
       .loft-modal-backdrop {
@@ -648,7 +714,7 @@
         .status-card-value { font-size: 20px; }
       }
 
-      /* ----- Canvas card (Summon 時は画面外に移すだけ。display:none にすると親が 0x0 になり Phaser の scale が壊れる) ----- */
+      /* ----- Canvas card (Adopt 時は画面外に移すだけ。display:none にすると親が 0x0 になり Phaser の scale が壊れる) ----- */
       .canvas-card-hidden {
         position: absolute !important;
         left: -9999px !important;
@@ -729,8 +795,11 @@
         <div class="shell-wallet-row">
           <div class="shell-wallet">
             <span class="shell-wallet-address" id="shell-wallet-address">0x1234…abcd</span>
-            <span class="shell-network" id="shell-network">—</span>
           </div>
+          <button type="button" class="shell-theme-btn" id="shell-theme-btn" title="Toggle light/dark theme" aria-label="Toggle theme">
+            <svg class="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </button>
           <button type="button" class="shell-disconnect-btn" id="shell-disconnect-btn" title="Disconnect wallet" aria-label="Disconnect wallet">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
@@ -738,7 +807,7 @@
       </header>
       <nav class="shell-tabs">
         <button type="button" class="shell-tab active" data-tab="farming">Farming</button>
-        <button type="button" class="shell-tab" data-tab="summon">Summon</button>
+        <button type="button" class="shell-tab" data-tab="adopt">Adopt</button>
         <button type="button" class="shell-tab" data-tab="deck">Deck</button>
         <button type="button" class="shell-tab" data-tab="debug">Debug</button>
       </nav>
@@ -768,9 +837,9 @@
             <h2 class="tab-intro-title">Farming</h2>
             <p class="tab-intro-text">Place birds in the Loft to earn SEED over time. Unlock more slots by upgrading Loft level.</p>
           </div>
-          <div class="tab-intro" data-tab="summon">
-            <h2 class="tab-intro-title">Summon</h2>
-            <p class="tab-intro-text">Use SEED or $BIRD to summon new birds. Summoned birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
+          <div class="tab-intro" data-tab="adopt">
+            <h2 class="tab-intro-title">Adopt</h2>
+            <p class="tab-intro-text">Use SEED or $BIRD to adopt new birds. Adopted birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
           </div>
           <div class="tab-intro" data-tab="deck">
             <h2 class="tab-intro-title">Deck</h2>
@@ -795,16 +864,16 @@
               <div class="farming-accrual-hint" id="farming-accrual-hint" aria-live="polite"></div>
             </div>
           </div>
-          <div id="pane-summon" class="tab-pane">
-            <div class="summon-pane-body">
+          <div id="pane-adopt" class="tab-pane">
+            <div class="adopt-pane-body">
               <div class="gacha-cta">
-                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Summon 1x</button>
-                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Summon 10x</button>
+                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Adopt 1x</button>
+                <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Adopt 10x</button>
               </div>
               <div class="gacha-results-section">
-                <div class="gacha-results-label">Summoned birds</div>
+                <div class="gacha-results-label">Adopted birds</div>
                 <div class="gacha-results-area" id="gacha-results-area">
-                  <p class="gacha-results-empty" id="gacha-results-empty">No summons yet.</p>
+                  <p class="gacha-results-empty" id="gacha-results-empty">No birds adopted yet.</p>
                 </div>
               </div>
             </div>

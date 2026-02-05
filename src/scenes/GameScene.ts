@@ -131,7 +131,7 @@ export class GameScene extends Phaser.Scene {
   private standbyScrollStartPointer = 0;
   private selectedBirdTypeKey: BirdTypeKey | null = null;
   private resizeDebounceTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Deck 時のみ: 前回 setParentSize した親サイズ。ループ防止＋Summon 復帰時は 0 にして再取得させる */
+  /** Deck 時のみ: 前回 setParentSize した親サイズ。ループ防止＋Adopt 復帰時は 0 にして再取得させる */
   private lastDeckParentW = 0;
   private lastDeckParentH = 0;
   /** 前回の Deck レイアウトが横並びだったか。ヒステリシス用。null は未確定。 */
@@ -341,7 +341,7 @@ export class GameScene extends Phaser.Scene {
         this.scene.launch('GachaScene');
         this.scene.bringToTop('GachaScene');
       });
-    const gachaLabel = this.add.text(PANEL_PADDING + btnW / 2, gachaBtnY, 'Summon', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5);
+    const gachaLabel = this.add.text(PANEL_PADDING + btnW / 2, gachaBtnY, 'Adopt', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5);
     this.leftPanelContainer.add([gachaBtn, gachaLabel]);
 
     const deckBtnY = gachaBtnY + btnH + 12;
@@ -634,7 +634,7 @@ export class GameScene extends Phaser.Scene {
     this.mainPanel.setVisible(true);
     if (this.useDomShell()) setCanvasCardDeckView(false);
 
-    // Summon から戻ったときは #app が display:none だったため getParentBounds() が 0x0 を返す。隠す前に保存したサイズを使う。
+    // Adopt から戻ったときは #app が display:none だったため getParentBounds() が 0x0 を返す。隠す前に保存したサイズを使う。
     if (this.useDomShell()) {
       const saved = getLastCanvasCardSize();
       if (saved && saved.width > 0 && saved.height > 0) {
@@ -826,7 +826,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Summon から Deck に戻る際など、次回 syncDeckScaleFromParent で必ず親サイズを再取得するためにキャッシュをクリア。 */
+  /** Adopt から Deck に戻る際など、次回 syncDeckScaleFromParent で必ず親サイズを再取得するためにキャッシュをクリア。 */
   clearDeckParentSizeCache(): void {
     this.lastDeckParentW = 0;
     this.lastDeckParentH = 0;

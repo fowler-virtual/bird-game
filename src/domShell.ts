@@ -20,7 +20,7 @@ const ASSET_BASE =
     }
   })();
 
-/** レアリティ → public の画像パス（Summon 結果・Farming/Deck DOM 表示・Vite base 対応） */
+/** レアリティ → public の画像パス（Adopt 結果・Farming/Deck DOM 表示・Vite base 対応） */
 export const RARITY_IMAGE_SRC: Record<BirdRarity, string> = {
   Common: ASSET_BASE + 'common.png',
   Uncommon: ASSET_BASE + 'uncommon.png',
@@ -28,6 +28,9 @@ export const RARITY_IMAGE_SRC: Record<BirdRarity, string> = {
   Epic: ASSET_BASE + 'epic.png',
   Legendary: ASSET_BASE + 'legendary.png',
 };
+
+/** Common 用 5 コマ横一列スプライト（Farming Loft のアニメーション用） */
+export const COMMON_SPRITE_SHEET_SRC = ASSET_BASE + 'common-sprite.png';
 const TAB_ACTIVE = 'active';
 
 function getShell(): HTMLElement | null {
@@ -38,11 +41,11 @@ const CANVAS_CARD_ID = 'shell-canvas-card';
 const CANVAS_HIDDEN_CLASS = 'canvas-card-hidden';
 const CANVAS_DECK_VIEW_CLASS = 'canvas-card-deck-view';
 
-/** 切り分け用: 直前のタブ（Summon から戻ったか判定用） */
+/** 切り分け用: 直前のタブ（Adopt から戻ったか判定用） */
 let lastTabId = '';
 const DEBUG_LAYOUT = true;
 
-/** Summon に隠す直前に保存したキャンバスカードのサイズ。Summon→Farming で getBoundingClientRect が 0 になるのを避ける。 */
+/** Adopt に隠す直前に保存したキャンバスカードのサイズ。Adopt→Farming で getBoundingClientRect が 0 になるのを避ける。 */
 let lastCanvasCardSize: { width: number; height: number } | null = null;
 
 export function getLastCanvasCardSize(): { width: number; height: number } | null {
@@ -107,7 +110,7 @@ export function switchToTab(tabId: string): void {
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
   /* Farming / Deck は HTML ビューなのでキャンバスを非表示にし、下に Phaser の名残が出ないようにする */
-  const hideCanvas = tabId === 'summon' || tabId === 'debug' || tabId === 'farming' || tabId === 'deck';
+  const hideCanvas = tabId === 'adopt' || tabId === 'debug' || tabId === 'farming' || tabId === 'deck';
   if (canvasCard) {
     if (hideCanvas) {
       const r = canvasCard.getBoundingClientRect();
@@ -266,6 +269,14 @@ function initTabListeners(): void {
   if (gacha10Btn) gacha10Btn.addEventListener('click', () => runGachaFromDom(10));
   const disconnectBtn = document.getElementById('shell-disconnect-btn');
   if (disconnectBtn) disconnectBtn.addEventListener('click', () => disconnectCallback?.());
+  const themeBtn = document.getElementById('shell-theme-btn');
+  if (themeBtn) themeBtn.addEventListener('click', () => {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    if (next === 'light') html.setAttribute('data-theme', 'light');
+    else html.removeAttribute('data-theme');
+    try { localStorage.setItem('bird-game-theme', next); } catch (_) {}
+  });
   initDebugPaneListeners();
   farmingView.init();
   deckView.init();
@@ -290,12 +301,10 @@ export function showGameShell(): void {
   }
 
   const addrEl = document.getElementById('shell-wallet-address');
-  const networkEl = document.getElementById('shell-network');
   if (addrEl) {
     const addr = GameStore.walletAddress;
     addrEl.textContent = addr ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : '—';
   }
-  if (networkEl) networkEl.textContent = '—';
 
   initTabListeners();
 

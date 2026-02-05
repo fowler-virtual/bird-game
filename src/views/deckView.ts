@@ -115,18 +115,25 @@ function renderInventory(): void {
       const cell = document.createElement('button');
       cell.type = 'button';
       cell.className = 'inventory-cell';
+      if (count < 1) cell.classList.add('unowned');
       cell.setAttribute('data-bird-type-key', key);
       (cell as HTMLButtonElement).disabled = count < 1;
 
-      const img = document.createElement('img');
-      img.src = RARITY_IMAGE_SRC[parts.rarity];
-      img.alt = parts.rarity;
-      cell.appendChild(img);
-
-      const countSpan = document.createElement('span');
-      countSpan.className = 'inventory-count';
-      countSpan.textContent = String(count);
-      cell.appendChild(countSpan);
+      if (count >= 1) {
+        const img = document.createElement('img');
+        img.src = RARITY_IMAGE_SRC[parts.rarity];
+        img.alt = parts.rarity;
+        cell.appendChild(img);
+        const countSpan = document.createElement('span');
+        countSpan.className = 'inventory-count';
+        countSpan.textContent = String(count);
+        cell.appendChild(countSpan);
+      } else {
+        const placeholder = document.createElement('span');
+        placeholder.className = 'inventory-unowned';
+        placeholder.textContent = '?';
+        cell.appendChild(placeholder);
+      }
 
       cell.addEventListener('click', () => {
         if (count < 1) return;
