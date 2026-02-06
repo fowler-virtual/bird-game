@@ -252,7 +252,17 @@ export const GameStore = {
     if (patch.gems) this.state = { ...this.state, gems: { ...this.state.gems, ...patch.gems } };
     if (patch.deckSlots) this.state = { ...this.state, deckSlots: [...patch.deckSlots] };
     if (patch.birdsOwned) this.state = { ...this.state, birdsOwned: [...patch.birdsOwned] };
-    if (patch.unlockedDeckCount !== undefined) this.state = { ...this.state, unlockedDeckCount: patch.unlockedDeckCount };
+    if (patch.unlockedDeckCount !== undefined) {
+      const nextCount = patch.unlockedDeckCount;
+      // デッキ枠数を減らしたときは、はみ出しているスロットの編成を自動的に外す
+      const nextSlots = [...this.state.deckSlots];
+      if (typeof nextCount === 'number') {
+        for (let i = nextCount; i < nextSlots.length; i++) {
+          nextSlots[i] = null;
+        }
+      }
+      this.state = { ...this.state, unlockedDeckCount: nextCount, deckSlots: nextSlots as DeckSlots };
+    }
     if (patch.loftLevel !== undefined) this.state = { ...this.state, loftLevel: patch.loftLevel };
     if (patch.inventory) this.state = { ...this.state, inventory: { ...patch.inventory } };
     if (patch.hasFreeGacha !== undefined) this.state = { ...this.state, hasFreeGacha: patch.hasFreeGacha };

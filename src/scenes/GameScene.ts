@@ -352,7 +352,7 @@ export class GameScene extends Phaser.Scene {
       .on('pointerover', () => deckBtn.setFillStyle(BG_HOVER))
       .on('pointerout', () => deckBtn.setFillStyle(BG_ELEVATED))
       .on('pointerdown', () => this.showDeck());
-    const deckLabel = this.add.text(PANEL_PADDING + btnW / 2, deckBtnY, 'Deck', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5);
+    const deckLabel = this.add.text(PANEL_PADDING + btnW / 2, deckBtnY, 'Loft', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5);
     this.leftPanelContainer.add([deckBtn, deckLabel]);
 
     const disconnectBtnY = deckBtnY + btnH + 12;
@@ -714,7 +714,7 @@ export class GameScene extends Phaser.Scene {
     this.leftPanel = this.add.container(0, 0);
     this.deckLeftPanelBg = this.add.rectangle(0, 0, 360, 280, BG_ELEVATED, 1).setStrokeStyle(1, BORDER).setOrigin(0, 0);
     this.leftPanel.add(this.deckLeftPanelBg);
-    this.deckSectionTitle = this.add.text(0, 0, 'DECK', sectionTitleStyle).setOrigin(0.5, 0.5).setDepth(SECTION_TITLE_DEPTH);
+    this.deckSectionTitle = this.add.text(0, 0, 'LOFT', sectionTitleStyle).setOrigin(0.5, 0.5).setDepth(SECTION_TITLE_DEPTH);
     this.leftPanel.add(this.deckSectionTitle);
 
     const placehold = 64;
@@ -753,7 +753,7 @@ export class GameScene extends Phaser.Scene {
     this.rightPanel.add(this.standbySectionTitle);
     const hintStyle = { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED };
     this.standbySectionHint = this.add
-      .text(0, 0, 'Tap a bird below to assign to deck', hintStyle)
+      .text(0, 0, 'Tap a bird below to assign to Loft', hintStyle)
       .setOrigin(0.5, 0.5)
       .setDepth(SECTION_TITLE_DEPTH);
     this.rightPanel.add(this.standbySectionHint);

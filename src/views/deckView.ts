@@ -41,9 +41,9 @@ function refreshShellStatus(): void {
   });
 }
 
-const HINT_DEFAULT = 'Tap a bird to add to deck (A→H in order). Tap a deck slot to remove.';
+const HINT_DEFAULT = 'Tap a bird to add to Loft (A→H in order). Tap a Loft slot to remove.';
 const HINT_DECK_FULL = 'No empty slot. Unlock more with Loft upgrade.';
-const HINT_ONBOARDING_PLACE = 'Tap your adopted bird below to place it on your deck.';
+const HINT_ONBOARDING_PLACE = 'Tap your adopted bird below to place it on your Loft.';
 
 function updateHint(text?: string): void {
   const hint = getEl(DECK_INVENTORY_HINT_ID);

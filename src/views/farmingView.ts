@@ -7,9 +7,10 @@ import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
 import { RARITY_IMAGE_SRC, COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus } from '../domShell';
+import * as deckView from './deckView';
 
 const LOFT_GRID_ID = 'loft-grid';
-const LOFT_UPGRADE_BTN_ID = 'loft-upgrade-btn';
+const LOFT_UPGRADE_BTN_ID = 'status-loft-upgrade-btn';
 const FARMING_ACCRUAL_HINT_ID = 'farming-accrual-hint';
 const LOFT_MODAL_BACKDROP_ID = 'loft-modal-backdrop';
 const LOFT_MODAL_COST_ID = 'loft-modal-cost';
@@ -44,6 +45,7 @@ function renderLoft(): void {
     const cell = document.createElement('div');
     cell.className = 'loft-cell';
     cell.setAttribute('role', 'gridcell');
+    cell.setAttribute('tabindex', '-1');
     const active = activeIndices.includes(slotIndex);
     if (!active) {
       cell.classList.add('locked');
@@ -56,18 +58,12 @@ function renderLoft(): void {
           cell.classList.add('has-bird');
           cell.dataset.slotIndex = String(slotIndex);
           const img = document.createElement('img');
-          if (bird.rarity === 'Common') {
-            // Common は frame1 から 1→2→3→4 の順番で進む。
-            // startLagTick によって「飛び始めるタイミング」だけランダムにずらす。
-            const lag = Math.floor(Math.random() * SPRITE_MAX_LAG_TICKS);
-            img.src = COMMON_FRAME_SRCS[SPRITE_SEQUENCE[0]];
-            img.dataset.commonLagTick = String(lag);
-            img.dataset.commonSeqIndex = '0';
-            img.className = 'loft-bird-img loft-bird-anim-common';
-          } else {
-            img.src = RARITY_IMAGE_SRC[bird.rarity];
-            img.className = 'loft-bird-img';
-          }
+          // Loft ではレアリティに関係なく、共通のロフト用スプライトをアニメーション表示する。
+          const lag = Math.floor(Math.random() * SPRITE_MAX_LAG_TICKS);
+          img.src = COMMON_FRAME_SRCS[SPRITE_SEQUENCE[0]];
+          img.dataset.commonLagTick = String(lag);
+          img.dataset.commonSeqIndex = '0';
+          img.className = 'loft-bird-img loft-bird-anim-common';
           img.alt = bird.rarity;
           cell.appendChild(img);
           cell.setAttribute('aria-label', `Slot ${slotIndex + 1}: ${bird.rarity}`);
@@ -80,7 +76,8 @@ function renderLoft(): void {
   }
 }
 
-function updateUpgradeButton(): void {
+/** Update Loft Upgrade button in status bar (enabled/disabled). Exported so domShell can call on status refresh. */
+export function updateUpgradeButton(): void {
   const btn = getEl(LOFT_UPGRADE_BTN_ID) as HTMLButtonElement | null;
   if (!btn) return;
 
@@ -150,6 +147,8 @@ function confirmUpgrade(): void {
   GameStore.save();
   closeUpgradeModal();
   refresh();
+  // Loftタブ（デッキ枠）も即座に解放状態を反映させる
+  deckView.refresh();
 }
 
 function initModalListeners(): void {
@@ -224,11 +223,12 @@ export function stop(): void {
   }
 }
 
-/** Call once when shell is shown to wire upgrade button and modal. */
+/** Call once when shell is shown to wire upgrade button (in status bar) and modal. */
 export function init(): void {
   initModalListeners();
   const btn = getEl(LOFT_UPGRADE_BTN_ID);
   btn?.addEventListener('click', () => {
     if (getNextUnlockCost(GameStore.state.unlockedDeckCount) != null) openUpgradeModal();
   });
+  updateUpgradeButton();
 }

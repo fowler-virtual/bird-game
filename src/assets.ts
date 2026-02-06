@@ -11,23 +11,24 @@ const ASSET_BASE =
     }
   })();
 
-/** レアリティ → public の画像パス（Adopt 結果・Farming/Deck DOM 表示・Vite base 対応） */
+/** レアリティ → public の画像パス（Adopt 結果・Loft/Inventory DOM 表示・Vite base 対応）
+ *  現状は全レアリティとも Java Sparrow のカード絵を指す想定。
+ */
 export const RARITY_IMAGE_SRC: Record<BirdRarity, string> = {
-  // Common は frame1 を基準アイコンとして使用
-  Common: ASSET_BASE + 'common-frame1.png',
-  Uncommon: ASSET_BASE + 'uncommon.png',
-  Rare: ASSET_BASE + 'rare.png',
-  Epic: ASSET_BASE + 'epic.png',
-  Legendary: ASSET_BASE + 'legendary.png',
+  Common: ASSET_BASE + 'java_sparrow_common.png',
+  Uncommon: ASSET_BASE + 'java_sparrow_uncommon.png',
+  Rare: ASSET_BASE + 'java_sparrow_rare.png',
+  Epic: ASSET_BASE + 'java_sparrow_epic.png',
+  Legendary: ASSET_BASE + 'java_sparrow_legendary.png',
 };
 
-/** Farming Loft 用: Common のフレーム画像（1〜6） */
+/** Farming Loft 用: Common Java Sparrow のフレーム画像（1〜6） */
 export const COMMON_FRAME_SRCS: string[] = [
-  ASSET_BASE + 'common-frame1.png',
-  ASSET_BASE + 'common-frame2.png',
-  ASSET_BASE + 'common-frame3.png',
-  ASSET_BASE + 'common-frame4.png',
-  ASSET_BASE + 'common-frame5.png',
-  ASSET_BASE + 'common-frame6.png',
+  ASSET_BASE + 'java_sparrow_common_frame1.png',
+  ASSET_BASE + 'java_sparrow_common_frame2.png',
+  ASSET_BASE + 'java_sparrow_common_frame3.png',
+  ASSET_BASE + 'java_sparrow_common_frame4.png',
+  ASSET_BASE + 'java_sparrow_common_frame5.png',
+  ASSET_BASE + 'java_sparrow_common_frame6.png',
 ];
 

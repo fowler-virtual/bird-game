@@ -296,38 +296,6 @@
         flex-direction: column;
         gap: 16px;
       }
-      .tab-intro {
-        display: none;
-        padding: 16px 16px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-      }
-      @media (min-width: 768px) {
-        .tab-intro { padding: 20px 16px; }
-      }
-      .tab-intro.active {
-        display: block;
-      }
-      .tab-intro-title {
-        font-size: 18px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        color: var(--text);
-        margin: 0 0 6px 0;
-      }
-      .tab-intro-text {
-        font-size: 13px;
-        color: var(--text-muted);
-        line-height: 1.5;
-        margin: 0;
-      }
-      .tab-intro-hint {
-        font-size: 13px;
-        color: var(--text-muted);
-        line-height: 1.4;
-        margin: 8px 0 0 0;
-      }
       .gacha-cta {
         display: flex;
         gap: 12px;
@@ -408,14 +376,6 @@
         border-radius: var(--radius);
         padding: 20px;
       }
-      .loft-section-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin: 0 0 16px 0;
-      }
       .loft-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -456,31 +416,22 @@
         height: 100%;
         object-fit: contain;
       }
-      .loft-actions { display: flex; justify-content: center; }
-      .loft-upgrade-btn {
-        min-height: 44px;
-        padding: 0 24px;
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--text);
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
-      }
-      .loft-upgrade-btn:hover:not(:disabled) {
-        background: var(--bg-card);
-        border-color: var(--text-muted);
-      }
-      .loft-upgrade-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       .farming-accrual-hint {
         min-height: 24px;
         font-size: 14px;
         font-weight: 500;
         color: var(--accent);
         text-align: center;
-              }
+        caret-color: transparent;
+        user-select: none;
+      }
+      .loft-section, .loft-grid, .loft-cell {
+        caret-color: transparent;
+        user-select: none;
+      }
+      .loft-cell:focus, .farming-accrual-hint:focus {
+        outline: none;
+      }
 
       /* ----- Deck pane (HTML+CSS) ----- */
       /* 常に上下配置：デッキを上・インベントリを下。デッキの鳥を大きくして主役に。 */
@@ -789,10 +740,10 @@
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
-        /* 下の tab-intro と左右の位置を完全に揃えるため、コンテナ幅いっぱいまで広げる */
         width: 100%;
       }
-      @media (min-width: 480px) {
+      /* 幅が十分あるときだけ4列。狭いときは2x2で見やすく */
+      @media (min-width: 640px) {
         .status-cards { grid-template-columns: repeat(4, 1fr); }
       }
       .status-cards-global {
@@ -801,7 +752,8 @@
       .status-card {
         display: flex;
         flex-direction: column;
-        padding: 14px 16px;
+        min-width: 0;
+        padding: 8px 12px;
         background: var(--bg-card);
         border: 1px solid var(--border);
         border-radius: var(--radius);
@@ -812,10 +764,9 @@
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        line-height: 1.2;
-        /* Reserve 2 lines so values align even when a label wraps (e.g. CURRENT SEED). */
-        min-height: 2.4em;
-        margin-bottom: 6px;
+        line-height: 1.15;
+        min-height: 2em;
+        margin-bottom: 0;
       }
       .status-card-value {
         font-size: 18px;
@@ -827,6 +778,53 @@
       @media (min-width: 768px) {
         .status-card-value { font-size: 20px; }
       }
+      .status-card-seed-row {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-top: auto;
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+      .status-card-seed-row .status-card-value { margin-top: 0; min-width: 0; }
+      .status-card-seed-delta {
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--accent);
+        user-select: none;
+        -webkit-user-select: none;
+        caret-color: transparent;
+      }
+      .status-card-loft .status-card-value-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+      .status-card-loft .status-card-value-row .status-card-value { margin-top: 0; min-width: 0; }
+      .status-loft-upgrade-btn {
+        flex-shrink: 0;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+        user-select: none;
+        -webkit-user-select: none;
+        caret-color: transparent;
+      }
+      .status-loft-upgrade-btn:hover:not(:disabled) {
+        background: var(--bg-card);
+        border-color: var(--text-muted);
+      }
+      .status-loft-upgrade-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .status-loft-upgrade-btn:focus { outline: none; }
 
       /* ----- Canvas card (Adopt 時は画面外に移すだけ。display:none にすると親が 0x0 になり Phaser の scale が壊れる) ----- */
       .canvas-card-hidden {
@@ -922,7 +920,7 @@
       <nav class="shell-tabs">
         <button type="button" class="shell-tab active" data-tab="farming">Farming</button>
         <button type="button" class="shell-tab" data-tab="adopt">Adopt</button>
-        <button type="button" class="shell-tab" data-tab="deck">Deck</button>
+        <button type="button" class="shell-tab" data-tab="deck">Loft</button>
         <button type="button" class="shell-tab" data-tab="debug">Debug</button>
       </nav>
       <main class="shell-content">
@@ -931,7 +929,10 @@
             <div class="status-cards status-cards-global">
               <div class="status-card">
                 <div class="status-card-label">Current SEED</div>
-                <div class="status-card-value" id="dom-seed">0</div>
+                <div class="status-card-seed-row">
+                  <div class="status-card-value" id="dom-seed">0</div>
+                  <span class="status-card-seed-delta" id="farming-accrual-hint" aria-live="polite"></span>
+                </div>
               </div>
               <div class="status-card">
                 <div class="status-card-label">SEED/day</div>
@@ -941,42 +942,22 @@
                 <div class="status-card-label">Network Share</div>
                 <div class="status-card-value" id="dom-network-share">—%</div>
               </div>
-              <div class="status-card">
+              <div class="status-card status-card-loft">
                 <div class="status-card-label">Loft Lv</div>
-                <div class="status-card-value" id="dom-loft-level">1</div>
+                <div class="status-card-value-row">
+                  <div class="status-card-value" id="dom-loft-level">1</div>
+                  <button type="button" class="status-loft-upgrade-btn" id="status-loft-upgrade-btn">Upgrade</button>
+                </div>
               </div>
             </div>
           </div>
-          <div class="tab-intro active" data-tab="farming">
-            <h2 class="tab-intro-title">Farming</h2>
-            <p class="tab-intro-text">Place birds in the Loft to earn SEED over time. Unlock more slots by upgrading Loft level.</p>
-          </div>
-          <div class="tab-intro" data-tab="adopt">
-            <h2 class="tab-intro-title">Adopt</h2>
-            <p class="tab-intro-text">Use SEED or $BIRD to adopt new birds. Adopted birds are added to your standby deck; assign them in the Deck tab to join farming.</p>
-          </div>
-          <div class="tab-intro" data-tab="deck">
-            <h2 class="tab-intro-title">Deck</h2>
-            <p class="tab-intro-text">Assign birds from your active deck (top) and inventory (bottom).</p>
-            <p class="tab-intro-hint" id="deck-inventory-hint">Tap a bird to add to deck (A→H in order). Tap a deck slot to remove.</p>
-          </div>
-          <div class="tab-intro" data-tab="debug">
-            <h2 class="tab-intro-title">Debug</h2>
-            <p class="tab-intro-text">Adjust SEED, $Bird, and Loft level for testing.</p>
-          </div>
-
           <div id="pane-farming" class="tab-pane active">
             <div class="farming-pane-body">
               <div class="loft-section">
-                <h3 class="loft-section-title">Loft</h3>
-                <div class="loft-grid" id="loft-grid" role="grid" aria-label="Loft slots">
+                <div class="loft-grid" id="loft-grid" role="grid" aria-label="Loft slots" tabindex="-1">
                   <!-- 4x2 cells filled by JS -->
                 </div>
-                <div class="loft-actions">
-                  <button type="button" class="loft-upgrade-btn" id="loft-upgrade-btn">Upgrade Loft</button>
-                </div>
               </div>
-              <div class="farming-accrual-hint" id="farming-accrual-hint" aria-live="polite"></div>
             </div>
           </div>
           <div id="pane-adopt" class="tab-pane">
@@ -1007,8 +988,8 @@
                   <p class="deck-onboarding-cta-text">Bird placed! Go to Farming to start earning SEED.</p>
                   <button type="button" class="shell-gacha-spin-btn" id="deck-onboarding-goto-farming">Go to Farming</button>
                 </div>
-                <section class="deck-section" aria-label="Deck">
-                  <h3 class="deck-section-title">Deck</h3>
+                <section class="deck-section" aria-label="Loft">
+                  <h3 class="deck-section-title">Loft</h3>
                   <div class="deck-grid" id="deck-grid" role="grid">
                     <!-- 8 slots filled by JS -->
                   </div>

@@ -133,7 +133,7 @@ export class GachaScene extends Phaser.Scene {
     this.hintModalObjects.push(box);
 
     const msg = this.add
-      .text(w / 2, h / 2 - 24, 'Added to standby.\nPlace on deck to earn SEED.', {
+      .text(w / 2, h / 2 - 24, 'Added to standby.\nPlace on Loft to earn SEED.', {
         resolution: TEXT_RESOLUTION,
         fontSize: FONT_BODY,
         color: TEXT_PRIMARY,
@@ -155,7 +155,7 @@ export class GachaScene extends Phaser.Scene {
         this.scene.get('GameScene')?.events.emit('refresh');
         this.scene.stop('GachaScene');
       });
-    const deployLabel = this.add.text(w / 2, h / 2 + 28, 'To Deck', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2);
+    const deployLabel = this.add.text(w / 2, h / 2 + 28, 'To Loft', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2);
     this.hintModalObjects.push(deployBtn, deployLabel);
   }
 }

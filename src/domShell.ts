@@ -79,13 +79,10 @@ export function switchToTab(tabId: string): void {
   }
   document.querySelectorAll('.shell-tab').forEach((el) => el.classList.remove(TAB_ACTIVE));
   document.querySelectorAll('.tab-pane').forEach((el) => el.classList.remove(TAB_ACTIVE));
-  document.querySelectorAll('.tab-intro').forEach((el) => el.classList.remove(TAB_ACTIVE));
   const tab = document.querySelector(`.shell-tab[data-tab="${tabId}"]`);
   const pane = document.getElementById(`pane-${tabId}`);
-  const intro = document.querySelector(`.tab-intro[data-tab="${tabId}"]`);
   if (tab) tab.classList.add(TAB_ACTIVE);
   if (pane) pane.classList.add(TAB_ACTIVE);
-  if (intro) intro.classList.add(TAB_ACTIVE);
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
   /* Farming / Deck は HTML ビューなのでキャンバスを非表示にし、下に Phaser の名残が出ないようにする */
@@ -385,7 +382,7 @@ function initDebugPaneListeners(): void {
   const resetBtn = document.getElementById('dom-debug-reset');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
-      if (!window.confirm('Reset game state and return to onboarding? (SEED, $Bird, birds, deck will be cleared.)')) return;
+      if (!window.confirm('Reset game state and return to onboarding? (SEED, $Bird, birds, and Loft will be cleared.)')) return;
       GameStore.resetToInitial();
       refreshDebugPane();
       emitGameRefresh();
@@ -496,6 +493,7 @@ export function updateShellStatus(payload: {
   if (seedPerDayEl) seedPerDayEl.textContent = String(Math.floor(payload.seedPerDay));
   if (networkEl) networkEl.textContent = `${payload.networkSharePercent.toFixed(5)}%`;
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
+  farmingView.updateUpgradeButton();
 }
 
 export function isShellVisible(): boolean {
