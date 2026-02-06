@@ -41,7 +41,7 @@ function refreshShellStatus(): void {
   });
 }
 
-const HINT_DEFAULT = 'Tap a bird to add to Loft (A→H in order). Tap a Loft slot to remove.';
+const HINT_DEFAULT = 'Tap a bird to add to Loft (A→L in order). Tap a Loft slot to remove.';
 const HINT_DECK_FULL = 'No empty slot. Unlock more with Loft upgrade.';
 const HINT_ONBOARDING_PLACE = 'Tap your adopted bird below to place it on your Loft.';
 
@@ -60,7 +60,7 @@ function renderDeck(): void {
   const state = GameStore.state;
 
   grid.innerHTML = '';
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < DECK_SLOT_IDS.length; i++) {
     const slot = document.createElement('button');
     slot.type = 'button';
     slot.className = 'deck-slot';

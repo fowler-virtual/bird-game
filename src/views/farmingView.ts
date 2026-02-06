@@ -41,7 +41,7 @@ function renderLoft(): void {
   const activeIndices = getActiveSlotIndices(state);
 
   grid.innerHTML = '';
-  for (let slotIndex = 0; slotIndex < 8; slotIndex++) {
+  for (let slotIndex = 0; slotIndex < state.deckSlots.length; slotIndex++) {
     const cell = document.createElement('div');
     cell.className = 'loft-cell';
     cell.setAttribute('role', 'gridcell');
@@ -216,6 +216,11 @@ export function stop(): void {
   if (accrualHintTimer) {
     clearTimeout(accrualHintTimer);
     accrualHintTimer = 0;
+  }
+  // 他タブに移動したら CURRENT SEED の「+◯ SEED」表示は必ず消しておく
+  const hintEl = getEl(FARMING_ACCRUAL_HINT_ID);
+  if (hintEl) {
+    hintEl.textContent = '';
   }
   if (spriteIntervalId) {
     clearInterval(spriteIntervalId);

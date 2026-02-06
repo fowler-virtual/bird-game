@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameStore } from '../store/GameStore';
+import { MAX_LOFT_LEVEL } from '../types';
 import {
   BG_CARD,
   BG_ELEVATED,
@@ -95,8 +96,8 @@ export class DebugScene extends Phaser.Scene {
     this.add.text(left, y, 'Loft Level', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0, 0.5).setDepth(d);
     this.loftText = this.add.text(valueX, y, String(GameStore.state.loftLevel), { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0, 0.5).setDepth(d);
     y += 20;
-    for (let lv = 1; lv <= 4; lv++) {
-      const lvX = cx - 54 + (lv - 1) * 36;
+    for (let lv = 1; lv <= MAX_LOFT_LEVEL; lv++) {
+      const lvX = cx - 90 + (lv - 1) * 36;
       this.add
         .rectangle(lvX, y, 28, 24, BG_ELEVATED)
         .setStrokeStyle(1, BORDER)
@@ -181,10 +182,10 @@ export class DebugScene extends Phaser.Scene {
   }
 
   private setLoftLevel(level: number): void {
-    if (level < 1 || level > 4) return;
+    if (level < 1 || level > MAX_LOFT_LEVEL) return;
     GameStore.setState({
       loftLevel: level,
-      unlockedDeckCount: (level * 2) as 2 | 4 | 6 | 8,
+      unlockedDeckCount: level * 2,
     });
     GameStore.save();
     this.loftText.setText(String(level));

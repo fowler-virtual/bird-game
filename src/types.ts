@@ -115,7 +115,7 @@ export interface Bird {
   color?: BirdColor;
 }
 
-export type DeckSlotId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H';
+export type DeckSlotId = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L';
 
 export type DeckSlots = (string | null)[];
 
@@ -139,27 +139,30 @@ export interface GameState {
   onboardingStep?: 'need_gacha' | 'need_place' | 'need_farming' | 'done';
 }
 
-const DECK_SLOT_IDS: DeckSlotId[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+const DECK_SLOT_IDS: DeckSlotId[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 export { DECK_SLOT_IDS };
 
-/** Loft解放コスト（SEED + $Bird）。2→4→6→8枠の3回解放 */
+/** Loft解放コスト（SEED + $Bird）。2→4→6→8→10→12枠の5回解放 */
 export const DECK_UNLOCK_COSTS: { seed: number; bird: number }[] = [
-  { seed: 500, bird: 200 },
-  { seed: 1200, bird: 500 },
-  { seed: 2500, bird: 1200 },
+  { seed: 500, bird: 200 },   // 2→4
+  { seed: 1200, bird: 500 },  // 4→6
+  { seed: 2500, bird: 1200 }, // 6→8
+  { seed: 5000, bird: 2500 }, // 8→10
+  { seed: 10000, bird: 5000 }, // 10→12
 ];
 
 export function getNextUnlockCost(unlockedDeckCount: number): { seed: number; bird: number } | null {
-  if (unlockedDeckCount >= 8) return null;
-  const index = unlockedDeckCount === 2 ? 0 : unlockedDeckCount === 4 ? 1 : unlockedDeckCount === 6 ? 2 : -1;
+  if (unlockedDeckCount >= 12) return null;
+  const index = (unlockedDeckCount - 2) / 2;
+  if (!Number.isInteger(index)) return null;
   if (index < 0) return null;
   return DECK_UNLOCK_COSTS[index] ?? null;
 }
 
 export const INITIAL_UNLOCKED_DECK_COUNT = 2;
 
-/** Loft Lv1=2枠, Lv2=4枠, Lv3=6枠, Lv4=8枠 */
-export const MAX_LOFT_LEVEL = 4;
+/** Loft Lv1=2枠, Lv2=4枠, Lv3=6枠, Lv4=8枠, Lv5=10枠, Lv6=12枠 */
+export const MAX_LOFT_LEVEL = 6;
 
 export function getActiveSlotsByLoftLevel(loftLevel: number): number {
   const lv = Math.min(MAX_LOFT_LEVEL, Math.max(1, loftLevel));

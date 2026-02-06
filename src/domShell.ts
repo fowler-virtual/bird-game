@@ -4,7 +4,7 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { getProductionRatePerHour, getNetworkSharePercent } from './types';
+import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from './types';
 import * as farmingView from './views/farmingView';
 import * as deckView from './views/deckView';
 import { RARITY_IMAGE_SRC } from './assets';
@@ -369,10 +369,10 @@ function initDebugPaneListeners(): void {
   document.querySelectorAll('.debug-loft-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const level = Number((btn as HTMLElement).getAttribute('data-level'));
-      if (level < 1 || level > 4) return;
+      if (level < 1 || level > MAX_LOFT_LEVEL) return;
       GameStore.setState({
         loftLevel: level,
-        unlockedDeckCount: (level * 2) as 2 | 4 | 6 | 8,
+        unlockedDeckCount: level * 2,
       });
       GameStore.save();
       refreshDebugPane();

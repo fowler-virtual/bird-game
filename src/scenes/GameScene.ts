@@ -50,15 +50,15 @@ const LEFT_PANEL_WIDTH = 220;
 /** この幅未満でドロワー＋フル幅コンテンツ、以上で左パネル常時表示（HyperFarm のように自動判定） */
 const MOBILE_BREAKPOINT = 768;
 const LOFT_COLS = 4;
-const LOFT_ROWS = 2;
+const LOFT_ROWS = 3;
 const LOFT_CELL = 88;
 const LOFT_GAP = 16;
 const LOFT_BIRD_SIZE = 72;
 const PANEL_PADDING = 20;
 const PANEL_TOP = 32;
-const DECK_SLOTS = 8;
+const DECK_SLOTS = 12;
 const DECK_HEADER_H = 44;
-/** デッキ: 4列×2行。スタンバイ: 5列×8行。 */
+/** デッキ: 4列×3行。スタンバイ: 5列×8行。 */
 const DECK_COLS = 4;
 const SLOT_GAP = 10;
 

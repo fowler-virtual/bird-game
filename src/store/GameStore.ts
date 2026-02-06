@@ -77,17 +77,17 @@ function parseGameState(raw: string | null): GameState {
         )
       : [];
     const deckSlots: DeckSlots = Array.isArray(parsed.deckSlots)
-      ? parsed.deckSlots.slice(0, 8).map((v) => (typeof v === 'string' ? v : null))
+      ? parsed.deckSlots.slice(0, DECK_SLOT_IDS.length).map((v) => (typeof v === 'string' ? v : null))
       : DECK_SLOT_IDS.map(() => null);
-    while (deckSlots.length < 8) deckSlots.push(null);
+    while (deckSlots.length < DECK_SLOT_IDS.length) deckSlots.push(null);
     const lastAccrualAt =
       typeof parsed.lastAccrualAt === 'string' ? parsed.lastAccrualAt : new Date().toISOString();
     const rawUnlocked = parsed.unlockedDeckCount;
     const rawCount = typeof rawUnlocked === 'number' ? rawUnlocked : INITIAL_UNLOCKED_DECK_COUNT;
-    const unlockedDeckCount = Math.min(8, Math.max(2, Math.round(rawCount / 2) * 2)) as 2 | 4 | 6 | 8;
+    const unlockedDeckCount = Math.min(12, Math.max(2, Math.round(rawCount / 2) * 2));
     const rawLoft = parsed.loftLevel;
     const loftLevel =
-      typeof rawLoft === 'number' && rawLoft >= 1 && rawLoft <= 4 ? rawLoft : Math.min(4, Math.max(1, unlockedDeckCount / 2));
+      typeof rawLoft === 'number' && rawLoft >= 1 && rawLoft <= 6 ? rawLoft : Math.min(6, Math.max(1, unlockedDeckCount / 2));
     for (let i = unlockedDeckCount; i < deckSlots.length; i++) {
       deckSlots[i] = null;
     }
@@ -295,12 +295,12 @@ export const GameStore = {
     const cost = getNextUnlockCost(this.state.unlockedDeckCount);
     if (!cost) return false;
     if (this.state.seed < cost.seed || this.birdCurrency < cost.bird) return false;
-    const nextCount = (this.state.unlockedDeckCount + 2) as 2 | 4 | 6 | 8;
+    const nextCount = this.state.unlockedDeckCount + 2;
     this.state = {
       ...this.state,
       seed: this.state.seed - cost.seed,
-      unlockedDeckCount: Math.min(8, nextCount),
-      loftLevel: Math.min(4, nextCount / 2),
+      unlockedDeckCount: Math.min(12, nextCount),
+      loftLevel: Math.min(6, nextCount / 2),
     };
     this.spendBirdCurrency(cost.bird);
     return true;
