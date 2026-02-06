@@ -5,7 +5,7 @@
 
 import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
-import { RARITY_IMAGE_SRC, COMMON_FRAME_SRCS } from '../assets';
+import { COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus } from '../domShell';
 import * as deckView from './deckView';
 
