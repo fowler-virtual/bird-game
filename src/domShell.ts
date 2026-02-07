@@ -282,7 +282,7 @@ function updateGachaButtonsAndCosts(): void {
     else btn1.textContent = `Adopt 1x (${cost1} $BIRD)`;
   }
   if (btn10) {
-    btn10.textContent = `Adopt 10x (${cost10} $BIRD)`;
+    btn10.textContent = 'Adopt 10x';
   }
 
   if (cost1El) {
