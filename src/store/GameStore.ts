@@ -386,29 +386,39 @@ export const GameStore = {
   },
 
   /**
-   * ガチャを N 回引く。1回目無料（hasFreeGacha）の場合はその1回は $BIRD 消費なし。
+   * ガチャを N 回引く。1回引くときのみ初回無料（hasFreeGacha）。10連は常に 100 $BIRD。
    * @returns ok: false のとき error にメッセージ、birds は空。ok: true のとき birds に今回引いた鳥。
    */
   pullGacha(count: 1 | 10): { ok: boolean; error?: string; birds: Bird[] } {
     if (!this.walletConnected) {
       return { ok: false, error: 'Please connect your wallet.', birds: [] };
     }
-    const freePulls = this.state.hasFreeGacha ? 1 : 0;
-    const paidPulls = Math.max(0, count - freePulls);
-    const cost = paidPulls * GACHA_COST;
+    const cost =
+      count === 1
+        ? (this.state.hasFreeGacha ? 0 : GACHA_COST)
+        : 10 * GACHA_COST;
     if (this.birdCurrency < cost) {
       return { ok: false, error: `Not enough $BIRD. (Required: ${cost})`, birds: [] };
     }
 
+    if (count === 10) {
+      this.spendBirdCurrency(cost);
+      if (this.state.hasFreeGacha) this.setState({ hasFreeGacha: false });
+    }
+
     const birds: Bird[] = [];
     for (let i = 0; i < count; i++) {
-      const isFree = i === 0 && this.state.hasFreeGacha;
-      if (!isFree) this.spendBirdCurrency(GACHA_COST);
-      else this.setState({ hasFreeGacha: false });
+      const isFree = count === 1 && i === 0 && this.state.hasFreeGacha;
+      if (count === 1 && !isFree) this.spendBirdCurrency(GACHA_COST);
+      if (count === 1 && isFree) this.setState({ hasFreeGacha: false });
 
       const rarity = isFree ? 'Common' : rollGachaRarity();
-      const species = BIRD_SPECIES[Math.floor(Math.random() * BIRD_SPECIES.length)];
-      const color = BIRD_COLORS[Math.floor(Math.random() * BIRD_COLORS.length)];
+      const species = isFree
+        ? BIRD_SPECIES[0]
+        : BIRD_SPECIES[Math.floor(Math.random() * BIRD_SPECIES.length)];
+      const color = isFree
+        ? BIRD_COLORS[0]
+        : BIRD_COLORS[Math.floor(Math.random() * BIRD_COLORS.length)];
       const bird: Bird = {
         id: generateBirdId(),
         rarity,

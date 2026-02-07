@@ -7,7 +7,6 @@ import { GameStore } from '../store/GameStore';
 import {
   DECK_SLOT_IDS,
   getBirdById,
-  isSlotActive,
   getActiveSlotIndices,
   getBirdTypeKeyForInventoryCell,
   parseBirdTypeKey,
@@ -58,15 +57,15 @@ function renderDeck(): void {
   if (!grid) return;
 
   const state = GameStore.state;
+  const activeIndices = getActiveSlotIndices(state);
 
   grid.innerHTML = '';
-  for (let i = 0; i < DECK_SLOT_IDS.length; i++) {
+  for (const i of activeIndices) {
     const slot = document.createElement('button');
     slot.type = 'button';
     slot.className = 'deck-slot';
     slot.setAttribute('data-slot-index', String(i));
-    const locked = !isSlotActive(state, i);
-    if (locked) slot.classList.add('locked');
+    slot.setAttribute('aria-label', `Slot ${DECK_SLOT_IDS[i]}`);
 
     const idLabel = document.createElement('span');
     idLabel.className = 'deck-slot-id';
@@ -86,7 +85,6 @@ function renderDeck(): void {
     }
 
     slot.addEventListener('click', () => {
-      if (locked) return;
       if (birdId) {
         GameStore.removeBirdFromDeck(i);
         GameStore.save();
@@ -167,8 +165,15 @@ function renderInventory(): void {
   }
 }
 
+const DECK_SLOTS_CAPTION_ID = 'deck-slots-caption';
+
 /** Call when Deck tab becomes visible. */
 export function refresh(): void {
+  const state = GameStore.state;
+  const activeCount = getActiveSlotIndices(state).length;
+  const captionEl = document.getElementById(DECK_SLOTS_CAPTION_ID);
+  if (captionEl) captionEl.textContent = `（${activeCount} slots）`;
+
   renderDeck();
   renderInventory();
   updateHint();

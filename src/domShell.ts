@@ -269,7 +269,7 @@ function updateGachaButtonsAndCosts(): void {
   const state = GameStore.state;
   const freePulls = state.hasFreeGacha ? 1 : 0;
   const cost1 = Math.max(0, 1 - freePulls) * GACHA_COST;
-  const cost10 = Math.max(0, 10 - freePulls) * GACHA_COST;
+  const cost10 = 10 * GACHA_COST;
   const bal = GameStore.birdCurrency;
 
   const btn1 = document.getElementById('shell-gacha-1') as HTMLButtonElement | null;
@@ -428,8 +428,10 @@ function runGachaFromDom(count: 1 | 10): void {
 
   const state = GameStore.state;
   const freePulls = state.hasFreeGacha ? 1 : 0;
-  const paidPulls = Math.max(0, count - freePulls);
-  const cost = paidPulls * GACHA_COST;
+  const cost =
+    count === 1
+      ? Math.max(0, 1 - freePulls) * GACHA_COST
+      : 10 * GACHA_COST;
   const bal = GameStore.birdCurrency;
 
   if (cost > 0 && bal < cost) {

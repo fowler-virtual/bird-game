@@ -332,21 +332,32 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
       }
-      .gacha-cta {
-        display: flex;
-        gap: 12px;
-      }
-      .gacha-option {
-        flex: 1;
+      .gacha-cta-wrap {
         display: flex;
         flex-direction: column;
         gap: 6px;
-        position: relative;
+      }
+      .gacha-cta-badge-row {
+        min-height: 22px;
+        text-align: left;
+      }
+      .gacha-cta-badge-row:empty { min-height: 0; }
+      .gacha-cta {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .gacha-option {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+      .gacha-option .shell-gacha-spin-btn {
+        width: 100%;
       }
       .adopt-free-badge {
-        position: absolute;
-        top: -8px;
-        right: 0;
+        display: inline-block;
         font-size: 10px;
         font-weight: 600;
         color: var(--accent);
@@ -440,9 +451,6 @@
         transition: opacity 0.15s, transform 0.15s;
         box-shadow: 0 2px 8px var(--accent-dim);
         white-space: nowrap;
-      }
-      #shell-gacha-10 {
-        min-width: 200px;
       }
       .shell-gacha-spin-btn:hover { opacity: 0.95; transform: scale(1.02); }
       .shell-gacha-spin-btn:active { transform: scale(0.98); }
@@ -682,6 +690,13 @@
         text-transform: uppercase;
         letter-spacing: 0.06em;
         margin: 0 0 12px 0;
+      }
+      .deck-slots-caption {
+        font-size: 11px;
+        font-weight: 500;
+        text-transform: none;
+        letter-spacing: 0;
+        color: var(--text-muted);
       }
       /* Loftタブのデッキ：Adopt と同じアイコンサイズ。常に4列、狭い幅ではアイコンだけ縮小 */
       .deck-grid {
@@ -1328,15 +1343,19 @@
               <p class="adopt-description">10 $BIRD per adoption. Place birds on your Loft to earn SEED.</p>
               <div class="adopt-cta-card">
                 <h3 class="adopt-cta-title">Adoption</h3>
-                <div class="gacha-cta">
-                  <div class="gacha-option">
+                <div class="gacha-cta-wrap">
+                  <div class="gacha-cta-badge-row">
                     <span class="adopt-free-badge" id="adopt-free-badge">First free</span>
-                    <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Adopt 1x</button>
-                    <div class="gacha-cost" id="gacha-cost-1"></div>
                   </div>
-                  <div class="gacha-option">
-                    <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Adopt 10x</button>
-                    <div class="gacha-cost" id="gacha-cost-10"></div>
+                  <div class="gacha-cta">
+                    <div class="gacha-option">
+                      <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-1">Adopt 1x</button>
+                      <div class="gacha-cost" id="gacha-cost-1"></div>
+                    </div>
+                    <div class="gacha-option">
+                      <button type="button" class="shell-gacha-spin-btn" id="shell-gacha-10">Adopt 10x</button>
+                      <div class="gacha-cost" id="gacha-cost-10"></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1366,7 +1385,7 @@
                   <button type="button" class="shell-gacha-spin-btn" id="deck-onboarding-goto-farming">Go to Farming</button>
                 </div>
                 <section class="deck-section" aria-label="Loft">
-                  <h3 class="deck-section-title">Loft</h3>
+                  <h3 class="deck-section-title">Loft <span id="deck-slots-caption" class="deck-slots-caption" aria-hidden="true"></span></h3>
                   <div class="deck-grid" id="deck-grid" role="grid">
                     <!-- 8 slots filled by JS -->
                   </div>
