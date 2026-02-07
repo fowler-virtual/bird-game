@@ -438,10 +438,10 @@
         100% { transform: scale(1); opacity: 1; }
       }
       .shell-gacha-spin-btn {
-        min-width: 120px;
+        min-width: 0;
         min-height: 48px;
-        padding: 0 16px;
-        font-size: 15px;
+        padding: 0 12px;
+        font-size: 14px;
         font-weight: 600;
         color: #fff;
         background: var(--accent);
@@ -450,6 +450,10 @@
         cursor: pointer;
         transition: opacity 0.15s, transform 0.15s;
         box-shadow: 0 2px 8px var(--accent-dim);
+        -webkit-appearance: none;
+        appearance: none;
+        overflow: hidden;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
       .shell-gacha-spin-btn:hover { opacity: 0.95; transform: scale(1.02); }
@@ -457,7 +461,10 @@
       .shell-gacha-spin-btn:disabled,
       .shell-gacha-spin-btn.onboarding-locked { opacity: 0.5; cursor: not-allowed; transform: none; pointer-events: none; }
       @media (min-width: 400px) {
-        .shell-gacha-spin-btn { min-height: 52px; font-size: 16px; }
+        .shell-gacha-spin-btn { min-height: 52px; font-size: 15px; padding: 0 16px; }
+      }
+      @media (min-width: 480px) {
+        .shell-gacha-spin-btn { font-size: 16px; }
       }
       .gacha-cost {
         font-size: 12px;
