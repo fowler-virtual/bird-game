@@ -327,6 +327,16 @@ const RARITY_WEIGHTS: { rarity: BirdRarity; weight: number }[] = [
   { rarity: 'Legendary', weight: 1 },
 ];
 
+/** レアリティごとの排出率（％）。表示用。 */
+export const RARITY_DROP_RATES: Record<BirdRarity, number> = (() => {
+  const total = RARITY_WEIGHTS.reduce((s, r) => s + r.weight, 0);
+  const out: Partial<Record<BirdRarity, number>> = {};
+  for (const { rarity, weight } of RARITY_WEIGHTS) {
+    out[rarity] = Math.round((weight / total) * 1000) / 10;
+  }
+  return out as Record<BirdRarity, number>;
+})();
+
 export function rollGachaRarity(): BirdRarity {
   const total = RARITY_WEIGHTS.reduce((s, r) => s + r.weight, 0);
   let r = Math.random() * total;

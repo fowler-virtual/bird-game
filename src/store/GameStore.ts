@@ -16,6 +16,7 @@ import {
 export const GACHA_COST = 10;
 
 const GAME_STATE_KEY = 'bird-game-state';
+/** 本番ではウォレット接続時にチェーンから $BIRD トークン残高を取得して表示する想定。現状はゲーム内で消費・保存する値。 */
 const BIRD_CURRENCY_KEY = 'bird-game-currency';
 const WALLET_KEY = 'bird-game-wallet';
 

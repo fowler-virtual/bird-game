@@ -4,7 +4,7 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from './types';
+import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import * as farmingView from './views/farmingView';
 import * as deckView from './views/deckView';
 import { RARITY_IMAGE_SRC } from './assets';
@@ -136,6 +136,8 @@ export function switchToTab(tabId: string): void {
   }
   if (tabId === 'adopt') {
     hideGachaResultsSection();
+    updateAdoptPane();
+    updateGachaButtonsAndCosts();
     updateAdoptPaneForOnboarding();
   }
   if (tabId === 'deck') {
@@ -168,21 +170,68 @@ function onTabClick(e: Event): void {
   switchToTab(tabId);
 }
 
-/** Adoptタブでは普段「Adopted birds」枠を非表示。タブ表示時は非表示にしておく。 */
+/** Adoptタブ用: 残高・Total adopted・レアリティプレビュー・初回無料バッジを更新 */
+function updateAdoptPane(): void {
+  const state = GameStore.state;
+  const balanceEl = document.getElementById('adopt-balance-value');
+  if (balanceEl) balanceEl.textContent = String(GameStore.birdCurrency);
+  const totalEl = document.getElementById('adopt-total-count');
+  if (totalEl) totalEl.textContent = String(state.birdsOwned.length);
+  const badgeEl = document.getElementById('adopt-free-badge');
+  if (badgeEl) {
+    if (state.hasFreeGacha) {
+      badgeEl.textContent = 'First free';
+      badgeEl.classList.remove('adopt-free-badge--used');
+    } else {
+      badgeEl.textContent = 'Used';
+      badgeEl.classList.add('adopt-free-badge--used');
+    }
+  }
+  const previewList = document.getElementById('adopt-rarity-preview-list');
+  if (previewList && previewList.children.length === 0) {
+    for (const rarity of RARITY_COLUMN_ORDER) {
+      const rate = RARITY_DROP_RATES[rarity];
+      const item = document.createElement('div');
+      item.className = 'adopt-rarity-preview-item';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'adopt-rarity-name';
+      nameSpan.textContent = rarity;
+      const rateSpan = document.createElement('span');
+      rateSpan.className = 'adopt-rarity-rate';
+      rateSpan.textContent = `${rate}%`;
+      const barWrap = document.createElement('div');
+      barWrap.className = 'adopt-rarity-bar-wrap';
+      const bar = document.createElement('div');
+      bar.className = 'adopt-rarity-bar';
+      bar.style.width = `${rate}%`;
+      barWrap.appendChild(bar);
+      item.appendChild(nameSpan);
+      item.appendChild(rateSpan);
+      item.appendChild(barWrap);
+      previewList.appendChild(item);
+    }
+  }
+  const emptyEl = document.getElementById('gacha-results-empty');
+  if (emptyEl && document.getElementById('gacha-results-area')?.querySelectorAll('.gacha-results-item').length === 0) {
+    emptyEl.textContent = state.hasFreeGacha
+      ? 'No birds adopted yet. Your first adoption is free!'
+      : 'No birds adopted yet.';
+  }
+}
+
 function hideGachaResultsSection(): void {
   const section = document.getElementById('gacha-results-section');
   if (!section) return;
   section.classList.add('gacha-results-section--hidden');
 }
 
-/** ガチャ成功時だけ結果枠を表示する */
 function showGachaResultsSection(): void {
   const section = document.getElementById('gacha-results-section');
   if (!section) return;
   section.classList.remove('gacha-results-section--hidden');
 }
 
-/** Adoptタブを離れたときにガチャ結果エリアを空にし、枠も非表示に戻す */
+/** Adoptタブを離れたときにガチャ結果エリアを空にし、枠を非表示にする */
 function clearGachaResultsArea(): void {
   const area = document.getElementById('gacha-results-area');
   if (!area) return;
@@ -191,7 +240,7 @@ function clearGachaResultsArea(): void {
   const empty = document.createElement('p');
   empty.className = 'gacha-results-empty';
   empty.id = 'gacha-results-empty';
-  empty.textContent = 'No birds adopted yet.';
+  empty.textContent = 'No birds adopted yet. Your first adoption is free!';
   area.appendChild(empty);
   hideGachaResultsSection();
 }
@@ -247,7 +296,119 @@ function updateGachaButtonsAndCosts(): void {
   }
 }
 
-/** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥を「ガチャで出た鳥」に表示する。 */
+/** ガチャ結果をモーダルで表示（スマホでも見切れない）。閉じたらメインエリアにも同じ結果を表示する */
+function showGachaResultModal(
+  birds: { rarity: string }[],
+  count: 1 | 10
+): void {
+  const backdrop = document.getElementById('gacha-result-modal-backdrop');
+  const modalArea = document.getElementById('gacha-result-modal-area');
+  const modalFeedback = document.getElementById('gacha-result-modal-feedback');
+  const modalConfettiWrap = document.getElementById('gacha-result-modal-confetti-wrap');
+  if (!backdrop || !modalArea) return;
+
+  const modal = backdrop.querySelector<HTMLElement>('.gacha-result-modal');
+  modal?.classList.toggle('gacha-result-modal--ten', birds.length === 10);
+
+  modalArea.innerHTML = '';
+  modalArea.classList.toggle('gacha-results-area--single', birds.length === 1);
+  if (modalFeedback) modalFeedback.textContent = '';
+  if (modalConfettiWrap) modalConfettiWrap.innerHTML = '';
+
+  const opening = document.createElement('div');
+  opening.className = 'gacha-opening';
+  opening.textContent = 'Opening…';
+  modalArea.appendChild(opening);
+
+  backdrop.classList.add('visible');
+  backdrop.setAttribute('aria-hidden', 'false');
+
+  const REVEAL_DELAY_MS = 220;
+  const OPENING_MS = 550;
+
+  window.setTimeout(() => {
+    opening.remove();
+
+    if (modalConfettiWrap && birds.length > 0) {
+      const colors = ['#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'];
+      for (let i = 0; i < 12; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'gacha-confetti';
+        dot.style.left = `${10 + Math.random() * 80}%`;
+        dot.style.top = '10px';
+        dot.style.background = colors[i % colors.length];
+        dot.style.animationDelay = `${Math.random() * 0.2}s`;
+        modalConfettiWrap.appendChild(dot);
+      }
+      window.setTimeout(() => {
+        modalConfettiWrap.innerHTML = '';
+      }, 1500);
+    }
+
+    const useCells = birds.length === 10;
+    const cells: HTMLElement[] = [];
+    if (useCells) {
+      for (let i = 0; i < 10; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'gacha-results-cell';
+        modalArea.appendChild(cell);
+        cells.push(cell);
+      }
+    }
+
+    birds.forEach((bird, index) => {
+      window.setTimeout(() => {
+        const img = document.createElement('img');
+        img.className = `gacha-results-item gacha-results-item--${bird.rarity.toLowerCase()}`;
+        img.src = RARITY_IMAGE_SRC[bird.rarity as keyof typeof RARITY_IMAGE_SRC];
+        img.alt = bird.rarity;
+        img.loading = 'lazy';
+        const scrollTarget = useCells && cells[index] ? cells[index] : img;
+        if (useCells && cells[index]) {
+          cells[index].appendChild(img);
+        } else {
+          modalArea.appendChild(img);
+        }
+        if (birds.length === 10) {
+          scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
+
+        if (index === 0 && modalFeedback) {
+          modalFeedback.textContent = count === 1
+            ? `You got ${bird.rarity}!`
+            : 'You got 10 birds!';
+        }
+      }, index * REVEAL_DELAY_MS);
+    });
+  }, OPENING_MS);
+}
+
+function closeGachaResultModal(): void {
+  const backdrop = document.getElementById('gacha-result-modal-backdrop');
+  const modalArea = document.getElementById('gacha-result-modal-area');
+  const mainArea = document.getElementById('gacha-results-area');
+  if (!backdrop || !modalArea) return;
+
+  backdrop.classList.remove('visible');
+  backdrop.setAttribute('aria-hidden', 'true');
+  const modal = backdrop.querySelector<HTMLElement>('.gacha-result-modal');
+  modal?.classList.remove('gacha-result-modal--ten');
+
+  const items = modalArea.querySelectorAll('.gacha-results-item');
+  if (mainArea && items.length > 0) {
+    mainArea.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
+    mainArea.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
+    items.forEach((img) => {
+      const clone = img.cloneNode(true) as HTMLImageElement;
+      mainArea.appendChild(clone);
+    });
+    showGachaResultsSection();
+  }
+
+  modalArea.innerHTML = '';
+}
+
+/** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥をモーダルで表示し、閉じたらメインエリアにも表示。 */
 function runGachaFromDom(count: 1 | 10): void {
   const step = GameStore.state.onboardingStep;
   if (step === 'need_gacha' && count !== 1) return;
@@ -307,19 +468,15 @@ function runGachaFromDom(count: 1 | 10): void {
   }
 
   area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
-  for (const bird of result.birds) {
-    const img = document.createElement('img');
-    img.className = 'gacha-results-item';
-    img.src = RARITY_IMAGE_SRC[bird.rarity];
-    img.alt = bird.rarity;
-    img.loading = 'lazy';
-    area.appendChild(img);
-  }
-  showGachaResultsSection();
+  area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
 
+  showGachaResultModal(result.birds, count);
+
+  updateAdoptPane();
   updateAdoptPaneForOnboarding();
   updateGachaButtonsAndCosts();
   updateDeckPaneVisibility();
+
   const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
   game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
 }
@@ -428,6 +585,14 @@ function initTabListeners(): void {
     try { localStorage.setItem('bird-game-theme', next); } catch (_) {}
   });
   initDebugPaneListeners();
+  const resultModalClose = document.getElementById('gacha-result-modal-close');
+  const resultModalBackdrop = document.getElementById('gacha-result-modal-backdrop');
+  if (resultModalClose) resultModalClose.addEventListener('click', closeGachaResultModal);
+  if (resultModalBackdrop) {
+    resultModalBackdrop.addEventListener('click', (e) => {
+      if (e.target === resultModalBackdrop) closeGachaResultModal();
+    });
+  }
   farmingView.init();
   deckView.init();
   if (typeof window !== 'undefined') {
@@ -465,7 +630,6 @@ export function showGameShell(): void {
   const firstTab = step === 'need_gacha' ? 'adopt' : 'farming';
   switchToTab(firstTab);
   updateTabsForOnboarding();
-  hideGachaResultsSection();
   updateDeckPaneVisibility();
 
   refreshPhaserScale();
