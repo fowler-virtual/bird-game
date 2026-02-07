@@ -8,7 +8,6 @@ import {
   BIRD_SPECIES,
   BIRD_COLORS,
   makeBirdTypeKeyFromParts,
-  parseBirdTypeKey,
   generateBirdId,
   rollGachaRarity,
 } from '../types';
