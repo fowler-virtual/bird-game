@@ -334,31 +334,28 @@ export const GameStore = {
     this.state = { ...this.state, deckSlots: next };
   },
 
-  /** 待機リストから鳥を1羽デッキに配置（inventory を 1 減らし、birdsOwned + deckSlots に追加） */
+  /** 待機リストから鳥を1羽デッキに配置（既存の鳥をスロットに割り当てるだけ。birdsOwned は増やさない） */
   placeBirdOnDeck(slotIndex: number, birdTypeKey: BirdTypeKey): boolean {
     if (!isSlotActive(this.state, slotIndex)) return false;
     if (this.state.deckSlots[slotIndex] != null) return false;
     const count = this.state.inventory[birdTypeKey] ?? 0;
     if (count < 1) return false;
-    const parts = parseBirdTypeKey(birdTypeKey);
-    if (!parts) return false;
-    const bird: Bird = {
-      id: generateBirdId(),
-      rarity: parts.rarity,
-      species: parts.species,
-      color: parts.color,
-      createdAt: new Date().toISOString(),
-    };
+    const inDeck = new Set(this.state.deckSlots.filter((id): id is string => id != null));
+    const bird = this.state.birdsOwned.find(
+      (b) => this.getBirdTypeKey(b) === birdTypeKey && !inDeck.has(b.id)
+    );
+    if (!bird) return false;
+    const nextSlots = [...this.state.deckSlots] as DeckSlots;
+    nextSlots[slotIndex] = bird.id;
     this.state = {
       ...this.state,
-      birdsOwned: [...this.state.birdsOwned, bird],
-      deckSlots: this.state.deckSlots.map((id, i) => (i === slotIndex ? bird.id : id)) as DeckSlots,
+      deckSlots: nextSlots,
       inventory: { ...this.state.inventory, [birdTypeKey]: count - 1 },
     };
     return true;
   },
 
-  /** デッキ枠の鳥を外して待機リストに戻す */
+  /** デッキ枠の鳥を外して待機リストに戻す（鳥は birdsOwned に残し、inventory のみ増やす） */
   removeBirdFromDeck(slotIndex: number): boolean {
     const birdId = this.state.deckSlots[slotIndex];
     if (birdId == null) return false;
@@ -366,10 +363,11 @@ export const GameStore = {
     if (!bird) return false;
     const key = this.getBirdTypeKey(bird);
     const count = this.state.inventory[key] ?? 0;
+    const nextSlots = [...this.state.deckSlots] as DeckSlots;
+    nextSlots[slotIndex] = null;
     this.state = {
       ...this.state,
-      birdsOwned: this.state.birdsOwned.filter((b) => b.id !== birdId),
-      deckSlots: this.state.deckSlots.map((id, i) => (i === slotIndex ? null : id)) as DeckSlots,
+      deckSlots: nextSlots,
       inventory: { ...this.state.inventory, [key]: count + 1 },
     };
     return true;

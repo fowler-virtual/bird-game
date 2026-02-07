@@ -178,13 +178,13 @@ function updateAdoptPane(): void {
   const totalEl = document.getElementById('adopt-total-count');
   if (totalEl) totalEl.textContent = String(state.birdsOwned.length);
   const badgeEl = document.getElementById('adopt-free-badge');
-  if (badgeEl) {
+  const badgeRow = document.getElementById('gacha-cta-badge-row');
+  if (badgeEl && badgeRow) {
     if (state.hasFreeGacha) {
       badgeEl.textContent = 'First free';
-      badgeEl.classList.remove('adopt-free-badge--used');
+      badgeRow.classList.remove('gacha-cta-badge-row--hidden');
     } else {
-      badgeEl.textContent = 'Used';
-      badgeEl.classList.add('adopt-free-badge--used');
+      badgeRow.classList.add('gacha-cta-badge-row--hidden');
     }
   }
   const previewList = document.getElementById('adopt-rarity-preview-list');
@@ -277,13 +277,8 @@ function updateGachaButtonsAndCosts(): void {
   const cost1El = document.getElementById('gacha-cost-1');
   const cost10El = document.getElementById('gacha-cost-10');
 
-  if (btn1) {
-    if (state.hasFreeGacha) btn1.textContent = 'Adopt 1x (Free)';
-    else btn1.textContent = `Adopt 1x (${cost1} $BIRD)`;
-  }
-  if (btn10) {
-    btn10.textContent = 'Adopt 10x';
-  }
+  if (btn1) btn1.textContent = 'Adopt 1x';
+  if (btn10) btn10.textContent = 'Adopt 10x';
 
   if (cost1El) {
     if (state.hasFreeGacha) cost1El.textContent = 'Cost: Free (first adoption)';
@@ -410,6 +405,7 @@ function closeGachaResultModal(): void {
 
 /** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥をモーダルで表示し、閉じたらメインエリアにも表示。 */
 function runGachaFromDom(count: 1 | 10): void {
+  if (gachaInProgress) return;
   const step = GameStore.state.onboardingStep;
   if (step === 'need_gacha' && count !== 1) return;
 
@@ -439,13 +435,19 @@ function runGachaFromDom(count: 1 | 10): void {
     return;
   }
 
+  gachaInProgress = true;
+  setGachaButtonsDisabled(true);
   let ok = true;
   if (cost === 0) {
     ok = window.confirm(`Use your free adoption to adopt ${count === 1 ? '1 bird' : `${count} birds`}?`);
   } else {
     ok = window.confirm(`Spend ${cost} $BIRD to adopt ${count === 1 ? '1 bird' : `${count} birds`}? (Balance: ${bal} $BIRD)`);
   }
-  if (!ok) return;
+  if (!ok) {
+    setGachaButtonsDisabled(false);
+    gachaInProgress = false;
+    return;
+  }
 
   const result = GameStore.pullGacha(count);
   const area = document.getElementById('gacha-results-area');
@@ -460,6 +462,8 @@ function runGachaFromDom(count: 1 | 10): void {
     msg.className = 'gacha-results-empty';
     msg.textContent = result.error ?? 'Error';
     area.appendChild(msg);
+    setGachaButtonsDisabled(false);
+    gachaInProgress = false;
     return;
   }
 
@@ -478,6 +482,10 @@ function runGachaFromDom(count: 1 | 10): void {
   updateAdoptPaneForOnboarding();
   updateGachaButtonsAndCosts();
   updateDeckPaneVisibility();
+
+  gachaInProgress = false;
+  setGachaButtonsDisabled(false);
+  updateAdoptPaneForOnboarding(); // 10x無効などオンボーディング状態を再適用
 
   const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
   game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
@@ -560,7 +568,15 @@ function initDebugPaneListeners(): void {
 }
 
 let tabListenersInited = false;
+let gachaInProgress = false;
 let disconnectCallback: (() => void) | null = null;
+
+function setGachaButtonsDisabled(disabled: boolean): void {
+  const gacha1 = document.getElementById('shell-gacha-1') as HTMLButtonElement | null;
+  const gacha10 = document.getElementById('shell-gacha-10') as HTMLButtonElement | null;
+  if (gacha1) gacha1.disabled = disabled;
+  if (gacha10) gacha10.disabled = disabled;
+}
 
 /** Called by GameScene when using DOM shell so header Disconnect button runs the same flow. */
 export function setDisconnectCallback(fn: (() => void) | null): void {
