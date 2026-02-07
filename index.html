@@ -341,7 +341,8 @@
         min-height: 22px;
         text-align: left;
       }
-      .gacha-cta-badge-row:empty { min-height: 0; }
+      .gacha-cta-badge-row:empty,
+      .gacha-cta-badge-row.gacha-cta-badge-row--hidden { display: none; min-height: 0; }
       .gacha-cta {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -365,7 +366,6 @@
         padding: 2px 6px;
         border-radius: 4px;
       }
-      .adopt-free-badge.adopt-free-badge--used { opacity: 0.5; }
       .adopt-rarity-card {
         background: var(--bg-card);
         border: 1px solid var(--border);
@@ -438,38 +438,21 @@
         100% { transform: scale(1); opacity: 1; }
       }
       .shell-gacha-spin-btn {
-        position: relative;
         min-width: 0;
         min-height: 48px;
         padding: 0 12px;
         font-size: 14px;
         font-weight: 600;
-        color: #fff;
-        background: none;
+        color: #fff !important;
+        background-color: var(--accent) !important;
         border: none;
         border-radius: var(--radius);
         cursor: pointer;
         transition: opacity 0.15s, transform 0.15s;
+        box-shadow: 0 2px 8px var(--accent-dim);
         -webkit-appearance: none;
         appearance: none;
         overflow: hidden;
-      }
-      .shell-gacha-spin-btn::before {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background-color: var(--accent);
-        border-radius: inherit;
-        z-index: -1;
-      }
-      .shell-gacha-spin-btn::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        box-shadow: 0 2px 8px var(--accent-dim);
-        border-radius: inherit;
-        pointer-events: none;
-        z-index: -1;
       }
       .shell-gacha-spin-btn:hover { opacity: 0.95; transform: scale(1.02); }
       .shell-gacha-spin-btn:active { transform: scale(0.98); }
@@ -1366,7 +1349,7 @@
               <div class="adopt-cta-card">
                 <h3 class="adopt-cta-title">Adoption</h3>
                 <div class="gacha-cta-wrap">
-                  <div class="gacha-cta-badge-row">
+                  <div class="gacha-cta-badge-row" id="gacha-cta-badge-row">
                     <span class="adopt-free-badge" id="adopt-free-badge">First free</span>
                   </div>
                   <div class="gacha-cta">
