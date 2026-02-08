@@ -5,6 +5,8 @@
 
 import { GameStore, GACHA_COST } from './store/GameStore';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
+const STATUS_CLAIM_BTN_ID = 'status-claim-btn';
+const FARMING_ACCRUAL_HINT_ID = 'farming-accrual-hint';
 import * as farmingView from './views/farmingView';
 import * as deckView from './views/deckView';
 import { RARITY_IMAGE_SRC } from './assets';
@@ -1001,12 +1003,35 @@ function initTabListeners(): void {
     });
   }
   farmingView.init();
+  const claimBtn = document.getElementById(STATUS_CLAIM_BTN_ID);
+  if (claimBtn) {
+    claimBtn.addEventListener('click', () => {
+      const amount = GameStore.claimSeed();
+      if (amount <= 0) return;
+      GameStore.save();
+      const state = GameStore.state;
+      updateShellStatus({
+        seed: state.seed,
+        seedPerDay: getProductionRatePerHour(state) * 24,
+        loftLevel: state.loftLevel,
+        networkSharePercent: getNetworkSharePercent(state),
+      });
+      const hintEl = document.getElementById(FARMING_ACCRUAL_HINT_ID);
+      if (hintEl) {
+        hintEl.textContent = `Claimed ${amount} SEED`;
+        window.setTimeout(() => {
+          hintEl.textContent = '';
+        }, 2000);
+      }
+    });
+  }
   deckView.init();
   if (typeof window !== 'undefined') {
     window.addEventListener('resize', onWindowResize);
   }
   updateAdoptPaneForOnboarding();
   updateGachaButtonsAndCosts();
+  updateClaimButton();
   tabListenersInited = true;
 }
 
@@ -1065,6 +1090,13 @@ export function updateShellStatus(payload: {
   if (networkEl) networkEl.textContent = `${payload.networkSharePercent.toFixed(5)}%`;
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
   farmingView.updateUpgradeButton();
+  updateClaimButton();
+}
+
+function updateClaimButton(): void {
+  const btn = document.getElementById(STATUS_CLAIM_BTN_ID) as HTMLButtonElement | null;
+  if (!btn) return;
+  btn.disabled = GameStore.state.seed <= 0;
 }
 
 export function isShellVisible(): boolean {

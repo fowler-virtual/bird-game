@@ -305,16 +305,23 @@ export const GameStore = {
   unlockNextDeckSlot(): boolean {
     const cost = getNextUnlockCost(this.state.unlockedDeckCount);
     if (!cost) return false;
-    if (this.state.seed < cost.seed || this.birdCurrency < cost.bird) return false;
+    if (this.birdCurrency < cost.bird) return false;
     const nextCount = this.state.unlockedDeckCount + 2;
     this.state = {
       ...this.state,
-      seed: this.state.seed - cost.seed,
       unlockedDeckCount: Math.min(12, nextCount),
       loftLevel: Math.min(6, nextCount / 2),
     };
     this.spendBirdCurrency(cost.bird);
     return true;
+  },
+
+  /** 獲得SEEDをウォレットへ送る。現在のSEEDを0にし、送金した量を返す。実際の送金はウォレット/契約側で行う想定。 */
+  claimSeed(): number {
+    if (this.state.seed <= 0) return 0;
+    const amount = this.state.seed;
+    this.state = { ...this.state, seed: 0 };
+    return amount;
   },
 
   addBird(bird: Bird): void {

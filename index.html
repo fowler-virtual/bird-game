@@ -953,7 +953,8 @@
         width: 100%;
       }
       .loft-modal-title { font-size: 18px; margin: 0 0 12px 0; color: var(--text); }
-      .loft-modal-cost { font-size: 14px; color: var(--text-muted); margin: 0 0 20px 0; }
+      .loft-modal-cost { font-size: 14px; color: var(--text-muted); margin: 0 0 8px 0; }
+      .loft-modal-error { font-size: 13px; color: #f87171; margin: 0 0 16px 0; min-height: 1.2em; }
       .loft-modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
       .loft-modal-cancel, .loft-modal-confirm {
         min-height: 40px;
@@ -1410,6 +1411,36 @@
       }
       .status-loft-upgrade-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .status-loft-upgrade-btn:focus { outline: none; }
+      .status-card-seed .status-card-value-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: auto;
+        flex-wrap: wrap;
+        min-width: 0;
+      }
+      .status-card-seed .status-card-value-row .status-card-seed-row { margin-top: 0; min-width: 0; }
+      .status-claim-btn {
+        flex-shrink: 0;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--text);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s;
+        user-select: none;
+        -webkit-user-select: none;
+        caret-color: transparent;
+      }
+      .status-claim-btn:hover:not(:disabled) {
+        background: var(--bg-card);
+        border-color: var(--text-muted);
+      }
+      .status-claim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .status-claim-btn:focus { outline: none; }
 
       /* ----- Canvas card (Adopt 時は画面外に移すだけ。display:none にすると親が 0x0 になり Phaser の scale が壊れる) ----- */
       .canvas-card-hidden {
@@ -1513,11 +1544,14 @@
         <div class="shell-content-inner" id="shell-content-inner">
           <div class="status-panel" id="status-panel">
             <div class="status-cards status-cards-global">
-              <div class="status-card">
+              <div class="status-card status-card-seed">
                 <div class="status-card-label">Current SEED</div>
-                <div class="status-card-seed-row">
-                  <div class="status-card-value" id="dom-seed">0</div>
-                  <span class="status-card-seed-delta" id="farming-accrual-hint" aria-live="polite"></span>
+                <div class="status-card-value-row">
+                  <div class="status-card-seed-row">
+                    <div class="status-card-value" id="dom-seed">0</div>
+                    <span class="status-card-seed-delta" id="farming-accrual-hint" aria-live="polite"></span>
+                  </div>
+                  <button type="button" class="status-claim-btn" id="status-claim-btn">Claim</button>
                 </div>
               </div>
               <div class="status-card">
@@ -1712,6 +1746,7 @@
             <div class="loft-modal" id="loft-modal" role="dialog" aria-labelledby="loft-modal-title">
               <h2 class="loft-modal-title" id="loft-modal-title">Upgrade Loft</h2>
               <p class="loft-modal-cost" id="loft-modal-cost"></p>
+              <p class="loft-modal-error" id="loft-modal-error" aria-live="polite"></p>
               <div class="loft-modal-actions">
                 <button type="button" class="loft-modal-cancel" id="loft-modal-cancel">Cancel</button>
                 <button type="button" class="loft-modal-confirm" id="loft-modal-confirm">Upgrade</button>

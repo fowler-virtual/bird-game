@@ -142,16 +142,16 @@ export interface GameState {
 const DECK_SLOT_IDS: DeckSlotId[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 export { DECK_SLOT_IDS };
 
-/** Loft解放コスト（SEED + $Bird）。2→4→6→8→10→12枠の5回解放 */
-export const DECK_UNLOCK_COSTS: { seed: number; bird: number }[] = [
-  { seed: 500, bird: 200 },   // 2→4
-  { seed: 1200, bird: 500 },  // 4→6
-  { seed: 2500, bird: 1200 }, // 6→8
-  { seed: 5000, bird: 2500 }, // 8→10
-  { seed: 10000, bird: 5000 }, // 10→12
+/** Loft解放コスト（$BIRD のみ。ウォレット接続後、残高不足なら処理エラーで返す）2→4→6→8→10→12枠の5回解放 */
+export const DECK_UNLOCK_COSTS: { bird: number }[] = [
+  { bird: 200 },   // 2→4
+  { bird: 500 },   // 4→6
+  { bird: 1200 },  // 6→8
+  { bird: 2500 },  // 8→10
+  { bird: 5000 },  // 10→12
 ];
 
-export function getNextUnlockCost(unlockedDeckCount: number): { seed: number; bird: number } | null {
+export function getNextUnlockCost(unlockedDeckCount: number): { bird: number } | null {
   if (unlockedDeckCount >= 12) return null;
   const index = (unlockedDeckCount - 2) / 2;
   if (!Number.isInteger(index)) return null;

@@ -1465,23 +1465,10 @@ export class GameScene extends Phaser.Scene {
   private showUpgradeConfirm(): void {
     const cost = getNextUnlockCost(GameStore.state.unlockedDeckCount);
     if (!cost) return;
-    const canAfford =
-      GameStore.state.seed >= cost.seed && GameStore.birdCurrency >= cost.bird;
-    const lackSeed = GameStore.state.seed < cost.seed;
-    const lackBird = GameStore.birdCurrency < cost.bird;
-    const shortageMsg =
-      lackSeed && lackBird
-        ? 'Not enough SEED and $Bird'
-        : lackSeed
-          ? 'Not enough SEED'
-          : lackBird
-            ? 'Not enough $Bird'
-            : '';
 
     this.hideUnlockConfirm();
     const w = this.scale.width;
     const h = this.scale.height;
-    // ブラウザで実際に見えているキャンバス領域の中央付近にモーダルを出す
     const vp = this.getViewportCenter();
     const centerY = vp.y;
     const depth = 1001;
@@ -1491,12 +1478,18 @@ export class GameScene extends Phaser.Scene {
       .setInteractive()
       .on('pointerdown', () => this.hideUnlockConfirm());
     this.unlockModalObjects.push(bg);
+    const costText = this.add
+      .text(w / 2, centerY + 10, `${cost.bird} $BIRD (you have ${GameStore.birdCurrency})`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: TEXT_PRIMARY })
+      .setOrigin(0.5).setDepth(depth + 2);
+    const errorText = this.add
+      .text(w / 2, centerY + 32, '', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: '#f87171' })
+      .setOrigin(0.5).setDepth(depth + 2).setVisible(false);
     this.unlockModalObjects.push(
       this.add.rectangle(w / 2, centerY, 280, 140, BG_CARD, 1).setStrokeStyle(1, BORDER).setDepth(depth + 1),
       this.add.text(w / 2, centerY - 40, 'Upgrade Loft?', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2),
       this.add.text(w / 2, centerY - 14, '2 slots will be unlocked.', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0.5).setDepth(depth + 2),
-      this.add.text(w / 2, centerY + 10, `${cost.seed} SEED + ${cost.bird} $B`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: canAfford ? TEXT_PRIMARY : '#f87171' }).setOrigin(0.5).setDepth(depth + 2),
-      this.add.text(w / 2, centerY + 32, shortageMsg, { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: '#f87171' }).setOrigin(0.5).setDepth(depth + 2).setVisible(!canAfford)
+      costText,
+      errorText
     );
     const cancelBtn = this.add
       .rectangle(w / 2 - 52, centerY + 54, 64, 26, BG_ELEVATED)
@@ -1505,11 +1498,14 @@ export class GameScene extends Phaser.Scene {
       .on('pointerdown', () => this.hideUnlockConfirm());
     this.unlockModalObjects.push(cancelBtn, this.add.text(w / 2 - 52, centerY + 54, 'Cancel', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
     const upgradeBtn = this.add
-      .rectangle(w / 2 + 52, centerY + 54, 64, 26, canAfford ? SUCCESS : BG_HOVER)
+      .rectangle(w / 2 + 52, centerY + 54, 64, 26, SUCCESS)
       .setDepth(depth + 2)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        if (!GameStore.unlockNextDeckSlot()) return;
+        if (!GameStore.unlockNextDeckSlot()) {
+          errorText.setVisible(true).setText('Not enough $BIRD.');
+          return;
+        }
         GameStore.save();
         this.hideUnlockConfirm();
         this.renderMainUI();

@@ -14,6 +14,7 @@ const LOFT_UPGRADE_BTN_ID = 'status-loft-upgrade-btn';
 const FARMING_ACCRUAL_HINT_ID = 'farming-accrual-hint';
 const LOFT_MODAL_BACKDROP_ID = 'loft-modal-backdrop';
 const LOFT_MODAL_COST_ID = 'loft-modal-cost';
+const LOFT_MODAL_ERROR_ID = 'loft-modal-error';
 const LOFT_MODAL_CANCEL_ID = 'loft-modal-cancel';
 const LOFT_MODAL_CONFIRM_ID = 'loft-modal-confirm';
 
@@ -84,9 +85,7 @@ export function updateUpgradeButton(): void {
   const state = GameStore.state;
   const cost = getNextUnlockCost(state.unlockedDeckCount);
   const canUpgrade = cost != null && state.loftLevel < MAX_LOFT_LEVEL;
-  const canAfford = cost != null && state.seed >= cost.seed && GameStore.birdCurrency >= cost.bird;
-
-  btn.disabled = !canUpgrade || !canAfford;
+  btn.disabled = !canUpgrade;
 }
 
 function refreshShellStatus(): void {
@@ -124,12 +123,14 @@ function openUpgradeModal(): void {
 
   const backdrop = getEl(LOFT_MODAL_BACKDROP_ID);
   const costEl = getEl(LOFT_MODAL_COST_ID);
+  const errorEl = getEl(LOFT_MODAL_ERROR_ID);
   const confirmBtn = getEl(LOFT_MODAL_CONFIRM_ID) as HTMLButtonElement | null;
   if (!backdrop || !costEl) return;
 
-  costEl.textContent = `SEED ${cost.seed} + $BIRD ${cost.bird}`;
-  const canAfford = GameStore.state.seed >= cost.seed && GameStore.birdCurrency >= cost.bird;
-  if (confirmBtn) confirmBtn.disabled = !canAfford;
+  const bal = GameStore.birdCurrency;
+  costEl.textContent = `Cost: ${cost.bird} $BIRD (you have ${bal})`;
+  if (errorEl) errorEl.textContent = '';
+  if (confirmBtn) confirmBtn.disabled = false;
 
   backdrop.classList.add('visible');
   backdrop.setAttribute('aria-hidden', 'false');
@@ -143,11 +144,14 @@ function closeUpgradeModal(): void {
 }
 
 function confirmUpgrade(): void {
-  if (!GameStore.unlockNextDeckSlot()) return;
+  if (!GameStore.unlockNextDeckSlot()) {
+    const errorEl = getEl(LOFT_MODAL_ERROR_ID);
+    if (errorEl) errorEl.textContent = 'Not enough $BIRD.';
+    return;
+  }
   GameStore.save();
   closeUpgradeModal();
   refresh();
-  // Loftタブ（デッキ枠）も即座に解放状態を反映させる
   deckView.refresh();
 }
 
