@@ -267,8 +267,11 @@
       /* ----- Content ----- */
       .shell-content {
         flex: 1;
+        min-height: 0;
         padding: var(--content-pad);
         overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
         /* Prevent layout shift when scrollbar appears/disappears (tab content height differs). */
         scrollbar-gutter: stable;
         display: flex;
