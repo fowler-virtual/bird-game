@@ -280,6 +280,7 @@
         .shell-content { overflow-y: scroll; }
       }
       .shell-content-inner {
+        position: relative;
         max-width: var(--content-max);
         margin: 0 auto;
         width: 100%;
@@ -728,6 +729,97 @@
         text-align: center;
       }
       .deck-onboarding-cta-text { margin: 0 0 12px 0; font-size: 14px; color: var(--text); }
+      .deck-pane-body { position: relative; min-height: 200px; }
+      .deck-onboarding-place-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 100;
+      }
+      .deck-onboarding-place-overlay-dim {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: var(--radius);
+      }
+      .deck-onboarding-place-overlay.visible { display: flex; }
+      .deck-onboarding-place-message-wrap {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        pointer-events: none;
+        max-width: calc(100% - 32px);
+        box-sizing: border-box;
+      }
+      .deck-onboarding-place-message {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        text-align: center;
+        max-width: 100%;
+        padding: 0 4px;
+      }
+      .deck-onboarding-place-pointer {
+        margin: 0;
+        font-size: 32px;
+        line-height: 1;
+      }
+      .inventory-section.onboarding-highlight {
+        box-shadow: 0 0 0 3px var(--accent), 0 0 20px rgba(34, 197, 94, 0.4);
+        position: relative;
+        z-index: 11;
+      }
+      .adopt-cta-card.onboarding-highlight {
+        box-shadow: 0 0 0 3px var(--accent), 0 0 20px rgba(34, 197, 94, 0.4);
+        position: relative;
+        z-index: 11;
+      }
+      .adopt-onboarding-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 100;
+      }
+      .adopt-onboarding-overlay.visible { display: block; }
+      .adopt-onboarding-dim {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: var(--radius);
+      }
+      .adopt-onboarding-message-wrap {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        pointer-events: none;
+        max-width: calc(100% - 32px);
+        box-sizing: border-box;
+      }
+      .adopt-onboarding-message {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        text-align: center;
+        max-width: 100%;
+        padding: 0 4px;
+      }
+      .adopt-onboarding-pointer {
+        margin: 0;
+        font-size: 32px;
+        line-height: 1;
+      }
       .deck-section, .inventory-section {
         background: var(--bg-card);
         border: 1px solid var(--border);
@@ -1419,7 +1511,7 @@
       </nav>
       <main class="shell-content">
         <div class="shell-content-inner" id="shell-content-inner">
-          <div class="status-panel">
+          <div class="status-panel" id="status-panel">
             <div class="status-cards status-cards-global">
               <div class="status-card">
                 <div class="status-card-label">Current SEED</div>
@@ -1461,7 +1553,7 @@
                 Balance: <span id="adopt-balance-value">0</span> $BIRD
               </div>
               <p class="adopt-description">10 $BIRD per adoption. Place birds on your Loft to earn SEED.</p>
-              <div class="adopt-cta-card">
+              <div class="adopt-cta-card" id="adopt-cta-card">
                 <h3 class="adopt-cta-title">Adoption</h3>
                 <div class="gacha-cta-wrap">
                   <div class="gacha-cta-badge-row" id="gacha-cta-badge-row">
@@ -1488,7 +1580,7 @@
                   <p class="gacha-results-empty" id="gacha-results-empty">No birds adopted yet. Your first adoption is free!</p>
                 </div>
               </div>
-              <div class="adopt-rarity-card" aria-label="Possible rarities">
+              <div class="adopt-rarity-card" id="adopt-rarity-card" aria-label="Possible rarities">
                 <h3 class="adopt-cta-title">Possible rarities</h3>
                 <div class="adopt-rarity-preview-list" id="adopt-rarity-preview-list"></div>
               </div>
@@ -1498,25 +1590,32 @@
             </div>
           </div>
           <div id="pane-deck" class="tab-pane">
-            <div class="deck-pane-body">
+            <div class="deck-pane-body" id="deck-pane-body">
               <p class="deck-empty-hint" id="deck-empty-hint">Adopt a bird first in the Adopt tab.</p>
               <div class="deck-content-with-birds deck-content-with-birds--hidden" id="deck-content-with-birds">
                 <div class="deck-onboarding-cta" id="deck-onboarding-cta" style="display: none;">
                   <p class="deck-onboarding-cta-text">Bird placed! Go to Farming to start earning SEED.</p>
                   <button type="button" class="shell-gacha-spin-btn" id="deck-onboarding-goto-farming">Go to Farming</button>
                 </div>
-                <section class="deck-section" aria-label="Loft">
+                <section class="deck-section" id="deck-section-loft" aria-label="Loft">
                   <h3 class="deck-section-title">Loft <span id="deck-slots-caption" class="deck-slots-caption" aria-hidden="true"></span></h3>
                   <div class="deck-grid" id="deck-grid" role="grid">
                     <!-- 8 slots filled by JS -->
                   </div>
                 </section>
-                <section class="inventory-section" aria-label="Inventory">
+                <section class="inventory-section" id="inventory-section" aria-label="Inventory">
                   <h3 class="inventory-section-title">Inventory</h3>
                   <div class="inventory-grid" id="inventory-grid" role="grid">
                     <!-- cells filled by JS -->
                   </div>
                 </section>
+              </div>
+              <div class="deck-onboarding-place-overlay" id="deck-onboarding-place-overlay" aria-hidden="true" aria-live="polite">
+                <div class="deck-onboarding-place-overlay-dim" id="deck-onboarding-place-overlay-dim" aria-hidden="true"></div>
+                <div class="deck-onboarding-place-message-wrap" id="deck-onboarding-place-message-wrap">
+                  <p class="deck-onboarding-place-message">Tap the bird you want to place on the Loft.</p>
+                  <p class="deck-onboarding-place-pointer" aria-hidden="true">↓</p>
+                </div>
               </div>
             </div>
           </div>
@@ -1568,6 +1667,15 @@
               <div class="debug-section debug-section-reset">
                 <button type="button" class="debug-reset-btn" id="dom-debug-reset">Reset (return to onboarding)</button>
               </div>
+            </div>
+          </div>
+          <div class="adopt-onboarding-overlay" id="adopt-onboarding-overlay" aria-hidden="true" aria-live="polite">
+            <div class="adopt-onboarding-dim" id="adopt-onboarding-dim-status" aria-hidden="true"></div>
+            <div class="adopt-onboarding-dim" id="adopt-onboarding-dim-middle" aria-hidden="true"></div>
+            <div class="adopt-onboarding-dim" id="adopt-onboarding-dim-rarity" aria-hidden="true"></div>
+            <div class="adopt-onboarding-message-wrap" id="adopt-onboarding-message-wrap">
+              <p class="adopt-onboarding-message">Tap here to adopt your first bird.</p>
+              <p class="adopt-onboarding-pointer" aria-hidden="true">↓</p>
             </div>
           </div>
           <!-- Gacha confirm modal -->

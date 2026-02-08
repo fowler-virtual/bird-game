@@ -17,14 +17,22 @@ const RARITY_RANK: Record<string, number> = {
   Epic: 3,
   Legendary: 4,
 };
-/** レアリティごとの紙吹雪の色（2〜3色でバリエーション） */
-const RARITY_CONFETTI_COLORS: Record<string, string[]> = {
-  Common: ['#94a3b8', '#cbd5e1', '#64748b'],
-  Uncommon: ['#22c55e', '#4ade80', '#16a34a'],
-  Rare: ['#3b82f6', '#60a5fa', '#2563eb'],
-  Epic: ['#a855f7', '#c084fc', '#7c3aed'],
-  Legendary: ['#eab308', '#fde047', '#ca8a04'],
-};
+/** 紙吹雪の累積パレット（レアリティが上がるごとにこの順で色が増えていく） */
+const CONFETTI_PALETTE_BY_TIER: string[] = [
+  '#94a3b8', '#cbd5e1', // Common
+  '#22c55e', '#4ade80', // Uncommon
+  '#3b82f6', '#60a5fa', // Rare
+  '#a855f7', '#c084fc', // Epic
+  '#eab308', '#fde047', // Legendary
+];
+const CONFETTI_COLORS_PER_TIER = 2;
+
+/** レアリティに応じた紙吹雪の色リスト（ランクが高いほど色数が多い） */
+function getConfettiColorsForRarity(rarity: string): string[] {
+  const rank = RARITY_RANK[rarity] ?? 0;
+  const count = (rank + 1) * CONFETTI_COLORS_PER_TIER;
+  return CONFETTI_PALETTE_BY_TIER.slice(0, Math.min(count, CONFETTI_PALETTE_BY_TIER.length));
+}
 
 const SHELL_ID = 'game-shell';
 const TAB_ACTIVE = 'active';
@@ -166,10 +174,14 @@ export function switchToTab(tabId: string): void {
     updateAdoptPane();
     updateGachaButtonsAndCosts();
     updateAdoptPaneForOnboarding();
+    updateAdoptOnboardingOverlay(true);
+  } else {
+    updateAdoptOnboardingOverlay(false);
   }
   if (tabId === 'deck') {
     updateDeckPaneVisibility();
     deckView.refresh();
+    updateDeckOnboardingPlaceOverlay();
   }
   if (tabId === 'network') {
     refreshNetworkStats();
@@ -181,11 +193,21 @@ export function switchToTab(tabId: string): void {
 export function updateTabsForOnboarding(): void {
   const step = GameStore.state.onboardingStep;
   const lockFarming = step === 'need_gacha' || step === 'need_place';
-  const farmingTab = document.querySelector('.shell-tab[data-tab="farming"]');
-  if (farmingTab) {
-    farmingTab.classList.toggle('onboarding-tab-locked', lockFarming);
-    farmingTab.setAttribute('aria-disabled', lockFarming ? 'true' : 'false');
-  }
+  const lockExceptDeck = step === 'need_place';
+  const tabs = [
+    { id: 'farming', lock: lockFarming },
+    { id: 'adopt', lock: step === 'need_gacha' || lockExceptDeck },
+    { id: 'deck', lock: false },
+    { id: 'network', lock: lockExceptDeck },
+    { id: 'debug', lock: lockExceptDeck },
+  ];
+  tabs.forEach(({ id, lock }) => {
+    const tab = document.querySelector(`.shell-tab[data-tab="${id}"]`);
+    if (tab) {
+      tab.classList.toggle('onboarding-tab-locked', lock);
+      tab.setAttribute('aria-disabled', lock ? 'true' : 'false');
+    }
+  });
 }
 
 function onTabClick(e: Event): void {
@@ -194,9 +216,9 @@ function onTabClick(e: Event): void {
   const tabId = target.getAttribute('data-tab');
   if (!tabId) return;
   const step = GameStore.state.onboardingStep;
-  if (tabId === 'farming' && (step === 'need_gacha' || step === 'need_place')) {
-    return;
-  }
+  if (step === 'need_gacha' && tabId !== 'adopt') return;
+  if (step === 'need_place' && tabId !== 'deck') return;
+  if (tabId === 'farming' && (step === 'need_gacha' || step === 'need_place')) return;
   switchToTab(tabId);
 }
 
@@ -283,6 +305,179 @@ function updateDeckPaneVisibility(): void {
   const contentWrap = document.getElementById('deck-content-with-birds');
   if (emptyHint) emptyHint.classList.toggle('deck-empty-hint--hidden', hasAnyBird);
   if (contentWrap) contentWrap.classList.toggle('deck-content-with-birds--hidden', !hasAnyBird);
+}
+
+let deckOnboardingResizeHandler: (() => void) | null = null;
+
+const DECK_ONBOARDING_MESSAGE_GAP = 10;
+const DECK_ONBOARDING_MESSAGE_FALLBACK_HEIGHT = 56;
+
+function positionDeckOnboardingMessageAboveInventory(): void {
+  const placeOverlay = document.getElementById('deck-onboarding-place-overlay');
+  const overlayDim = document.getElementById('deck-onboarding-place-overlay-dim');
+  const messageWrap = document.getElementById('deck-onboarding-place-message-wrap');
+  const inventorySection = document.getElementById('inventory-section');
+  const loftSection = document.getElementById('deck-section-loft');
+  if (!placeOverlay || !overlayDim || !messageWrap || !inventorySection || !loftSection || !placeOverlay.classList.contains('visible')) return;
+  const parent = placeOverlay.parentElement;
+  if (!parent) return;
+  const parentRect = parent.getBoundingClientRect();
+  const loftRect = loftSection.getBoundingClientRect();
+  overlayDim.style.top = `${loftRect.top - parentRect.top}px`;
+  overlayDim.style.left = `${loftRect.left - parentRect.left}px`;
+  overlayDim.style.width = `${loftRect.width}px`;
+  overlayDim.style.height = `${loftRect.height}px`;
+  const overlayRect = placeOverlay.getBoundingClientRect();
+  const sectionRect = inventorySection.getBoundingClientRect();
+  const wrapRect = messageWrap.getBoundingClientRect();
+  const wrapHeight = wrapRect.height > 0 ? wrapRect.height : DECK_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
+  const top = sectionRect.top - overlayRect.top - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
+  const left = sectionRect.left - overlayRect.left + sectionRect.width / 2;
+  messageWrap.style.top = `${Math.max(8, top)}px`;
+  messageWrap.style.left = `${left}px`;
+  messageWrap.style.transform = 'translateX(-50%)';
+}
+
+/** need_place 時にオーバーレイとインベントリハイライトを表示。メッセージと矢印はインベントリ全体の中央上に固定し、リサイズ時も再計算する */
+function updateDeckOnboardingPlaceOverlay(): void {
+  const step = GameStore.state.onboardingStep;
+  const show = step === 'need_place';
+  const placeOverlay = document.getElementById('deck-onboarding-place-overlay');
+  const messageWrap = document.getElementById('deck-onboarding-place-message-wrap');
+  const inventorySection = document.getElementById('inventory-section');
+
+  if (deckOnboardingResizeHandler) {
+    window.removeEventListener('resize', deckOnboardingResizeHandler);
+    deckOnboardingResizeHandler = null;
+  }
+
+  if (placeOverlay) {
+    placeOverlay.classList.toggle('visible', show);
+    placeOverlay.setAttribute('aria-hidden', show ? 'false' : 'true');
+    if (!show) {
+      const dim = document.getElementById('deck-onboarding-place-overlay-dim');
+      if (dim) {
+        dim.style.top = '';
+        dim.style.left = '';
+        dim.style.width = '';
+        dim.style.height = '';
+      }
+    }
+  }
+  if (inventorySection) {
+    inventorySection.classList.toggle('onboarding-highlight', show);
+  }
+  if (!show || !placeOverlay || !messageWrap) return;
+
+  const runPosition = (): void => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(positionDeckOnboardingMessageAboveInventory);
+    });
+  };
+  runPosition();
+  deckOnboardingResizeHandler = runPosition;
+  window.addEventListener('resize', deckOnboardingResizeHandler);
+}
+
+let adoptOnboardingResizeHandler: (() => void) | null = null;
+
+const ADOPT_ONBOARDING_MESSAGE_GAP = 10;
+const ADOPT_ONBOARDING_MESSAGE_FALLBACK_HEIGHT = 48;
+/** 暗転下端と ADOPTION 緑枠の間の余白（かぶり防止） */
+const ADOPT_ONBOARDING_DIM_BOTTOM_GAP = 12;
+
+function positionAdoptOnboardingOverlay(): void {
+  const overlay = document.getElementById('adopt-onboarding-overlay');
+  const dimStatus = document.getElementById('adopt-onboarding-dim-status');
+  const dimMiddle = document.getElementById('adopt-onboarding-dim-middle');
+  const dimRarity = document.getElementById('adopt-onboarding-dim-rarity');
+  const messageWrap = document.getElementById('adopt-onboarding-message-wrap');
+  const adoptCtaCard = document.getElementById('adopt-cta-card');
+  const statusPanel = document.getElementById('status-panel');
+  const rarityCard = document.getElementById('adopt-rarity-card');
+  if (!overlay || !dimStatus || !dimMiddle || !dimRarity || !messageWrap || !adoptCtaCard || !statusPanel || !rarityCard || !overlay.classList.contains('visible')) return;
+  const overlayRect = overlay.getBoundingClientRect();
+  const statusRect = statusPanel.getBoundingClientRect();
+  const rarityRect = rarityCard.getBoundingClientRect();
+  const ctaRect = adoptCtaCard.getBoundingClientRect();
+  const toOverlayTop = (y: number) => y - overlayRect.top;
+  const toOverlayLeft = (x: number) => x - overlayRect.left;
+  dimStatus.style.top = `${toOverlayTop(statusRect.top)}px`;
+  dimStatus.style.left = `${toOverlayLeft(statusRect.left)}px`;
+  dimStatus.style.width = `${statusRect.width}px`;
+  dimStatus.style.height = `${statusRect.height}px`;
+  const middleTop = toOverlayTop(statusRect.bottom);
+  const middleBottom = Math.max(middleTop, toOverlayTop(ctaRect.top) - ADOPT_ONBOARDING_DIM_BOTTOM_GAP);
+  const middleHeight = Math.max(0, middleBottom - middleTop);
+  dimMiddle.style.top = `${middleTop}px`;
+  dimMiddle.style.left = '0';
+  dimMiddle.style.width = `${overlayRect.width}px`;
+  dimMiddle.style.height = `${middleHeight}px`;
+  dimRarity.style.top = `${toOverlayTop(rarityRect.top)}px`;
+  dimRarity.style.left = `${toOverlayLeft(rarityRect.left)}px`;
+  dimRarity.style.width = `${rarityRect.width}px`;
+  dimRarity.style.height = `${rarityRect.height}px`;
+  const wrapRect = messageWrap.getBoundingClientRect();
+  const wrapHeight = wrapRect.height > 0 ? wrapRect.height : ADOPT_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
+  const top = toOverlayTop(ctaRect.top) - wrapHeight - ADOPT_ONBOARDING_MESSAGE_GAP;
+  const left = toOverlayLeft(ctaRect.left) + ctaRect.width / 2;
+  messageWrap.style.top = `${Math.max(8, top)}px`;
+  messageWrap.style.left = `${left}px`;
+  messageWrap.style.transform = 'translateX(-50%)';
+}
+
+/** need_gacha 時に Adopt タブで ADOPTION 強調・ステータス/排出率を暗転・メッセージ＋矢印を表示。Adopt タブでないときは常に非表示。 */
+function updateAdoptOnboardingOverlay(adoptTabActive?: boolean): void {
+  const step = GameStore.state.onboardingStep;
+  const show = (adoptTabActive !== false) && step === 'need_gacha';
+  const overlay = document.getElementById('adopt-onboarding-overlay');
+  const adoptCtaCard = document.getElementById('adopt-cta-card');
+  const dimStatus = document.getElementById('adopt-onboarding-dim-status');
+  const dimMiddle = document.getElementById('adopt-onboarding-dim-middle');
+  const dimRarity = document.getElementById('adopt-onboarding-dim-rarity');
+
+  if (adoptOnboardingResizeHandler) {
+    window.removeEventListener('resize', adoptOnboardingResizeHandler);
+    adoptOnboardingResizeHandler = null;
+  }
+
+  if (overlay) {
+    overlay.classList.toggle('visible', show);
+    overlay.setAttribute('aria-hidden', show ? 'false' : 'true');
+    if (!show) {
+      if (dimStatus) {
+        dimStatus.style.top = '';
+        dimStatus.style.left = '';
+        dimStatus.style.width = '';
+        dimStatus.style.height = '';
+      }
+      if (dimMiddle) {
+        dimMiddle.style.top = '';
+        dimMiddle.style.left = '';
+        dimMiddle.style.width = '';
+        dimMiddle.style.height = '';
+      }
+      if (dimRarity) {
+        dimRarity.style.top = '';
+        dimRarity.style.left = '';
+        dimRarity.style.width = '';
+        dimRarity.style.height = '';
+      }
+    }
+  }
+  if (adoptCtaCard) {
+    adoptCtaCard.classList.toggle('onboarding-highlight', show);
+  }
+  if (!show || !overlay) return;
+
+  const runPosition = (): void => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(positionAdoptOnboardingOverlay);
+    });
+  };
+  runPosition();
+  adoptOnboardingResizeHandler = runPosition;
+  window.addEventListener('resize', adoptOnboardingResizeHandler);
 }
 
 /** オンボーディング中は Adopt で 10x を無効化（結果枠の表示は switchToTab / runGachaFromDom で制御） */
@@ -407,7 +602,7 @@ function showGachaResultModal(
   backdrop.setAttribute('aria-hidden', 'false');
 
   const effectRarity = getEffectRarity(birds);
-  const confettiColors = RARITY_CONFETTI_COLORS[effectRarity] ?? RARITY_CONFETTI_COLORS.Common;
+  const confettiColors = getConfettiColorsForRarity(effectRarity);
   const effectRarityKey = effectRarity.toLowerCase();
 
   const modal = backdrop.querySelector<HTMLElement>('.gacha-result-modal');

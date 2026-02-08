@@ -188,6 +188,18 @@ export function refresh(): void {
     (gotoBtn as HTMLButtonElement).dataset.listener = '1';
     gotoBtn.addEventListener('click', () => switchToTab('farming'));
   }
+
+  const placeOverlay = document.getElementById('deck-onboarding-place-overlay');
+  const inventorySection = document.getElementById('inventory-section');
+  if (placeOverlay) {
+    const show = step === 'need_place';
+    placeOverlay.classList.toggle('visible', show);
+    placeOverlay.setAttribute('aria-hidden', show ? 'false' : 'true');
+  }
+  if (inventorySection) {
+    inventorySection.classList.toggle('onboarding-highlight', step === 'need_place');
+  }
+
   updateTabsForOnboarding();
 }
 
