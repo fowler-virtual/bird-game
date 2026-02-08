@@ -708,6 +708,8 @@
         display: flex;
         flex-direction: column;
         gap: 16px;
+        overflow: visible;
+        touch-action: pan-y;
       }
       .deck-empty-hint {
         font-size: 14px;
@@ -721,6 +723,8 @@
         display: flex;
         flex-direction: column;
         gap: 16px;
+        overflow: visible;
+        touch-action: pan-y;
       }
       .deck-content-with-birds.deck-content-with-birds--hidden { display: none !important; }
       .deck-onboarding-cta {
@@ -829,6 +833,8 @@
         border-radius: var(--radius);
         padding: 20px;
         min-width: 0;
+        overflow: visible;
+        touch-action: pan-y;
       }
       .deck-section-title, .inventory-section-title {
         font-size: 12px;
@@ -876,6 +882,7 @@
       .deck-slot:hover:not(.locked) { background: var(--bg-card); border-color: var(--text-muted); }
       .deck-slot.locked { opacity: 0.5; cursor: not-allowed; }
       .deck-slot.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+      .deck-slot { touch-action: pan-y; }
       .deck-slot .deck-slot-id { font-size: 11px; color: var(--text-muted); position: absolute; top: 4px; left: 6px; z-index: 1; }
       .deck-slot .deck-slot-bird {
         width: 100%;
@@ -899,6 +906,8 @@
         aspect-ratio: 5/8;
         width: 100%;
         gap: 8px;
+        overflow: visible;
+        touch-action: pan-y;
       }
       .inventory-cell {
         background: var(--bg-elevated);
@@ -918,6 +927,7 @@
       .inventory-cell:hover { background: var(--bg-card); border-color: var(--text-muted); }
       .inventory-cell.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
       .inventory-cell:disabled { opacity: 0.5; cursor: not-allowed; }
+      .inventory-cell { touch-action: pan-y; }
       .inventory-cell img {
         flex: 1;
         min-width: 0;
