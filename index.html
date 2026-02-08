@@ -269,27 +269,28 @@
         flex: 1;
         min-height: 0;
         padding: var(--content-pad);
-        overflow: auto;
-        -webkit-overflow-scrolling: touch;
-        touch-action: pan-y;
-        /* Prevent layout shift when scrollbar appears/disappears (tab content height differs). */
-        scrollbar-gutter: stable;
         display: flex;
         flex-direction: column;
         gap: 20px;
-      }
-      /* Fallback for browsers without scrollbar-gutter: always reserve scrollbar width. */
-      @supports not (scrollbar-gutter: stable) {
-        .shell-content { overflow-y: scroll; }
+        overflow: hidden;
       }
       .shell-content-inner {
         position: relative;
+        flex: 1;
+        min-height: 0;
         max-width: var(--content-max);
         margin: 0 auto;
         width: 100%;
         display: flex;
         flex-direction: column;
         gap: 20px;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        scrollbar-gutter: stable;
+      }
+      @supports not (scrollbar-gutter: stable) {
+        .shell-content-inner { overflow-y: scroll; }
       }
       .tab-pane { display: none; flex-direction: column; gap: 20px; }
       .tab-pane.active { display: flex; }
@@ -1646,13 +1647,13 @@
                 </div>
                 <section class="deck-section" id="deck-section-loft" aria-label="Loft">
                   <h3 class="deck-section-title">Loft <span id="deck-slots-caption" class="deck-slots-caption" aria-hidden="true"></span></h3>
-                  <div class="deck-grid" id="deck-grid" role="grid">
+                  <div class="deck-grid" id="deck-grid" role="group" aria-label="Loft slots">
                     <!-- 8 slots filled by JS -->
                   </div>
                 </section>
                 <section class="inventory-section" id="inventory-section" aria-label="Inventory">
                   <h3 class="inventory-section-title">Inventory</h3>
-                  <div class="inventory-grid" id="inventory-grid" role="grid">
+                  <div class="inventory-grid" id="inventory-grid" role="group" aria-label="Inventory birds">
                     <!-- cells filled by JS -->
                   </div>
                 </section>
