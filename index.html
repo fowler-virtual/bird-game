@@ -574,6 +574,31 @@
       .gacha-results-item--rare { box-shadow: 0 0 14px rgba(59, 130, 246, 0.55); }
       .gacha-results-item--epic { box-shadow: 0 0 18px rgba(168, 85, 247, 0.6); }
       .gacha-results-item--legendary { box-shadow: 0 0 22px rgba(234, 179, 8, 0.75); }
+      /* レア以上：中央拡大のあと、それぞれの色で光る（reveal を上書きしないよう両方指定） */
+      .gacha-results-item--glow.gacha-results-item--rare {
+        animation: gacha-reveal 0.45s ease-out forwards, gacha-card-glow-rare 1.4s ease-in-out 0.45s infinite;
+        border-radius: var(--radius);
+      }
+      .gacha-results-item--glow.gacha-results-item--epic {
+        animation: gacha-reveal 0.45s ease-out forwards, gacha-card-glow-epic 1.2s ease-in-out 0.45s infinite;
+        border-radius: var(--radius);
+      }
+      .gacha-results-item--glow.gacha-results-item--legendary {
+        animation: gacha-reveal 0.45s ease-out forwards, gacha-card-glow-legendary 1s ease-in-out 0.45s infinite;
+        border-radius: var(--radius);
+      }
+      @keyframes gacha-card-glow-rare {
+        0%, 100% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.5), 0 0 28px rgba(59, 130, 246, 0.3); }
+        50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.7), 0 0 44px rgba(59, 130, 246, 0.45); }
+      }
+      @keyframes gacha-card-glow-epic {
+        0%, 100% { box-shadow: 0 0 16px rgba(168, 85, 247, 0.5), 0 0 36px rgba(168, 85, 247, 0.35); }
+        50% { box-shadow: 0 0 26px rgba(168, 85, 247, 0.75), 0 0 56px rgba(168, 85, 247, 0.5); }
+      }
+      @keyframes gacha-card-glow-legendary {
+        0%, 100% { box-shadow: 0 0 20px rgba(234, 179, 8, 0.6), 0 0 44px rgba(234, 179, 8, 0.4); }
+        50% { box-shadow: 0 0 32px rgba(234, 179, 8, 0.9), 0 0 64px rgba(234, 179, 8, 0.55); }
+      }
       .gacha-confetti-wrap {
         position: absolute;
         inset: 0;
@@ -587,6 +612,20 @@
         border-radius: 50%;
         pointer-events: none;
         animation: gacha-confetti-fall 1.4s ease-in forwards;
+      }
+      .gacha-confetti-wrap--uncommon .gacha-confetti { animation-duration: 1.3s; }
+      .gacha-confetti-wrap--rare .gacha-confetti { width: 9px; height: 9px; animation-duration: 1.5s; }
+      .gacha-confetti-wrap--epic .gacha-confetti {
+        width: 10px;
+        height: 10px;
+        animation: gacha-confetti-fall 1.8s ease-in forwards;
+        box-shadow: 0 0 6px currentColor;
+      }
+      .gacha-confetti-wrap--legendary .gacha-confetti {
+        width: 12px;
+        height: 12px;
+        animation: gacha-confetti-fall 2.2s ease-in forwards;
+        box-shadow: 0 0 10px currentColor;
       }
       @keyframes gacha-confetti-fall {
         to { opacity: 0; transform: translateY(120px) rotate(180deg); }
@@ -895,6 +934,63 @@
       }
       .debug-reset-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
 
+      /* ----- Network (flock stats) ----- */
+      .network-pane-body { padding: 0; display: flex; flex-direction: column; gap: 24px; }
+      .network-intro {
+        font-size: 14px;
+        color: var(--text-muted);
+        margin: 0;
+        line-height: 1.5;
+      }
+      .network-section {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+      }
+      .network-section-title {
+        margin: 0 0 14px 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .network-stat-list { display: flex; flex-direction: column; gap: 12px; }
+      .network-stat-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 10px 16px;
+      }
+      .network-stat-label { font-size: 14px; font-weight: 500; color: var(--text); }
+      .network-stat-count { font-size: 14px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+      .network-stat-bar-wrap {
+        grid-column: 1 / -1;
+        height: 6px;
+        background: var(--bg-elevated);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .network-stat-bar {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+        border-radius: 3px;
+        transition: width 0.35s ease;
+      }
+      .network-total {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .network-total strong { color: var(--text); font-variant-numeric: tabular-nums; }
+      .network-demo-note {
+        margin-top: 16px;
+        font-size: 11px;
+        color: var(--text-muted);
+        opacity: 0.85;
+      }
+
       /* ----- Gacha confirm modal ----- */
       .gacha-modal-backdrop {
         position: fixed;
@@ -966,7 +1062,7 @@
         align-items: stretch;
         justify-content: flex-start;
         overflow-y: auto;
-        z-index: 300;
+        z-index: 99999;
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       }
       .gacha-result-modal-backdrop.visible { display: flex; }
@@ -1300,6 +1396,7 @@
         <button type="button" class="shell-tab active" data-tab="farming">Farming</button>
         <button type="button" class="shell-tab" data-tab="adopt">Adopt</button>
         <button type="button" class="shell-tab" data-tab="deck">Loft</button>
+        <button type="button" class="shell-tab" data-tab="network">Network</button>
         <button type="button" class="shell-tab" data-tab="debug">Debug</button>
       </nav>
       <main class="shell-content">
@@ -1402,6 +1499,25 @@
                   </div>
                 </section>
               </div>
+            </div>
+          </div>
+          <div id="pane-network" class="tab-pane">
+            <div class="network-pane-body">
+              <p class="network-intro">See how the flock is growing across the network.</p>
+              <section class="network-section" aria-label="Nests by level">
+                <h3 class="network-section-title">Nests by level</h3>
+                <div class="network-stat-list" id="network-level-list">
+                  <!-- filled by JS -->
+                </div>
+              </section>
+              <section class="network-section" aria-label="Birds by rarity">
+                <h3 class="network-section-title">Birds by rarity</h3>
+                <div class="network-stat-list" id="network-dist-list">
+                  <!-- filled by JS -->
+                </div>
+                <div class="network-total">Total companions adopted: <strong id="network-total-birds">—</strong></div>
+              </section>
+              <p class="network-demo-note" id="network-demo-note">Demo data. Live stats when connected to network.</p>
             </div>
           </div>
           <div id="pane-debug" class="tab-pane">

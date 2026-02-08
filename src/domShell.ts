@@ -9,6 +9,23 @@ import * as farmingView from './views/farmingView';
 import * as deckView from './views/deckView';
 import { RARITY_IMAGE_SRC } from './assets';
 
+/** ガチャエフェクト用: レアリティの「強さ」順（高いほど強い） */
+const RARITY_RANK: Record<string, number> = {
+  Common: 0,
+  Uncommon: 1,
+  Rare: 2,
+  Epic: 3,
+  Legendary: 4,
+};
+/** レアリティごとの紙吹雪の色（2〜3色でバリエーション） */
+const RARITY_CONFETTI_COLORS: Record<string, string[]> = {
+  Common: ['#94a3b8', '#cbd5e1', '#64748b'],
+  Uncommon: ['#22c55e', '#4ade80', '#16a34a'],
+  Rare: ['#3b82f6', '#60a5fa', '#2563eb'],
+  Epic: ['#a855f7', '#c084fc', '#7c3aed'],
+  Legendary: ['#eab308', '#fde047', '#ca8a04'],
+};
+
 const SHELL_ID = 'game-shell';
 const TAB_ACTIVE = 'active';
 
@@ -23,6 +40,14 @@ const CANVAS_DECK_VIEW_CLASS = 'canvas-card-deck-view';
 /** 切り分け用: 直前のタブ（Adopt から戻ったか判定用） */
 let lastTabId = '';
 const DEBUG_LAYOUT = true;
+/** ガチャの流れをコンソールに出す（原因究明用）。本番では false に。 */
+const DEBUG_GACHA = true;
+function gachaLog(msg: string, data?: unknown): void {
+  if (DEBUG_GACHA && typeof console !== 'undefined' && console.log) {
+    if (data !== undefined) console.log('[Gacha]', msg, data);
+    else console.log('[Gacha]', msg);
+  }
+}
 
 /** Adopt に隠す直前に保存したキャンバスカードのサイズ。Adopt→Farming で getBoundingClientRect が 0 になるのを避ける。 */
 let lastCanvasCardSize: { width: number; height: number } | null = null;
@@ -86,7 +111,7 @@ export function switchToTab(tabId: string): void {
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
   /* Farming / Deck は HTML ビューなのでキャンバスを非表示にし、下に Phaser の名残が出ないようにする */
-  const hideCanvas = tabId === 'adopt' || tabId === 'debug' || tabId === 'farming' || tabId === 'deck';
+  const hideCanvas = tabId === 'adopt' || tabId === 'debug' || tabId === 'farming' || tabId === 'deck' || tabId === 'network';
   if (canvasCard) {
     if (hideCanvas) {
       const r = canvasCard.getBoundingClientRect();
@@ -143,6 +168,9 @@ export function switchToTab(tabId: string): void {
   if (tabId === 'deck') {
     updateDeckPaneVisibility();
     deckView.refresh();
+  }
+  if (tabId === 'network') {
+    refreshNetworkStats();
   }
   updateTabsForOnboarding();
 }
@@ -291,16 +319,58 @@ function updateGachaButtonsAndCosts(): void {
   }
 }
 
+/** 表示エフェクトに使うレアリティ（1引き＝その1羽、10引き＝一番強いレアリティ） */
+function getEffectRarity(birds: { rarity?: string }[]): string {
+  if (birds.length === 0) return 'Common';
+  const first = birds[0].rarity;
+  if (birds.length === 1) return typeof first === 'string' && RARITY_RANK[first] !== undefined ? first : 'Common';
+  let best: string = typeof first === 'string' && RARITY_RANK[first] !== undefined ? first : 'Common';
+  for (let i = 1; i < birds.length; i++) {
+    const r = birds[i].rarity;
+    if (typeof r === 'string' && (RARITY_RANK[r] ?? -1) > (RARITY_RANK[best] ?? -1)) best = r;
+  }
+  return best;
+}
+
+/** ガチャ結果モーダル用: バックドロップを body 直下に移して確実に最前面に表示する */
+function moveGachaModalToBody(): void {
+  const backdrop = document.getElementById('gacha-result-modal-backdrop');
+  if (!backdrop || backdrop.parentElement === document.body) return;
+  document.body.appendChild(backdrop);
+}
+
+/** ガチャ結果モーダル用: バックドロップを shell 内の元の位置に戻す */
+function moveGachaModalBackToShell(): void {
+  const backdrop = document.getElementById('gacha-result-modal-backdrop');
+  const container = document.getElementById('shell-content-inner');
+  const before = document.getElementById('shell-canvas-card');
+  if (!backdrop || backdrop.parentElement !== document.body) return;
+  if (container && before) container.insertBefore(backdrop, before);
+  else if (container) container.appendChild(backdrop);
+}
+
 /** ガチャ結果をモーダルで表示（スマホでも見切れない）。閉じたらメインエリアにも同じ結果を表示する */
 function showGachaResultModal(
   birds: { rarity: string }[],
   count: 1 | 10
 ): void {
+  gachaLog('showGachaResultModal entered', { birdsCount: birds.length, count });
   const backdrop = document.getElementById('gacha-result-modal-backdrop');
   const modalArea = document.getElementById('gacha-result-modal-area');
   const modalFeedback = document.getElementById('gacha-result-modal-feedback');
   const modalConfettiWrap = document.getElementById('gacha-result-modal-confetti-wrap');
-  if (!backdrop || !modalArea) return;
+  if (!backdrop || !modalArea) {
+    gachaLog('BLOCKED: backdrop or modalArea null', { hasBackdrop: !!backdrop, hasModalArea: !!modalArea });
+    return;
+  }
+  gachaLog('moving modal to body and adding visible');
+  moveGachaModalToBody();
+  backdrop.classList.add('visible');
+  backdrop.setAttribute('aria-hidden', 'false');
+
+  const effectRarity = getEffectRarity(birds);
+  const confettiColors = RARITY_CONFETTI_COLORS[effectRarity] ?? RARITY_CONFETTI_COLORS.Common;
+  const effectRarityKey = effectRarity.toLowerCase();
 
   const modal = backdrop.querySelector<HTMLElement>('.gacha-result-modal');
   modal?.classList.toggle('gacha-result-modal--ten', birds.length === 10);
@@ -308,15 +378,18 @@ function showGachaResultModal(
   modalArea.innerHTML = '';
   modalArea.classList.toggle('gacha-results-area--single', birds.length === 1);
   if (modalFeedback) modalFeedback.textContent = '';
-  if (modalConfettiWrap) modalConfettiWrap.innerHTML = '';
+  if (modalConfettiWrap) {
+    modalConfettiWrap.innerHTML = '';
+    ['common', 'uncommon', 'rare', 'epic', 'legendary'].forEach((r) =>
+      modalConfettiWrap!.classList.remove(`gacha-confetti-wrap--${r}`)
+    );
+    modalConfettiWrap.classList.add(`gacha-confetti-wrap--${effectRarityKey}`);
+  }
 
   const opening = document.createElement('div');
   opening.className = 'gacha-opening';
   opening.textContent = 'Opening…';
   modalArea.appendChild(opening);
-
-  backdrop.classList.add('visible');
-  backdrop.setAttribute('aria-hidden', 'false');
 
   const REVEAL_DELAY_MS = 220;
   const OPENING_MS = 550;
@@ -325,19 +398,19 @@ function showGachaResultModal(
     opening.remove();
 
     if (modalConfettiWrap && birds.length > 0) {
-      const colors = ['#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#3b82f6'];
-      for (let i = 0; i < 12; i++) {
+      const numDots = effectRarity === 'Legendary' ? 20 : effectRarity === 'Epic' ? 16 : 12;
+      for (let i = 0; i < numDots; i++) {
         const dot = document.createElement('div');
         dot.className = 'gacha-confetti';
         dot.style.left = `${10 + Math.random() * 80}%`;
         dot.style.top = '10px';
-        dot.style.background = colors[i % colors.length];
+        dot.style.background = confettiColors[i % confettiColors.length];
         dot.style.animationDelay = `${Math.random() * 0.2}s`;
         modalConfettiWrap.appendChild(dot);
       }
       window.setTimeout(() => {
         modalConfettiWrap.innerHTML = '';
-      }, 1500);
+      }, effectRarity === 'Legendary' ? 2200 : effectRarity === 'Epic' ? 1800 : 1500);
     }
 
     const useCells = birds.length === 10;
@@ -353,8 +426,10 @@ function showGachaResultModal(
 
     birds.forEach((bird, index) => {
       window.setTimeout(() => {
+        const rarityKey = bird.rarity.toLowerCase();
+        const isRarePlus = ['rare', 'epic', 'legendary'].includes(rarityKey);
         const img = document.createElement('img');
-        img.className = `gacha-results-item gacha-results-item--${bird.rarity.toLowerCase()}`;
+        img.className = `gacha-results-item gacha-results-item--${rarityKey}${isRarePlus ? ' gacha-results-item--glow' : ''}`;
         img.src = RARITY_IMAGE_SRC[bird.rarity as keyof typeof RARITY_IMAGE_SRC];
         img.alt = bird.rarity;
         img.loading = 'lazy';
@@ -369,9 +444,7 @@ function showGachaResultModal(
         }
 
         if (index === 0 && modalFeedback) {
-          modalFeedback.textContent = count === 1
-            ? `You got ${bird.rarity}!`
-            : 'You got 10 birds!';
+          modalFeedback.textContent = `You got ${count === 1 ? bird.rarity : effectRarity}!`;
         }
       }, index * REVEAL_DELAY_MS);
     });
@@ -382,8 +455,18 @@ function closeGachaResultModal(): void {
   const backdrop = document.getElementById('gacha-result-modal-backdrop');
   const modalArea = document.getElementById('gacha-result-modal-area');
   const mainArea = document.getElementById('gacha-results-area');
+  const modalConfettiWrap = document.getElementById('gacha-result-modal-confetti-wrap');
   if (!backdrop || !modalArea) return;
 
+  if (modalConfettiWrap) {
+    modalConfettiWrap.classList.remove(
+      'gacha-confetti-wrap--common',
+      'gacha-confetti-wrap--uncommon',
+      'gacha-confetti-wrap--rare',
+      'gacha-confetti-wrap--epic',
+      'gacha-confetti-wrap--legendary'
+    );
+  }
   backdrop.classList.remove('visible');
   backdrop.setAttribute('aria-hidden', 'true');
   const modal = backdrop.querySelector<HTMLElement>('.gacha-result-modal');
@@ -399,18 +482,25 @@ function closeGachaResultModal(): void {
     });
     showGachaResultsSection();
   }
-
   modalArea.innerHTML = '';
+  moveGachaModalBackToShell();
 }
 
 /** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥をモーダルで表示し、閉じたらメインエリアにも表示。 */
 function runGachaFromDom(count: 1 | 10): void {
-  if (gachaInProgress) return;
+  gachaLog('runGachaFromDom called', { count });
+  if (gachaInProgress) {
+    gachaLog('BLOCKED: gachaInProgress is true');
+    return;
+  }
   const step = GameStore.state.onboardingStep;
-  if (step === 'need_gacha' && count !== 1) return;
+  if (step === 'need_gacha' && count !== 1) {
+    gachaLog('BLOCKED: need_gacha and count !== 1', { step, count });
+    return;
+  }
 
-  // ウォレット接続とコストを確認してから実行
   if (!GameStore.walletConnected) {
+    gachaLog('BLOCKED: wallet not connected');
     const area = document.getElementById('gacha-results-area');
     if (area) {
       area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
@@ -429,71 +519,142 @@ function runGachaFromDom(count: 1 | 10): void {
       ? Math.max(0, 1 - freePulls) * GACHA_COST
       : 10 * GACHA_COST;
   const bal = GameStore.birdCurrency;
+  gachaLog('cost/balance', { cost, bal, hasFreeGacha: state.hasFreeGacha });
 
   if (cost > 0 && bal < cost) {
+    gachaLog('BLOCKED: insufficient balance', { cost, bal });
     window.alert(`Insufficient $BIRD balance. You need ${cost} $BIRD. (Balance: ${bal} $BIRD)`);
     return;
   }
 
   gachaInProgress = true;
   setGachaButtonsDisabled(true);
-  let ok = true;
-  if (cost === 0) {
-    ok = window.confirm(`Use your free adoption to adopt ${count === 1 ? '1 bird' : `${count} birds`}?`);
-  } else {
-    ok = window.confirm(`Spend ${cost} $BIRD to adopt ${count === 1 ? '1 bird' : `${count} birds`}? (Balance: ${bal} $BIRD)`);
-  }
-  if (!ok) {
-    setGachaButtonsDisabled(false);
+  try {
+    const ok =
+      cost === 0
+        ? window.confirm(`Use your free adoption to adopt ${count === 1 ? '1 bird' : `${count} birds`}?`)
+        : window.confirm(`Spend ${cost} $BIRD to adopt ${count === 1 ? '1 bird' : `${count} birds`}? (Balance: ${bal} $BIRD)`);
+    if (!ok) {
+      gachaLog('user cancelled confirm');
+      return;
+    }
+
+    gachaLog('calling pullGacha', { count });
+    const result = GameStore.pullGacha(count);
+    gachaLog('pullGacha result', { ok: result.ok, error: result.error, birdsCount: result.birds?.length });
+
+    const area = document.getElementById('gacha-results-area');
+    const emptyEl = document.getElementById('gacha-results-empty');
+    if (!area) {
+      gachaLog('BLOCKED: gacha-results-area not found');
+      return;
+    }
+
+    area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
+    if (emptyEl) emptyEl.remove();
+
+    if (!result.ok) {
+      gachaLog('pullGacha failed', result.error);
+      const msg = document.createElement('p');
+      msg.className = 'gacha-results-empty';
+      msg.textContent = result.error ?? 'Error';
+      area.appendChild(msg);
+      return;
+    }
+
+    if (step === 'need_gacha' && count === 1) {
+      GameStore.setState({ onboardingStep: 'need_place' });
+      GameStore.save();
+      switchToTab('deck');
+    }
+
+    area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
+    area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
+
+    gachaLog('calling showGachaResultModal', { birdsCount: result.birds.length });
+    showGachaResultModal(result.birds, count);
+    updateAdoptPane();
+    updateAdoptPaneForOnboarding();
+    updateGachaButtonsAndCosts();
+    updateDeckPaneVisibility();
+    const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
+    game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
+    gachaLog('gacha flow done');
+  } catch (err) {
+    gachaLog('EXCEPTION in gacha flow', err);
+    throw err;
+  } finally {
     gachaInProgress = false;
-    return;
-  }
-
-  const result = GameStore.pullGacha(count);
-  const area = document.getElementById('gacha-results-area');
-  const emptyEl = document.getElementById('gacha-results-empty');
-  if (!area) return;
-
-  area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
-  if (emptyEl) emptyEl.remove();
-
-  if (!result.ok) {
-    const msg = document.createElement('p');
-    msg.className = 'gacha-results-empty';
-    msg.textContent = result.error ?? 'Error';
-    area.appendChild(msg);
     setGachaButtonsDisabled(false);
-    gachaInProgress = false;
-    return;
+    updateAdoptPaneForOnboarding();
+    gachaLog('finally: reset gachaInProgress and buttons');
   }
-
-  if (step === 'need_gacha' && count === 1) {
-    GameStore.setState({ onboardingStep: 'need_place' });
-    GameStore.save();
-    switchToTab('deck');
-  }
-
-  area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
-  area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
-
-  showGachaResultModal(result.birds, count);
-
-  updateAdoptPane();
-  updateAdoptPaneForOnboarding();
-  updateGachaButtonsAndCosts();
-  updateDeckPaneVisibility();
-
-  gachaInProgress = false;
-  setGachaButtonsDisabled(false);
-  updateAdoptPaneForOnboarding(); // 10x無効などオンボーディング状態を再適用
-
-  const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
-  game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
 }
 
 function emitGameRefresh(): void {
   const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
   game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
+}
+
+/** Network タブ: フロック全体の統計（現状はデモデータ。将来 API で差し替え可能） */
+function refreshNetworkStats(): void {
+  const levelList = document.getElementById('network-level-list');
+  const distList = document.getElementById('network-dist-list');
+  const totalEl = document.getElementById('network-total-birds');
+
+  const levelData = [
+    { level: 1, users: 21288 },
+    { level: 2, users: 3615 },
+    { level: 3, users: 557 },
+    { level: 4, users: 125 },
+    { level: 5, users: 10 },
+    { level: 6, users: 2 },
+  ];
+  const totalLevelUsers = levelData.reduce((s, d) => s + d.users, 0);
+
+  if (levelList) {
+    levelList.innerHTML = '';
+    for (const d of levelData) {
+      const pct = totalLevelUsers > 0 ? (d.users / totalLevelUsers) * 100 : 0;
+      const row = document.createElement('div');
+      row.className = 'network-stat-row';
+      row.innerHTML = `
+        <span class="network-stat-label">Level ${d.level}</span>
+        <span class="network-stat-count">${d.users.toLocaleString()}</span>
+        <div class="network-stat-bar-wrap">
+          <div class="network-stat-bar" style="width: ${pct}%"></div>
+        </div>
+      `;
+      levelList.appendChild(row);
+    }
+  }
+
+  const rarityData = [
+    { name: 'Common', count: 45038 },
+    { name: 'Uncommon', count: 22959 },
+    { name: 'Rare', count: 26820 },
+    { name: 'Epic', count: 23196 },
+    { name: 'Legendary', count: 19782 },
+  ];
+  const totalBirds = rarityData.reduce((s, d) => s + d.count, 0);
+
+  if (distList) {
+    distList.innerHTML = '';
+    for (const d of rarityData) {
+      const pct = totalBirds > 0 ? (d.count / totalBirds) * 100 : 0;
+      const row = document.createElement('div');
+      row.className = 'network-stat-row';
+      row.innerHTML = `
+        <span class="network-stat-label">${d.name}</span>
+        <span class="network-stat-count">${d.count.toLocaleString()}</span>
+        <div class="network-stat-bar-wrap">
+          <div class="network-stat-bar" style="width: ${pct}%"></div>
+        </div>
+      `;
+      distList.appendChild(row);
+    }
+  }
+  if (totalEl) totalEl.textContent = totalBirds.toLocaleString();
 }
 
 function refreshDebugPane(): void {
