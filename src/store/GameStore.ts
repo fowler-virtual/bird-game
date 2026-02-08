@@ -279,6 +279,17 @@ export const GameStore = {
     return makeBirdTypeKeyFromParts(bird.rarity, species, color);
   },
 
+  /** その BirdTypeKey を何体持っているか（インベントリ＋デッキの合計） */
+  getOwnedCountByKey(key: BirdTypeKey): number {
+    const inv = this.state.inventory[key] ?? 0;
+    const onDeck = this.state.deckSlots.filter((id) => {
+      if (id == null) return false;
+      const bird = this.state.birdsOwned.find((b) => b.id === id);
+      return bird ? this.getBirdTypeKey(bird) === key : false;
+    }).length;
+    return inv + onDeck;
+  },
+
   /** birdsOwned / deckSlots から inventory を再構築する */
   rebuildInventory(): void {
     const inv: Record<BirdTypeKey, number> = {};

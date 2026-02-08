@@ -898,8 +898,14 @@ export class GameScene extends Phaser.Scene {
     standbyVisibleH: number;
     needsStandbyScroll: boolean;
   } {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    const w =
+      this.screen === 'deck'
+        ? this.getDeckParentRect().w
+        : this.scale.width;
+    const h =
+      this.screen === 'deck'
+        ? this.getDeckParentRect().h
+        : this.scale.height;
     const isMobile = this.resolveDeckLayoutMobile(w);
     const padding = DECK_PANEL_PADDING;
     const gap = DECK_PANEL_GAP;
@@ -960,9 +966,8 @@ export class GameScene extends Phaser.Scene {
       slotSize = Math.min(100, Math.floor((maxDeckGridWidth - (deckCols - 1) * slotGap) / deckCols));
       standbyCols = 5;
       standbyGap = 8;
-      const baseStandbyCell = Math.min(80, Math.max(64, Math.floor((rightW - padding * 2 - (5 - 1) * standbyGap) / 5)));
-      // Inventory の鳥アイコンがデッキより大きくならないように、セルサイズを deck の slotSize 以下に抑える
-      standbyCell = Math.min(baseStandbyCell, slotSize);
+      // 幅が広いときはセルを大きくしてアイコンがボックスに対して小さく見えないようにする（最大 180px）
+      standbyCell = Math.min(180, Math.max(64, Math.floor((rightW - padding * 2 - (5 - 1) * standbyGap) / 5)));
       const deckGridH = deckRows * slotSize + (deckRows - 1) * slotGap;
       leftPanelH = 28 + deckGridH + 24;
     }
@@ -1028,7 +1033,6 @@ export class GameScene extends Phaser.Scene {
       inventoryLocalTop,
       needsStandbyScroll,
     } = layout;
-    const birdSize = Math.max(24, slotSize - BIRD_INSET);
     const deckGridW = deckCols * slotSize + (deckCols - 1) * slotGap;
     const deckGridLeft = Math.max(layout.padding, (leftW - deckGridW) / 2);
 
@@ -1061,7 +1065,16 @@ export class GameScene extends Phaser.Scene {
       const y = layout.deckLocalTop + row * (slotSize + slotGap) + slotSize / 2 + slotGap / 2;
       this.slotGlows[i]?.setSize(slotSize + glowPad, slotSize + glowPad).setPosition(x, y);
       this.slotZones[i]?.setSize(slotSize, slotSize).setPosition(x, y);
-      this.deckImages[i]?.setDisplaySize(birdSize, birdSize).setPosition(x, y);
+      const deckImg = this.deckImages[i];
+      if (deckImg) {
+        deckImg.setPosition(x, y);
+        const tw = deckImg.width;
+        if (tw > 0) {
+          deckImg.setScale(slotSize / tw);
+        } else {
+          deckImg.setDisplaySize(slotSize, slotSize);
+        }
+      }
       this.deckTexts[i]?.setPosition(x, y);
     }
 
@@ -1106,6 +1119,8 @@ export class GameScene extends Phaser.Scene {
       if (this.deckStandbyWrapper) this.deckStandbyWrapper.clearMask();
       if (this.standbyScrollZone) this.standbyScrollZone.setVisible(false);
     }
+
+    this.refreshInventoryGrid(layout);
   }
 
   private renderMainUI(): void {
@@ -1282,15 +1297,14 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private refreshInventoryGrid(): void {
+  private refreshInventoryGrid(layoutFromApply?: ReturnType<GameScene['getDeckLayout']>): void {
     if (!this.inventoryContainer) return;
     this.inventoryContainer.removeAll(true);
     const state = GameStore.state;
-    const layout = this.getDeckLayout();
+    const layout = layoutFromApply ?? this.getDeckLayout();
     const cell = layout.standbyCell;
     const gap = layout.standbyGap;
     const cols = layout.standbyCols;
-    const imgSize = Math.max(24, cell - BIRD_INSET);
     const rarityMap: Record<string, BirdRarity> = {
       C: 'Common',
       U: 'Uncommon',
@@ -1308,7 +1322,7 @@ export class GameScene extends Phaser.Scene {
       const displayRow = Math.floor(i / cols);
       const cx = displayCol * (cell + gap) + cell / 2;
       const cy = displayRow * (cell + gap) + cell / 2;
-      this.addInventoryCell(cx, cy, cell, imgSize, key, state, rarityMap);
+      this.addInventoryCell(cx, cy, cell, key, state, rarityMap);
     }
   }
 
@@ -1316,12 +1330,12 @@ export class GameScene extends Phaser.Scene {
     cx: number,
     cy: number,
     cell: number,
-    imgSize: number,
     key: BirdTypeKey,
     state: GameState,
     rarityMap: Record<string, BirdRarity>
   ): void {
-    const count = state.inventory[key] ?? 0;
+    const inInventory = state.inventory[key] ?? 0;
+    const owned = GameStore.getOwnedCountByKey(key);
     const rarityCode = key.slice(0, 1);
     const rarity = rarityMap[rarityCode] ?? 'Common';
     const texKey = RARITY_TEXTURE_KEYS[rarity];
@@ -1330,26 +1344,32 @@ export class GameScene extends Phaser.Scene {
       .rectangle(cx, cy, cell, cell, BG_ELEVATED, 1)
       .setStrokeStyle(1, BORDER_SUBTLE)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.onInventoryCellClick(key, count));
+      .on('pointerdown', () => this.onInventoryCellClick(key, inInventory));
     this.inventoryContainer!.add(zone);
 
-    const inner = cell - 4;
-    const cardBg = this.add.rectangle(cx, cy, inner, inner, BG_CARD, 1).setStrokeStyle(1, BORDER_SUBTLE);
+    const cardBg = this.add.rectangle(cx, cy, zone.width, zone.height, BG_CARD, 1).setStrokeStyle(1, BORDER_SUBTLE);
     this.inventoryContainer!.add(cardBg);
 
-    if (count > 0) {
-      this.inventoryContainer!.add(
-        this.add.image(cx, cy, texKey).setDisplaySize(imgSize, imgSize)
-      );
+    if (owned >= 1) {
+      const img = this.add.image(cx, cy, texKey).setOrigin(0.5, 0.5);
+      const targetSize = Math.max(16, zone.width);
+      const texW = img.width;
+      if (texW > 0) {
+        img.setScale(targetSize / texW);
+      } else {
+        img.setDisplaySize(targetSize, targetSize);
+      }
+      this.inventoryContainer!.add(img);
       const countText = this.add
-        .text(cx + cell / 2 - 5, cy - cell / 2 + 4, `×${count}`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: TEXT_PRIMARY })
+        .text(cx + cell / 2 - 5, cy - cell / 2 + 4, `×${inInventory}`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: TEXT_PRIMARY })
         .setOrigin(1, 0);
       this.inventoryContainer!.add(countText);
     } else {
-      const slotBg = this.add.rectangle(cx, cy, imgSize, imgSize, BG_ELEVATED, 0.6).setStrokeStyle(1, BORDER_SUBTLE);
+      const slotBg = this.add.rectangle(cx, cy, zone.width, zone.height, BG_ELEVATED, 0.6).setStrokeStyle(1, BORDER_SUBTLE);
       this.inventoryContainer!.add(slotBg);
+      const questionFontSize = `${Math.round(cell * 0.42)}px`;
       this.inventoryContainer!.add(
-        this.add.text(cx, cy, '?', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_MUTED }).setOrigin(0.5)
+        this.add.text(cx, cy, '?', { resolution: TEXT_RESOLUTION, fontSize: questionFontSize, color: TEXT_MUTED }).setOrigin(0.5)
       );
     }
   }

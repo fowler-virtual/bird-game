@@ -39,6 +39,8 @@ const CANVAS_DECK_VIEW_CLASS = 'canvas-card-deck-view';
 
 /** 切り分け用: 直前のタブ（Adopt から戻ったか判定用） */
 let lastTabId = '';
+/** モーダル表示中のガチャ結果（×で早期に閉じたときに全件をメインエリアへ反映する用） */
+let lastGachaModalBirds: { rarity: string }[] = [];
 const DEBUG_LAYOUT = true;
 /** ガチャの流れをコンソールに出す（原因究明用）。本番では false に。 */
 const DEBUG_GACHA = true;
@@ -270,6 +272,7 @@ function clearGachaResultsArea(): void {
   empty.id = 'gacha-results-empty';
   empty.textContent = 'No birds adopted yet. Your first adoption is free!';
   area.appendChild(empty);
+  clearInsufficientBalanceMessage();
   hideGachaResultsSection();
 }
 
@@ -310,13 +313,29 @@ function updateGachaButtonsAndCosts(): void {
 
   if (cost1El) {
     if (state.hasFreeGacha) cost1El.textContent = 'Cost: Free (first adoption)';
+    else if (bal < cost1) cost1El.textContent = `Cost: ${cost1} $BIRD (you have ${bal})`;
     else cost1El.textContent = `Cost: ${cost1} $BIRD`;
     cost1El.classList.toggle('gacha-cost-insufficient', bal < cost1);
   }
+  if (bal >= cost1 && bal >= cost10) clearInsufficientBalanceMessage();
   if (cost10El) {
-    cost10El.textContent = `Cost: ${cost10} $BIRD`;
+    if (bal < cost10) cost10El.textContent = `Cost: ${cost10} $BIRD (you have ${bal})`;
+    else cost10El.textContent = `Cost: ${cost10} $BIRD`;
     cost10El.classList.toggle('gacha-cost-insufficient', bal < cost10);
   }
+}
+
+/** 残高不足メッセージを Adoption ボックス内（コスト表示の下）にテキストのみで表示 */
+function showInsufficientBalanceMessage(): void {
+  const el = document.getElementById('gacha-insufficient-message');
+  if (!el) return;
+  el.textContent = 'Not enough $BIRD.';
+}
+
+/** 残高不足メッセージを消す（残高が足りる場合やガチャ成功時など） */
+function clearInsufficientBalanceMessage(): void {
+  const el = document.getElementById('gacha-insufficient-message');
+  if (el) el.textContent = '';
 }
 
 /** 表示エフェクトに使うレアリティ（1引き＝その1羽、10引き＝一番強いレアリティ） */
@@ -349,18 +368,37 @@ function moveGachaModalBackToShell(): void {
   else if (container) container.appendChild(backdrop);
 }
 
+/** モーダルが使えない環境用：結果をメインの Adopted birds エリアに直接表示する */
+function appendGachaResultToMainArea(birds: { rarity: string }[]): void {
+  const mainArea = document.getElementById('gacha-results-area');
+  if (!mainArea) return;
+  mainArea.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
+  mainArea.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
+  birds.forEach((bird) => {
+    const img = document.createElement('img');
+    img.className = `gacha-results-item gacha-results-item--${bird.rarity.toLowerCase()}`;
+    img.src = RARITY_IMAGE_SRC[bird.rarity as keyof typeof RARITY_IMAGE_SRC];
+    img.alt = bird.rarity;
+    img.loading = 'lazy';
+    mainArea.appendChild(img);
+  });
+  showGachaResultsSection();
+}
+
 /** ガチャ結果をモーダルで表示（スマホでも見切れない）。閉じたらメインエリアにも同じ結果を表示する */
 function showGachaResultModal(
   birds: { rarity: string }[],
   count: 1 | 10
 ): void {
   gachaLog('showGachaResultModal entered', { birdsCount: birds.length, count });
+  lastGachaModalBirds = birds.slice();
   const backdrop = document.getElementById('gacha-result-modal-backdrop');
   const modalArea = document.getElementById('gacha-result-modal-area');
   const modalFeedback = document.getElementById('gacha-result-modal-feedback');
   const modalConfettiWrap = document.getElementById('gacha-result-modal-confetti-wrap');
   if (!backdrop || !modalArea) {
     gachaLog('BLOCKED: backdrop or modalArea null', { hasBackdrop: !!backdrop, hasModalArea: !!modalArea });
+    appendGachaResultToMainArea(birds);
     return;
   }
   gachaLog('moving modal to body and adding visible');
@@ -472,16 +510,10 @@ function closeGachaResultModal(): void {
   const modal = backdrop.querySelector<HTMLElement>('.gacha-result-modal');
   modal?.classList.remove('gacha-result-modal--ten');
 
-  const items = modalArea.querySelectorAll('.gacha-results-item');
-  if (mainArea && items.length > 0) {
-    mainArea.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
-    mainArea.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
-    items.forEach((img) => {
-      const clone = img.cloneNode(true) as HTMLImageElement;
-      mainArea.appendChild(clone);
-    });
-    showGachaResultsSection();
+  if (mainArea && lastGachaModalBirds.length > 0) {
+    appendGachaResultToMainArea(lastGachaModalBirds);
   }
+  lastGachaModalBirds = [];
   modalArea.innerHTML = '';
   moveGachaModalBackToShell();
 }
@@ -523,7 +555,7 @@ function runGachaFromDom(count: 1 | 10): void {
 
   if (cost > 0 && bal < cost) {
     gachaLog('BLOCKED: insufficient balance', { cost, bal });
-    window.alert(`Insufficient $BIRD balance. You need ${cost} $BIRD. (Balance: ${bal} $BIRD)`);
+    showInsufficientBalanceMessage();
     return;
   }
 
@@ -570,6 +602,7 @@ function runGachaFromDom(count: 1 | 10): void {
 
     area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
     area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
+    clearInsufficientBalanceMessage();
 
     gachaLog('calling showGachaResultModal', { birdsCount: result.birds.length });
     showGachaResultModal(result.birds, count);

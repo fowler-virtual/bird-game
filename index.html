@@ -471,6 +471,15 @@
       .gacha-cost.gacha-cost-insufficient {
         color: #f97373;
       }
+      .gacha-insufficient-message {
+        font-size: 13px;
+        color: #f97373;
+        margin: 12px 0 0 0;
+        min-height: 0;
+      }
+      .gacha-insufficient-message:empty {
+        display: none;
+      }
       .gacha-results-section {
         background: var(--bg-card);
         border: 1px solid var(--border);
@@ -518,7 +527,6 @@
         font-size: 13px;
         color: var(--text-muted);
         margin: 0;
-        grid-column: 1 / -1;
       }
       .gacha-results-item {
         width: 100%;
@@ -792,8 +800,11 @@
       .inventory-grid {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
+        grid-template-rows: repeat(8, 1fr);
+        aspect-ratio: 5/8;
+        width: 100%;
         gap: 8px;
-              }
+      }
       .inventory-cell {
         background: var(--bg-elevated);
         border: 1px solid var(--border);
@@ -802,21 +813,28 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        justify-content: center;
         gap: 4px;
         cursor: pointer;
         transition: background 0.15s, border-color 0.15s;
         min-width: 0;
+        min-height: 0;
       }
       .inventory-cell:hover { background: var(--bg-card); border-color: var(--text-muted); }
       .inventory-cell.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
       .inventory-cell:disabled { opacity: 0.5; cursor: not-allowed; }
-      .inventory-cell img { width: 100%; max-width: 56px; height: auto; aspect-ratio: 1; object-fit: contain; }
-      .inventory-cell .inventory-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--accent); }
-      .inventory-cell.unowned {
-        justify-content: center;
+      .inventory-cell img {
+        flex: 1;
+        min-width: 0;
+        min-height: 0;
+        width: 100%;
+        max-width: none;
+        object-fit: contain;
+        aspect-ratio: 1;
       }
+      .inventory-cell .inventory-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--accent); }
       .inventory-cell.unowned .inventory-unowned {
-        font-size: 28px;
+        font-size: clamp(20px, 8vw, 36px);
         font-weight: 600;
         color: var(--text-muted);
         line-height: 1;
@@ -1460,6 +1478,7 @@
                     </div>
                   </div>
                 </div>
+                <p id="gacha-insufficient-message" class="gacha-insufficient-message" aria-live="polite"></p>
               </div>
               <div class="gacha-results-section gacha-results-section--hidden" id="gacha-results-section">
                 <div id="gacha-confetti-wrap" class="gacha-confetti-wrap" aria-hidden="true"></div>

@@ -108,25 +108,26 @@ function renderInventory(): void {
       const key = getBirdTypeKeyForInventoryCell(row, col);
       if (!key) continue;
 
-      const count = state.inventory[key] ?? 0;
+      const inInventory = state.inventory[key] ?? 0;
+      const owned = GameStore.getOwnedCountByKey(key);
       const parts = parseBirdTypeKey(key);
       if (!parts) continue;
 
       const cell = document.createElement('button');
       cell.type = 'button';
       cell.className = 'inventory-cell';
-      if (count < 1) cell.classList.add('unowned');
+      if (owned < 1) cell.classList.add('unowned');
       cell.setAttribute('data-bird-type-key', key);
-      (cell as HTMLButtonElement).disabled = count < 1;
+      (cell as HTMLButtonElement).disabled = inInventory < 1;
 
-      if (count >= 1) {
+      if (owned >= 1) {
         const img = document.createElement('img');
         img.src = RARITY_IMAGE_SRC[parts.rarity];
         img.alt = parts.rarity;
         cell.appendChild(img);
         const countSpan = document.createElement('span');
         countSpan.className = 'inventory-count';
-        countSpan.textContent = String(count);
+        countSpan.textContent = String(inInventory);
         cell.appendChild(countSpan);
       } else {
         const placeholder = document.createElement('span');
@@ -136,7 +137,7 @@ function renderInventory(): void {
       }
 
       cell.addEventListener('click', () => {
-        if (count < 1) return;
+        if (inInventory < 1) return;
         const state = GameStore.state;
         const activeIndices = getActiveSlotIndices(state);
         const firstEmpty = activeIndices.find((idx) => state.deckSlots[idx] === null);
