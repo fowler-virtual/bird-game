@@ -213,10 +213,10 @@ function updateSavePowerHint(): void {
   el.textContent = '';
 }
 
-/** Save ボタンは LOFT タブ内にあるため、LOFT タブ表示時などに表示切替する。ウォレット接続中は常に表示（ローカル仕様）。 */
+/** Save ボタンは LOFT タブ内にあるため、LOFT タブ表示時などに表示切替する。 */
 export function updateSaveWrapVisibility(): void {
   const saveWrap = getEl(LOFT_SAVE_WRAP_ID);
-  if (saveWrap) saveWrap.style.display = GameStore.walletAddress ? 'flex' : 'none';
+  if (saveWrap) saveWrap.style.display = hasNetworkStateContract() && GameStore.walletAddress ? 'flex' : 'none';
   updateSavePowerHint();
 }
 
@@ -312,14 +312,6 @@ export function init(): void {
   const saveBtn = getEl(SAVE_DECK_BTN_ID) as HTMLButtonElement | null;
   saveBtn?.addEventListener('click', async () => {
     if (!GameStore.walletAddress) return;
-    if (GameStore.state.onboardingStep === 'need_save' && !hasNetworkStateContract()) {
-      GameStore.setState({ onboardingStep: 'need_farming' });
-      GameStore.save();
-      deckView.refresh();
-      updateDeckOnboardingPlaceOverlay();
-      showPlaceSuccessModal();
-      return;
-    }
     const power = Math.floor(getProductionRatePerHour(GameStore.state));
     if (power <= 0) {
       await showMessageModal({
@@ -329,12 +321,9 @@ export function init(): void {
       return;
     }
     // 既にオンチェーンの値と同じパワーならトランザクションを送らない（ガス節約）
-    // 初回オンボーディング(need_save)のときは必ず tx を送る（chain=0 → 90 なのでスキップしない）
     const chainPower = getCachedPower();
     const alreadyUpToDate = chainPower != null && Math.floor(chainPower) === power;
-    const isNeedSaveOnboarding = GameStore.state.onboardingStep === 'need_save';
-
-    if (alreadyUpToDate && !isNeedSaveOnboarding) {
+    if (alreadyUpToDate) {
       await showMessageModal({
         message: 'Your deck power is already up-to-date on-chain. No Save needed.',
         success: true,
