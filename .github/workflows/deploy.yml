@@ -29,6 +29,10 @@ jobs:
       - run: npm run build
         env:
           GITHUB_PAGES: 'true'
+          VITE_SEED_TOKEN_ADDRESS: ${{ vars.VITE_SEED_TOKEN_ADDRESS }}
+          VITE_NETWORK_STATE_ADDRESS: ${{ vars.VITE_NETWORK_STATE_ADDRESS }}
+          VITE_REWARD_CLAIM_ADDRESS: ${{ vars.VITE_REWARD_CLAIM_ADDRESS }}
+          VITE_CLAIM_API_URL: ${{ vars.VITE_CLAIM_API_URL }}
 
       - uses: actions/upload-pages-artifact@v3
         with:
