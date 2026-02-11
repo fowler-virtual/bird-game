@@ -5,9 +5,10 @@
 
 import { GameStore } from './store/GameStore';
 import { requestAccounts, hasWallet, setJustConnectingFlag } from './wallet';
-import { showGameShell, hideGameShell } from './domShell';
+import { showGameShell, hideGameShell, showMessageModal } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
+import { hasNetworkStateContract, getLoftLevelRaw, setLoftLevel } from './networkState';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -44,8 +45,31 @@ function onConnectClick(): void {
         alert(`Connection failed: ${result.error}`);
         return;
       }
-      GameStore.setWalletConnected(true, result.address);
+      const address = result.address;
+      GameStore.setWalletConnected(true, address);
       await refreshSeedTokenFromChain();
+
+      // 初回ログイン時: オンチェーンに Loft レベル1 がまだ登録されていなければ、このタイミングで刻む
+      if (hasNetworkStateContract()) {
+        try {
+          const rawLevel = await getLoftLevelRaw(address);
+          if (rawLevel <= 0) {
+            const levelResult = await setLoftLevel(1);
+            if (!levelResult.ok) {
+              await showMessageModal({
+                title: 'Loft level not recorded',
+                message:
+                  levelResult.error ??
+                  'Failed to record Loft level 1 on-chain. You can still play, but the NETWORK tab may not reflect your level.',
+                success: false,
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[TitleUI] Failed to ensure Loft level 1 on-chain', e);
+        }
+      }
+
       showGameShell();
       createPhaserGame();
     })
