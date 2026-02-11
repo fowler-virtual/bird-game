@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "vercel-build": "echo \"skip frontend build for Vercel claim API\"",
     "preview": "vite preview",
     "chain": "hardhat node",
     "compile": "hardhat compile",
