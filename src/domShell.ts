@@ -1513,9 +1513,12 @@ export function showGameShell(): void {
 
   initTabListeners();
 
-  /* 初回表示: オンボーディング中は Adopt から、そうでなければ Farming */
+  /* 初回表示: オンボーディング状態に応じて適切なタブから開始する */
   const step = GameStore.state.onboardingStep;
-  const firstTab = step === 'need_gacha' ? 'adopt' : 'farming';
+  let firstTab: 'farming' | 'adopt' | 'deck';
+  if (step === 'need_gacha') firstTab = 'adopt';
+  else if (step === 'need_place' || step === 'need_save') firstTab = 'deck';
+  else firstTab = 'farming';
   switchToTab(firstTab);
   updateTabsForOnboarding();
   updateDeckPaneVisibility();
