@@ -185,7 +185,7 @@ export async function fetchLevelCounts(): Promise<number[]> {
   if (!contract) throw new Error('Contract not available.');
   try {
     const arr = await contract.getLevelCounts();
-    return Array.from(arr).map((x: bigint) => Number(x));
+    return (Array.from(arr) as bigint[]).map((x) => Number(x));
   } catch {
     return [0, 0, 0, 0, 0, 0];
   }
@@ -196,7 +196,7 @@ export async function fetchLevelCountsStrict(): Promise<number[]> {
   const contract = await getContract(false);
   if (!contract) throw new Error('Contract not available.');
   const arr = await contract.getLevelCounts();
-  return Array.from(arr).map((x: bigint) => Number(x));
+  return (Array.from(arr) as bigint[]).map((x) => Number(x));
 }
 
 /** レアリティ別鳥数。古いコントラクトの場合は [0,0,0,0,0] を返し lastFetchError は触らない（他 fetches の結果でステータスカードを表示するため）。 */
@@ -205,7 +205,7 @@ export async function fetchGlobalRarityCounts(): Promise<number[]> {
   if (!contract) return [0, 0, 0, 0, 0];
   try {
     const arr = await contract.getGlobalRarityCounts();
-    return Array.from(arr).map((x: bigint) => Number(x));
+    return (Array.from(arr) as bigint[]).map((x) => Number(x));
   } catch {
     return [0, 0, 0, 0, 0];
   }
@@ -216,7 +216,7 @@ export async function fetchGlobalRarityCountsStrict(): Promise<number[]> {
   const contract = await getContract(false);
   if (!contract) throw new Error('Contract not available.');
   const arr = await contract.getGlobalRarityCounts();
-  return Array.from(arr).map((x: bigint) => Number(x));
+  return (Array.from(arr) as bigint[]).map((x) => Number(x));
 }
 
 /** デバッグ用: 直近の addRarityCountsOnChain の戻り値 */

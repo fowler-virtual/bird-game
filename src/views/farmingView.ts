@@ -7,7 +7,6 @@ import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
 import { COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay } from '../domShell';
-import { refreshSeedTokenFromChain } from '../seedToken';
 import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getCachedPower } from '../networkState';
 import * as deckView from './deckView';
 
@@ -104,7 +103,7 @@ function refreshShellStatus(): void {
 }
 
 function tickAccrual(): void {
-  const delta = GameStore.applyAccrual();
+  GameStore.applyAccrual();
   GameStore.save();
   refreshShellStatus();
 }

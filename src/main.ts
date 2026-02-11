@@ -1,7 +1,6 @@
 import { GameStore } from './store/GameStore';
 import { initTitleUI, showTitleUI, hideTitleUI } from './titleUI';
 import { setupAccountChangeReload } from './wallet';
-import { showGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { hasNetworkStateContract, getLoftLevelRaw } from './networkState';
 

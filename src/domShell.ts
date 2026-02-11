@@ -4,8 +4,8 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES, getBirdById } from './types';
-import { refreshSeedTokenFromChain, transferSeedTokens, burnSeedForAction } from './seedToken';
+import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
+import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim } from './claimApi';
 import { executeClaim } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
@@ -16,7 +16,6 @@ import {
   refreshNetworkStateFromChain,
   getSeedPerDayFromChain,
   getNetworkSharePercentFromChain,
-  updatePowerOnChain,
   getCachedShareBps,
   getCachedLevelCounts,
   getCachedRarityCounts,
@@ -372,9 +371,6 @@ function positionDeckOnboardingMessageAboveInventory(): void {
   const messageWrap = document.getElementById('deck-onboarding-place-message-wrap');
   const inventorySection = document.getElementById('inventory-section');
   if (!placeOverlay || !overlayDim || !messageWrap || !inventorySection || !placeOverlay.classList.contains('visible')) return;
-  const overlayRect = placeOverlay.getBoundingClientRect();
-  const toOverlayTop = (y: number) => y - overlayRect.top;
-  const toOverlayLeft = (x: number) => x - overlayRect.left;
   const contentInner = document.getElementById('shell-content-inner');
   const loftCard = document.querySelector('.status-card-loft');
   if (loftCard && contentInner) {
@@ -522,8 +518,6 @@ let adoptOnboardingResizeHandler: (() => void) | null = null;
 
 const ADOPT_ONBOARDING_MESSAGE_GAP = 10;
 const ADOPT_ONBOARDING_MESSAGE_FALLBACK_HEIGHT = 48;
-/** 暗転下端と ADOPTION 緑枠の間の余白（かぶり防止） */
-const ADOPT_ONBOARDING_DIM_BOTTOM_GAP = 12;
 
 function positionAdoptOnboardingOverlay(): void {
   const overlay = document.getElementById('adopt-onboarding-overlay');
@@ -627,7 +621,6 @@ function isFirstAdoptionFree(): boolean {
 }
 
 function updateGachaButtonsAndCosts(): void {
-  const state = GameStore.state;
   const freeFirst = isFirstAdoptionFree();
   const cost1 = freeFirst ? 0 : GACHA_COST;
   const cost10 = 10 * GACHA_COST;
@@ -910,7 +903,7 @@ export async function runConfirmBurnThenSuccess(options: {
 }
 
 /** ガチャ実行前の確認をモーダルで表示し、Confirm/Cancel で true/false を返す。 */
-function showGachaConfirmModal(count: 1 | 10, cost: number, bal: number): Promise<boolean> {
+function showGachaConfirmModal(count: 1 | 10, cost: number, _bal: number): Promise<boolean> {
   return new Promise((resolve) => {
     const textEl = document.getElementById('gacha-modal-text');
     const backdrop = document.getElementById('gacha-modal-backdrop');
@@ -1014,7 +1007,6 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
     return;
   }
 
-  const state = GameStore.state;
   const freeFirst = isFirstAdoptionFree();
   const cost =
     count === 1

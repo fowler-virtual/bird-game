@@ -182,7 +182,6 @@ export class GameScene extends Phaser.Scene {
     // 再接続で同じシーンが再利用されるため、破棄済み参照を捨てる
     this.slotPickerObjects = [];
     this.unlockModalObjects = [];
-    this.completeModalObjects = [];
 
     GameStore.applyAccrual();
     GameStore.save();
@@ -1112,7 +1111,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private renderMainUI(): void {
-    const delta = GameStore.applyAccrual();
+    GameStore.applyAccrual();
     GameStore.save();
     const state = GameStore.state;
     this.seedText.setText(state.seed.toFixed(2));
@@ -1544,7 +1543,7 @@ export class GameScene extends Phaser.Scene {
     const now = Date.now();
     if (now - this.lastAccrualCheckTime >= ACCRUAL_INTERVAL_MS) {
       this.lastAccrualCheckTime = now;
-      const delta = GameStore.applyAccrual();
+      GameStore.applyAccrual();
       GameStore.save();
       this.renderMainUI();
     }
