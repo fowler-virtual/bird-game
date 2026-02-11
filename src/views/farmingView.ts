@@ -320,17 +320,6 @@ export function init(): void {
       });
       return;
     }
-    // 既にオンチェーンの値と同じパワーならトランザクションを送らない（ガス節約）
-    const chainPower = getCachedPower();
-    const alreadyUpToDate = chainPower != null && Math.floor(chainPower) === power;
-    if (alreadyUpToDate) {
-      await showMessageModal({
-        message: 'Your deck power is already up-to-date on-chain. No Save needed.',
-        success: true,
-      });
-      return;
-    }
-
     saveBtn.disabled = true;
     try {
       const result = await updatePowerOnChain(power);
