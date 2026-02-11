@@ -213,15 +213,10 @@ function updateSavePowerHint(): void {
   el.textContent = '';
 }
 
-/** Save ボタンは LOFT タブ内にあるため、LOFT タブ表示時などに表示切替する。 */
-/** 初回オンボーディング(need_save)のときも表示する（契約未設定の環境では押下時にメッセージを出してフローを進める）。 */
+/** Save ボタンは LOFT タブ内にあるため、LOFT タブ表示時などに表示切替する。ウォレット接続中は常に表示（ローカル仕様）。 */
 export function updateSaveWrapVisibility(): void {
   const saveWrap = getEl(LOFT_SAVE_WRAP_ID);
-  const hasContract = hasNetworkStateContract();
-  const hasWallet = !!GameStore.walletAddress;
-  const isNeedSave = GameStore.state.onboardingStep === 'need_save';
-  const show = (hasContract && hasWallet) || (hasWallet && isNeedSave);
-  if (saveWrap) saveWrap.style.display = show ? 'flex' : 'none';
+  if (saveWrap) saveWrap.style.display = GameStore.walletAddress ? 'flex' : 'none';
   updateSavePowerHint();
 }
 
@@ -322,11 +317,7 @@ export function init(): void {
       GameStore.save();
       deckView.refresh();
       updateDeckOnboardingPlaceOverlay();
-      await showMessageModal({
-        title: 'Save (offline)',
-        message: 'Network is not configured for on-chain save. Your progress is saved locally. You can continue playing.',
-        success: true,
-      });
+      showPlaceSuccessModal();
       return;
     }
     const power = Math.floor(getProductionRatePerHour(GameStore.state));
