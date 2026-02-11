@@ -39,13 +39,13 @@ export class GachaScene extends Phaser.Scene {
       .rectangle(this.scale.width / 2, this.scale.height / 2, this.scale.width, this.scale.height, BG_PRIMARY)
       .setDepth(-2);
 
-    console.log('[STORE] GachaScene create', GameStore.state, GameStore.birdCurrency);
+    console.log('[STORE] GachaScene create', GameStore.state, GameStore.seedToken);
 
     GameStore.applyAccrual();
     GameStore.save();
 
-    this.add.text(24, HEADER_Y, '$Bird', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_MUTED }).setOrigin(0, 0.5);
-    this.currencyText = this.add.text(70, HEADER_Y, String(GameStore.birdCurrency), { resolution: TEXT_RESOLUTION, fontSize: FONT_H3, color: TEXT_PRIMARY }).setOrigin(0, 0.5);
+    this.add.text(24, HEADER_Y, '$SEED', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_MUTED }).setOrigin(0, 0.5);
+    this.currencyText = this.add.text(70, HEADER_Y, String(GameStore.seedToken), { resolution: TEXT_RESOLUTION, fontSize: FONT_H3, color: TEXT_PRIMARY }).setOrigin(0, 0.5);
 
     const btnX = this.scale.width / 2;
     const btnY = 140;
@@ -54,7 +54,7 @@ export class GachaScene extends Phaser.Scene {
       .setStrokeStyle(1, BORDER)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.doPull());
-    const pullLabel = GameStore.state.hasFreeGacha ? 'Pull once (free)' : `Pull (${GACHA_COST} $Bird)`;
+    const pullLabel = GameStore.state.hasFreeGacha ? 'Pull once (free)' : `Pull (${GACHA_COST} $SEED)`;
     this.add.text(btnX, btnY, pullLabel, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5);
 
     this.messageText = this.add.text(btnX, btnY + 44, '', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: DANGER_HEX }).setOrigin(0.5);
@@ -103,7 +103,7 @@ export class GachaScene extends Phaser.Scene {
     }
 
     const bird = gachaResult.birds[0];
-    this.currencyText.setText(String(GameStore.birdCurrency));
+    this.currencyText.setText(String(GameStore.seedToken));
     if (this.resultImage && bird) {
       this.resultImage.setTexture(RARITY_TEXTURE_KEYS[bird.rarity]);
       this.resultImage.setVisible(true);

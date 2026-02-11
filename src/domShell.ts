@@ -4,7 +4,42 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
+import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES, getBirdById } from './types';
+import { refreshSeedTokenFromChain, transferSeedTokens, burnSeedForAction } from './seedToken';
+import { requestClaim } from './claimApi';
+import { executeClaim } from './rewardClaim';
+import { requestAccounts, revokeWalletPermissions } from './wallet';
+import { showTitleUI } from './titleUI';
+import { destroyPhaserGame } from './phaserBoot';
+import {
+  hasNetworkStateContract,
+  refreshNetworkStateFromChain,
+  getSeedPerDayFromChain,
+  getNetworkSharePercentFromChain,
+  updatePowerOnChain,
+  getCachedShareBps,
+  getCachedLevelCounts,
+  getCachedRarityCounts,
+  addRarityCountsOnChain,
+  getNetworkStateFetchError,
+  clearNetworkStateCache,
+  getCachedPower,
+  fetchMyPower,
+  fetchMyShareBps,
+  fetchLevelCountsStrict,
+  fetchGlobalRarityCountsStrict,
+  getLastAddRarityResult,
+  getLastUpdatePowerResult,
+} from './networkState';
+
+/** リセット後は SAVE するまでステータスカードにオンチェーン値を出さない（sessionStorage） */
+const SUPPRESS_CHAIN_DISPLAY_KEY = 'bird-game-suppress-chain-display';
+export function clearSuppressChainDisplay(): void {
+  try {
+    sessionStorage.removeItem(SUPPRESS_CHAIN_DISPLAY_KEY);
+  } catch (_) {}
+}
+
 const STATUS_CLAIM_BTN_ID = 'status-claim-btn';
 const FARMING_ACCRUAL_HINT_ID = 'farming-accrual-hint';
 import * as farmingView from './views/farmingView';
@@ -169,7 +204,7 @@ export function switchToTab(tabId: string): void {
       GameStore.setState({ onboardingStep: 'done' });
       GameStore.save();
     }
-    farmingView.refresh();
+    refreshNetworkStateFromChain().then(() => farmingView.refresh());
   }
   if (tabId === 'adopt') {
     hideGachaResultsSection();
@@ -177,16 +212,32 @@ export function switchToTab(tabId: string): void {
     updateGachaButtonsAndCosts();
     updateAdoptPaneForOnboarding();
     updateAdoptOnboardingOverlay(true);
+    refreshSeedTokenFromChain().then(() => {
+      updateAdoptPane();
+      updateGachaButtonsAndCosts();
+      updateAdoptPaneForOnboarding();
+    });
+    // 初回表示で白枠が縮む問題: レイアウト確定後にリフロー＋resize 発火で再計算（リサイズ時は自然に直るのを初回でも再現）
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const card = document.getElementById('adopt-cta-card');
+        const pane = document.getElementById('pane-adopt');
+        if (card) void card.offsetHeight;
+        if (pane) void pane.offsetHeight;
+        window.dispatchEvent(new Event('resize'));
+      });
+    });
   } else {
     updateAdoptOnboardingOverlay(false);
   }
   if (tabId === 'deck') {
     updateDeckPaneVisibility();
     deckView.refresh();
+    farmingView.updateSaveWrapVisibility();
     updateDeckOnboardingPlaceOverlay();
   }
   if (tabId === 'network') {
-    refreshNetworkStats();
+    refreshNetworkStateFromChain().then(() => refreshNetworkStats());
   }
   updateTabsForOnboarding();
 }
@@ -194,14 +245,14 @@ export function switchToTab(tabId: string): void {
 /** オンボーディング状態に応じてタブのロックを更新。Deck で鳥を置いた直後にも呼ぶ */
 export function updateTabsForOnboarding(): void {
   const step = GameStore.state.onboardingStep;
-  const lockFarming = step === 'need_gacha' || step === 'need_place';
-  const lockExceptDeck = step === 'need_place';
+  const lockFarming = step === 'need_gacha' || step === 'need_place' || step === 'need_save';
+  const lockExceptDeck = step === 'need_place' || step === 'need_save';
   const tabs = [
     { id: 'farming', lock: lockFarming },
     { id: 'adopt', lock: step === 'need_gacha' || lockExceptDeck },
     { id: 'deck', lock: false },
     { id: 'network', lock: lockExceptDeck },
-    { id: 'debug', lock: lockExceptDeck },
+    { id: 'debug', lock: false },
   ];
   tabs.forEach(({ id, lock }) => {
     const tab = document.querySelector(`.shell-tab[data-tab="${id}"]`);
@@ -217,10 +268,11 @@ function onTabClick(e: Event): void {
   if (!target) return;
   const tabId = target.getAttribute('data-tab');
   if (!tabId) return;
+  if (target.classList.contains('onboarding-tab-locked')) return;
   const step = GameStore.state.onboardingStep;
-  if (step === 'need_gacha' && tabId !== 'adopt') return;
-  if (step === 'need_place' && tabId !== 'deck') return;
-  if (tabId === 'farming' && (step === 'need_gacha' || step === 'need_place')) return;
+  if (step === 'need_gacha' && tabId !== 'adopt' && tabId !== 'debug') return;
+  if ((step === 'need_place' || step === 'need_save') && tabId !== 'deck' && tabId !== 'debug') return;
+  if (tabId === 'farming' && (step === 'need_gacha' || step === 'need_place' || step === 'need_save')) return;
   switchToTab(tabId);
 }
 
@@ -228,13 +280,13 @@ function onTabClick(e: Event): void {
 function updateAdoptPane(): void {
   const state = GameStore.state;
   const balanceEl = document.getElementById('adopt-balance-value');
-  if (balanceEl) balanceEl.textContent = String(GameStore.birdCurrency);
+  if (balanceEl) balanceEl.textContent = String(GameStore.seedToken);
   const totalEl = document.getElementById('adopt-total-count');
   if (totalEl) totalEl.textContent = String(state.birdsOwned.length);
   const badgeEl = document.getElementById('adopt-free-badge');
   const badgeRow = document.getElementById('gacha-cta-badge-row');
   if (badgeEl && badgeRow) {
-    if (state.hasFreeGacha) {
+    if (isFirstAdoptionFree()) {
       badgeEl.textContent = 'First free';
       badgeRow.classList.remove('gacha-cta-badge-row--hidden');
     } else {
@@ -319,34 +371,94 @@ function positionDeckOnboardingMessageAboveInventory(): void {
   const overlayDim = document.getElementById('deck-onboarding-place-overlay-dim');
   const messageWrap = document.getElementById('deck-onboarding-place-message-wrap');
   const inventorySection = document.getElementById('inventory-section');
-  const loftSection = document.getElementById('deck-section-loft');
-  if (!placeOverlay || !overlayDim || !messageWrap || !inventorySection || !loftSection || !placeOverlay.classList.contains('visible')) return;
-  const parent = placeOverlay.parentElement;
-  if (!parent) return;
-  const parentRect = parent.getBoundingClientRect();
-  const loftRect = loftSection.getBoundingClientRect();
-  overlayDim.style.top = `${loftRect.top - parentRect.top}px`;
-  overlayDim.style.left = `${loftRect.left - parentRect.left}px`;
-  overlayDim.style.width = `${loftRect.width}px`;
-  overlayDim.style.height = `${loftRect.height}px`;
+  if (!placeOverlay || !overlayDim || !messageWrap || !inventorySection || !placeOverlay.classList.contains('visible')) return;
   const overlayRect = placeOverlay.getBoundingClientRect();
-  const sectionRect = inventorySection.getBoundingClientRect();
+  const toOverlayTop = (y: number) => y - overlayRect.top;
+  const toOverlayLeft = (x: number) => x - overlayRect.left;
+  const contentInner = document.getElementById('shell-content-inner');
+  const loftCard = document.querySelector('.status-card-loft');
+  if (loftCard && contentInner) {
+    const innerRect = contentInner.getBoundingClientRect();
+    const cardRect = loftCard.getBoundingClientRect();
+    const width = Math.max(0, Math.floor(cardRect.right - innerRect.left) - 1);
+    placeOverlay.style.left = '0';
+    placeOverlay.style.top = '0';
+    placeOverlay.style.bottom = '0';
+    placeOverlay.style.width = `${width}px`;
+    placeOverlay.style.right = 'auto';
+  }
+  const overlayRect2 = placeOverlay.getBoundingClientRect();
+  const toOverlayTop2 = (y: number) => y - overlayRect2.top;
+  const toOverlayLeft2 = (x: number) => x - overlayRect2.left;
+  const invRect = inventorySection.getBoundingClientRect();
+  overlayDim.style.top = `${toOverlayTop2(invRect.top)}px`;
+  overlayDim.style.left = `${toOverlayLeft2(invRect.left)}px`;
+  overlayDim.style.width = `${invRect.width}px`;
+  overlayDim.style.height = `${invRect.height}px`;
   const wrapRect = messageWrap.getBoundingClientRect();
   const wrapHeight = wrapRect.height > 0 ? wrapRect.height : DECK_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
-  const top = sectionRect.top - overlayRect.top - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
-  const left = sectionRect.left - overlayRect.left + sectionRect.width / 2;
-  messageWrap.style.top = `${Math.max(8, top)}px`;
+  const invSectionTop = invRect.top;
+  let top = toOverlayTop2(invSectionTop) - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
+  top = Math.max(8, top);
+  const left = toOverlayLeft2(invRect.left) + invRect.width / 2;
+  messageWrap.style.top = `${top}px`;
   messageWrap.style.left = `${left}px`;
   messageWrap.style.transform = 'translateX(-50%)';
 }
 
-/** need_place 時にオーバーレイとインベントリハイライトを表示。メッセージと矢印はインベントリ全体の中央上に固定し、リサイズ時も再計算する */
-function updateDeckOnboardingPlaceOverlay(): void {
+/** need_save 時: SAVE ボタンだけ穴あき（それ以外は暗転）、メッセージは SAVE ボタン上に白字でゆらゆら */
+function positionDeckOnboardingMessageForNeedSave(): void {
+  const placeOverlay = document.getElementById('deck-onboarding-place-overlay');
+  const overlayDim = document.getElementById('deck-onboarding-place-overlay-dim');
+  const messageWrap = document.getElementById('deck-onboarding-place-message-wrap');
+  const saveWrap = document.getElementById('loft-save-wrap');
+  const saveBtn = document.getElementById('status-save-deck-btn') as HTMLButtonElement | null;
+  if (!placeOverlay || !overlayDim || !messageWrap || !saveWrap || !saveBtn || !placeOverlay.classList.contains('visible')) return;
+
+  const contentInner = document.getElementById('shell-content-inner');
+  const loftCard = document.querySelector('.status-card-loft');
+  if (loftCard && contentInner) {
+    const innerRect = contentInner.getBoundingClientRect();
+    const cardRect = loftCard.getBoundingClientRect();
+    const width = Math.max(0, Math.floor(cardRect.right - innerRect.left) - 1);
+    placeOverlay.style.left = '0';
+    placeOverlay.style.top = '0';
+    placeOverlay.style.bottom = '0';
+    placeOverlay.style.width = `${width}px`;
+    placeOverlay.style.right = 'auto';
+  }
+  const overlayRect = placeOverlay.getBoundingClientRect();
+  const toOverlayTop = (y: number) => y - overlayRect.top;
+  const toOverlayLeft = (x: number) => x - overlayRect.left;
+
+  // 白抜き（穴）のサイズは SAVE ボタンそのものに合わせる
+  const saveRect = saveBtn.getBoundingClientRect();
+  overlayDim.style.left = `${toOverlayLeft(saveRect.left)}px`;
+  overlayDim.style.top = `${toOverlayTop(saveRect.top)}px`;
+  overlayDim.style.width = `${Math.max(0, saveRect.width)}px`;
+  overlayDim.style.height = `${Math.max(0, saveRect.height)}px`;
+
+  const wrapHeight = messageWrap.getBoundingClientRect().height || DECK_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
+  const msgTop = toOverlayTop(saveRect.top) - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
+  messageWrap.style.top = `${Math.max(8, msgTop)}px`;
+  messageWrap.style.left = `${toOverlayLeft(saveRect.left) + saveRect.width / 2}px`;
+  messageWrap.style.transform = 'translateX(-50%)';
+
+  const msgEl = messageWrap.querySelector('.deck-onboarding-place-message');
+  const pointerEl = messageWrap.querySelector('.deck-onboarding-place-pointer');
+  const innerEl = messageWrap.querySelector('.deck-onboarding-place-message-inner');
+  if (msgEl) msgEl.textContent = 'Press the SAVE button below.';
+  if (pointerEl) (pointerEl as HTMLElement).textContent = '↓';
+  if (innerEl) innerEl.classList.add('deck-onboarding-message-wobble');
+}
+
+/** need_place / need_save 時にオーバーレイを表示。need_place=インベントリ穴、need_save=SAVEボタンのみ穴。タブ切替時と SAVE 成功後のクリア用に export */
+export function updateDeckOnboardingPlaceOverlay(): void {
   const step = GameStore.state.onboardingStep;
-  const show = step === 'need_place';
+  const show = step === 'need_place' || step === 'need_save';
   const placeOverlay = document.getElementById('deck-onboarding-place-overlay');
   const messageWrap = document.getElementById('deck-onboarding-place-message-wrap');
-  const inventorySection = document.getElementById('inventory-section');
+  const messageInner = document.querySelector('.deck-onboarding-place-message-inner');
 
   if (deckOnboardingResizeHandler) {
     window.removeEventListener('resize', deckOnboardingResizeHandler);
@@ -356,7 +468,10 @@ function updateDeckOnboardingPlaceOverlay(): void {
   if (placeOverlay) {
     placeOverlay.classList.toggle('visible', show);
     placeOverlay.setAttribute('aria-hidden', show ? 'false' : 'true');
-    if (!show) {
+    if (show) {
+      placeOverlay.style.top = '0';
+      placeOverlay.style.bottom = '0';
+    } else {
       const dim = document.getElementById('deck-onboarding-place-overlay-dim');
       if (dim) {
         dim.style.top = '';
@@ -364,21 +479,43 @@ function updateDeckOnboardingPlaceOverlay(): void {
         dim.style.width = '';
         dim.style.height = '';
       }
+      placeOverlay.style.width = '';
+      placeOverlay.style.left = '';
+      placeOverlay.style.right = '';
+      placeOverlay.style.top = '';
+      placeOverlay.style.bottom = '';
+      if (messageInner) messageInner.classList.remove('deck-onboarding-message-wobble');
+      const msgEl = document.querySelector('.deck-onboarding-place-message');
+      if (msgEl) msgEl.textContent = 'Tap the bird you want to place on the Loft.';
     }
-  }
-  if (inventorySection) {
-    inventorySection.classList.toggle('onboarding-highlight', show);
   }
   if (!show || !placeOverlay || !messageWrap) return;
 
-  const runPosition = (): void => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(positionDeckOnboardingMessageAboveInventory);
-    });
-  };
-  runPosition();
-  deckOnboardingResizeHandler = runPosition;
-  window.addEventListener('resize', deckOnboardingResizeHandler);
+  if (step === 'need_place') {
+    const msgEl = document.querySelector('.deck-onboarding-place-message');
+    if (msgEl) msgEl.textContent = 'Tap the bird you want to place on the Loft.';
+    if (messageInner) messageInner.classList.remove('deck-onboarding-message-wobble');
+    const runPosition = (): void => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(positionDeckOnboardingMessageAboveInventory);
+      });
+    };
+    runPosition();
+    deckOnboardingResizeHandler = runPosition;
+    window.addEventListener('resize', deckOnboardingResizeHandler);
+  } else {
+    const msgEl = document.querySelector('.deck-onboarding-place-message');
+    if (msgEl) msgEl.textContent = 'Press the SAVE button below.';
+    if (messageInner) messageInner.classList.add('deck-onboarding-message-wobble');
+    const runPosition = (): void => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(positionDeckOnboardingMessageForNeedSave);
+      });
+    };
+    runPosition();
+    deckOnboardingResizeHandler = runPosition;
+    window.addEventListener('resize', deckOnboardingResizeHandler);
+  }
 }
 
 let adoptOnboardingResizeHandler: (() => void) | null = null;
@@ -390,53 +527,52 @@ const ADOPT_ONBOARDING_DIM_BOTTOM_GAP = 12;
 
 function positionAdoptOnboardingOverlay(): void {
   const overlay = document.getElementById('adopt-onboarding-overlay');
-  const dimStatus = document.getElementById('adopt-onboarding-dim-status');
-  const dimMiddle = document.getElementById('adopt-onboarding-dim-middle');
-  const dimRarity = document.getElementById('adopt-onboarding-dim-rarity');
+  const spotlight = document.getElementById('adopt-onboarding-dim-spotlight');
   const messageWrap = document.getElementById('adopt-onboarding-message-wrap');
   const adoptCtaCard = document.getElementById('adopt-cta-card');
-  const statusPanel = document.getElementById('status-panel');
-  const rarityCard = document.getElementById('adopt-rarity-card');
-  if (!overlay || !dimStatus || !dimMiddle || !dimRarity || !messageWrap || !adoptCtaCard || !statusPanel || !rarityCard || !overlay.classList.contains('visible')) return;
+  const loftCard = document.querySelector('.status-card-loft');
+  const contentInner = document.getElementById('shell-content-inner');
+  if (!overlay || !spotlight || !messageWrap || !adoptCtaCard || !overlay.classList.contains('visible')) return;
+  if (loftCard && contentInner) {
+    const innerRect = contentInner.getBoundingClientRect();
+    const cardRect = loftCard.getBoundingClientRect();
+    const width = Math.max(0, Math.floor(cardRect.right - innerRect.left) - 1);
+    overlay.style.left = '0';
+    overlay.style.top = '0';
+    overlay.style.bottom = '0';
+    overlay.style.width = `${width}px`;
+    overlay.style.right = 'auto';
+  }
   const overlayRect = overlay.getBoundingClientRect();
-  const statusRect = statusPanel.getBoundingClientRect();
-  const rarityRect = rarityCard.getBoundingClientRect();
   const ctaRect = adoptCtaCard.getBoundingClientRect();
   const toOverlayTop = (y: number) => y - overlayRect.top;
   const toOverlayLeft = (x: number) => x - overlayRect.left;
-  dimStatus.style.top = `${toOverlayTop(statusRect.top)}px`;
-  dimStatus.style.left = `${toOverlayLeft(statusRect.left)}px`;
-  dimStatus.style.width = `${statusRect.width}px`;
-  dimStatus.style.height = `${statusRect.height}px`;
-  const middleTop = toOverlayTop(statusRect.bottom);
-  const middleBottom = Math.max(middleTop, toOverlayTop(ctaRect.top) - ADOPT_ONBOARDING_DIM_BOTTOM_GAP);
-  const middleHeight = Math.max(0, middleBottom - middleTop);
-  dimMiddle.style.top = `${middleTop}px`;
-  dimMiddle.style.left = '0';
-  dimMiddle.style.width = `${overlayRect.width}px`;
-  dimMiddle.style.height = `${middleHeight}px`;
-  dimRarity.style.top = `${toOverlayTop(rarityRect.top)}px`;
-  dimRarity.style.left = `${toOverlayLeft(rarityRect.left)}px`;
-  dimRarity.style.width = `${rarityRect.width}px`;
-  dimRarity.style.height = `${rarityRect.height}px`;
+  spotlight.style.top = `${toOverlayTop(ctaRect.top)}px`;
+  spotlight.style.left = `${toOverlayLeft(ctaRect.left)}px`;
+  spotlight.style.width = `${ctaRect.width}px`;
+  spotlight.style.height = `${ctaRect.height}px`;
   const wrapRect = messageWrap.getBoundingClientRect();
   const wrapHeight = wrapRect.height > 0 ? wrapRect.height : ADOPT_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
-  const top = toOverlayTop(ctaRect.top) - wrapHeight - ADOPT_ONBOARDING_MESSAGE_GAP;
+  let top = toOverlayTop(ctaRect.top) - wrapHeight - ADOPT_ONBOARDING_MESSAGE_GAP;
+  const statusPanel = document.getElementById('status-panel');
+  if (statusPanel) {
+    const statusBottom = statusPanel.getBoundingClientRect().bottom;
+    const minTop = toOverlayTop(statusBottom) + 8;
+    top = Math.max(minTop, top);
+  }
+  top = Math.max(12, top);
   const left = toOverlayLeft(ctaRect.left) + ctaRect.width / 2;
-  messageWrap.style.top = `${Math.max(8, top)}px`;
+  messageWrap.style.top = `${top}px`;
   messageWrap.style.left = `${left}px`;
   messageWrap.style.transform = 'translateX(-50%)';
 }
 
-/** need_gacha 時に Adopt タブで ADOPTION 強調・ステータス/排出率を暗転・メッセージ＋矢印を表示。Adopt タブでないときは常に非表示。 */
+/** need_gacha 時に Adopt タブで ADOPTION 強調・全面暗転（カードだけ穴あき）・メッセージ＋矢印を表示。Adopt タブでないときは常に非表示。 */
 function updateAdoptOnboardingOverlay(adoptTabActive?: boolean): void {
   const step = GameStore.state.onboardingStep;
   const show = (adoptTabActive !== false) && step === 'need_gacha';
   const overlay = document.getElementById('adopt-onboarding-overlay');
-  const adoptCtaCard = document.getElementById('adopt-cta-card');
-  const dimStatus = document.getElementById('adopt-onboarding-dim-status');
-  const dimMiddle = document.getElementById('adopt-onboarding-dim-middle');
-  const dimRarity = document.getElementById('adopt-onboarding-dim-rarity');
+  const spotlight = document.getElementById('adopt-onboarding-dim-spotlight');
 
   if (adoptOnboardingResizeHandler) {
     window.removeEventListener('resize', adoptOnboardingResizeHandler);
@@ -447,28 +583,18 @@ function updateAdoptOnboardingOverlay(adoptTabActive?: boolean): void {
     overlay.classList.toggle('visible', show);
     overlay.setAttribute('aria-hidden', show ? 'false' : 'true');
     if (!show) {
-      if (dimStatus) {
-        dimStatus.style.top = '';
-        dimStatus.style.left = '';
-        dimStatus.style.width = '';
-        dimStatus.style.height = '';
-      }
-      if (dimMiddle) {
-        dimMiddle.style.top = '';
-        dimMiddle.style.left = '';
-        dimMiddle.style.width = '';
-        dimMiddle.style.height = '';
-      }
-      if (dimRarity) {
-        dimRarity.style.top = '';
-        dimRarity.style.left = '';
-        dimRarity.style.width = '';
-        dimRarity.style.height = '';
+      overlay.style.width = '';
+      overlay.style.left = '';
+      overlay.style.right = '';
+      overlay.style.top = '';
+      overlay.style.bottom = '';
+      if (spotlight) {
+        spotlight.style.top = '';
+        spotlight.style.left = '';
+        spotlight.style.width = '';
+        spotlight.style.height = '';
       }
     }
-  }
-  if (adoptCtaCard) {
-    adoptCtaCard.classList.toggle('onboarding-highlight', show);
   }
   if (!show || !overlay) return;
 
@@ -493,12 +619,19 @@ function updateAdoptPaneForOnboarding(): void {
   }
 }
 
+/** 初回 adoption（1x）を無料とするか。hasFreeGacha またはまだ1羽も持っていない場合は無料扱い。 */
+function isFirstAdoptionFree(): boolean {
+  const state = GameStore.state;
+  if (state.hasFreeGacha) return true;
+  return state.birdsOwned.length === 0;
+}
+
 function updateGachaButtonsAndCosts(): void {
   const state = GameStore.state;
-  const freePulls = state.hasFreeGacha ? 1 : 0;
-  const cost1 = Math.max(0, 1 - freePulls) * GACHA_COST;
+  const freeFirst = isFirstAdoptionFree();
+  const cost1 = freeFirst ? 0 : GACHA_COST;
   const cost10 = 10 * GACHA_COST;
-  const bal = GameStore.birdCurrency;
+  const bal = GameStore.seedToken;
 
   const btn1 = document.getElementById('shell-gacha-1') as HTMLButtonElement | null;
   const btn10 = document.getElementById('shell-gacha-10') as HTMLButtonElement | null;
@@ -509,15 +642,15 @@ function updateGachaButtonsAndCosts(): void {
   if (btn10) btn10.textContent = 'Adopt 10x';
 
   if (cost1El) {
-    if (state.hasFreeGacha) cost1El.textContent = 'Cost: Free (first adoption)';
-    else if (bal < cost1) cost1El.textContent = `Cost: ${cost1} $BIRD (you have ${bal})`;
-    else cost1El.textContent = `Cost: ${cost1} $BIRD`;
+    if (freeFirst) cost1El.textContent = 'Cost: Free (first adoption)';
+    else if (bal < cost1) cost1El.textContent = `Cost: ${cost1} $SEED (you have ${bal})`;
+    else cost1El.textContent = `Cost: ${cost1} $SEED`;
     cost1El.classList.toggle('gacha-cost-insufficient', bal < cost1);
   }
   if (bal >= cost1 && bal >= cost10) clearInsufficientBalanceMessage();
   if (cost10El) {
-    if (bal < cost10) cost10El.textContent = `Cost: ${cost10} $BIRD (you have ${bal})`;
-    else cost10El.textContent = `Cost: ${cost10} $BIRD`;
+    if (bal < cost10) cost10El.textContent = `Cost: ${cost10} $SEED (you have ${bal})`;
+    else cost10El.textContent = `Cost: ${cost10} $SEED`;
     cost10El.classList.toggle('gacha-cost-insufficient', bal < cost10);
   }
 }
@@ -526,7 +659,7 @@ function updateGachaButtonsAndCosts(): void {
 function showInsufficientBalanceMessage(): void {
   const el = document.getElementById('gacha-insufficient-message');
   if (!el) return;
-  el.textContent = 'Not enough $BIRD.';
+  el.textContent = 'Not enough $SEED.';
 }
 
 /** 残高不足メッセージを消す（残高が足りる場合やガチャ成功時など） */
@@ -715,8 +848,148 @@ function closeGachaResultModal(): void {
   moveGachaModalBackToShell();
 }
 
+/** 初回 Loft 配置完了時: モーダル＋レジェンド同様の〇が降るエフェクトを表示。「Go to Farming」で閉じてタブ切り替え。 */
+export function showPlaceSuccessModal(): void {
+  const backdrop = document.getElementById('place-success-modal-backdrop');
+  const confettiWrap = document.getElementById('place-success-modal-confetti-wrap');
+  if (!backdrop || !confettiWrap) return;
+  backdrop.classList.add('visible');
+  backdrop.setAttribute('aria-hidden', 'false');
+  confettiWrap.innerHTML = '';
+  const confettiColors = getConfettiColorsForRarity('Legendary');
+  const numDots = 20;
+  for (let i = 0; i < numDots; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'gacha-confetti';
+    dot.style.left = `${10 + Math.random() * 80}%`;
+    dot.style.top = '10px';
+    dot.style.background = confettiColors[i % confettiColors.length];
+    dot.style.animationDelay = `${Math.random() * 0.2}s`;
+    confettiWrap.appendChild(dot);
+  }
+  window.setTimeout(() => {
+    confettiWrap.innerHTML = '';
+  }, 2200);
+}
+
+export function closePlaceSuccessModal(): void {
+  const backdrop = document.getElementById('place-success-modal-backdrop');
+  if (!backdrop) return;
+  backdrop.classList.remove('visible');
+  backdrop.setAttribute('aria-hidden', 'true');
+  switchToTab('farming');
+}
+
+/**
+ * 確認→送金(burn)完了→成功時のみ onSuccess 実行の共通フロー。
+ * ガチャ・LOFT アップグレードで同じ順序を保証する。
+ */
+export async function runConfirmBurnThenSuccess(options: {
+  getConfirmResult: () => Promise<boolean>;
+  amount: number;
+  context: 'gacha' | 'loft';
+  setProcessingMessage?: (message: string) => void;
+  setError?: (message: string) => void;
+  onSuccess: () => Promise<void>;
+}): Promise<{ ok: true } | { ok: false; error?: string }> {
+  const ok = await options.getConfirmResult();
+  if (!ok) return { ok: false, error: 'Cancelled' };
+
+  if (options.amount > 0) {
+    options.setProcessingMessage?.('Please confirm the transaction in your wallet.');
+    const burnResult = await burnSeedForAction(options.amount, options.context);
+    options.setProcessingMessage?.('');
+    if (!burnResult.ok) {
+      options.setError?.(burnResult.error ?? 'Transaction failed.');
+      return { ok: false, error: burnResult.error };
+    }
+  }
+
+  await options.onSuccess();
+  return { ok: true };
+}
+
+/** ガチャ実行前の確認をモーダルで表示し、Confirm/Cancel で true/false を返す。 */
+function showGachaConfirmModal(count: 1 | 10, cost: number, bal: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const textEl = document.getElementById('gacha-modal-text');
+    const backdrop = document.getElementById('gacha-modal-backdrop');
+    if (!textEl || !backdrop) {
+      resolve(false);
+      return;
+    }
+    const message =
+      cost === 0
+        ? `Use your free adoption to adopt ${count === 1 ? '1 bird' : `${count} birds`}?`
+        : `Spend ${cost} $SEED to adopt ${count === 1 ? '1 bird' : `${count} birds`}?`;
+    textEl.textContent = message;
+    backdrop.classList.add('visible');
+    backdrop.setAttribute('aria-hidden', 'false');
+
+    const finish = (value: boolean) => {
+      backdrop.classList.remove('visible');
+      backdrop.setAttribute('aria-hidden', 'true');
+      cancelBtn?.removeEventListener('click', onCancel);
+      confirmBtn?.removeEventListener('click', onConfirm);
+      backdrop.removeEventListener('click', onBackdrop);
+      resolve(value);
+    };
+
+    const cancelBtn = document.getElementById('gacha-modal-cancel');
+    const confirmBtn = document.getElementById('gacha-modal-confirm');
+    const onCancel = () => finish(false);
+    const onConfirm = () => finish(true);
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === backdrop) finish(false);
+    };
+
+    cancelBtn?.addEventListener('click', onCancel);
+    confirmBtn?.addEventListener('click', onConfirm);
+    backdrop.addEventListener('click', onBackdrop);
+  });
+}
+
+/** ガチャ確認モーダルと同じ見た目のメッセージモーダル（Claim 成功・LOFT 結果など）。OK で閉じる。 */
+export function showMessageModal(options: { title?: string; message: string; success?: boolean }): Promise<void> {
+  return new Promise((resolve) => {
+    const backdrop = document.getElementById('message-modal-backdrop');
+    const titleEl = document.getElementById('message-modal-title');
+    const textEl = document.getElementById('message-modal-text');
+    const okBtn = document.getElementById('message-modal-ok');
+    if (!backdrop || !textEl) {
+      resolve();
+      return;
+    }
+    if (titleEl) {
+      titleEl.textContent = options.title ?? '';
+    }
+    textEl.textContent = options.message;
+    textEl.classList.remove('message-modal-text--success', 'message-modal-text--error');
+    if (options.success === true) textEl.classList.add('message-modal-text--success');
+    else if (options.success === false) textEl.classList.add('message-modal-text--error');
+
+    const finish = () => {
+      backdrop.classList.remove('visible');
+      backdrop.setAttribute('aria-hidden', 'true');
+      okBtn?.removeEventListener('click', onOk);
+      backdrop.removeEventListener('click', onBackdrop);
+      resolve();
+    };
+
+    const onOk = () => finish();
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === backdrop) finish();
+    };
+
+    backdrop.classList.add('visible');
+    backdrop.setAttribute('aria-hidden', 'false');
+    okBtn?.addEventListener('click', onOk);
+    backdrop.addEventListener('click', onBackdrop);
+  });
+}
+
 /** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥をモーダルで表示し、閉じたらメインエリアにも表示。 */
-function runGachaFromDom(count: 1 | 10): void {
+async function runGachaFromDom(count: 1 | 10): Promise<void> {
   gachaLog('runGachaFromDom called', { count });
   if (gachaInProgress) {
     gachaLog('BLOCKED: gachaInProgress is true');
@@ -742,13 +1015,13 @@ function runGachaFromDom(count: 1 | 10): void {
   }
 
   const state = GameStore.state;
-  const freePulls = state.hasFreeGacha ? 1 : 0;
+  const freeFirst = isFirstAdoptionFree();
   const cost =
     count === 1
-      ? Math.max(0, 1 - freePulls) * GACHA_COST
+      ? (freeFirst ? 0 : GACHA_COST)
       : 10 * GACHA_COST;
-  const bal = GameStore.birdCurrency;
-  gachaLog('cost/balance', { cost, bal, hasFreeGacha: state.hasFreeGacha });
+  const bal = GameStore.seedToken;
+  gachaLog('cost/balance', { cost, bal, freeFirst });
 
   if (cost > 0 && bal < cost) {
     gachaLog('BLOCKED: insufficient balance', { cost, bal });
@@ -758,58 +1031,116 @@ function runGachaFromDom(count: 1 | 10): void {
 
   gachaInProgress = true;
   setGachaButtonsDisabled(true);
-  try {
-    const ok =
-      cost === 0
-        ? window.confirm(`Use your free adoption to adopt ${count === 1 ? '1 bird' : `${count} birds`}?`)
-        : window.confirm(`Spend ${cost} $BIRD to adopt ${count === 1 ? '1 bird' : `${count} birds`}? (Balance: ${bal} $BIRD)`);
-    if (!ok) {
-      gachaLog('user cancelled confirm');
-      return;
-    }
 
-    gachaLog('calling pullGacha', { count });
-    const result = GameStore.pullGacha(count);
-    gachaLog('pullGacha result', { ok: result.ok, error: result.error, birdsCount: result.birds?.length });
-
-    const area = document.getElementById('gacha-results-area');
-    const emptyEl = document.getElementById('gacha-results-empty');
-    if (!area) {
-      gachaLog('BLOCKED: gacha-results-area not found');
-      return;
-    }
-
+  const area = document.getElementById('gacha-results-area');
+  const setGachaAreaMessage = (message: string) => {
+    if (!area) return;
     area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
-    if (emptyEl) emptyEl.remove();
-
-    if (!result.ok) {
-      gachaLog('pullGacha failed', result.error);
-      const msg = document.createElement('p');
-      msg.className = 'gacha-results-empty';
-      msg.textContent = result.error ?? 'Error';
-      area.appendChild(msg);
-      return;
-    }
-
-    if (step === 'need_gacha' && count === 1) {
-      GameStore.setState({ onboardingStep: 'need_place' });
-      GameStore.save();
-      switchToTab('deck');
-    }
-
     area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
+    const p = document.createElement('p');
+    p.className = 'gacha-results-empty';
+    p.textContent = message;
+    area.appendChild(p);
+    showGachaResultsSection();
+  };
+  const clearGachaAreaMessage = () => {
+    if (!area) return;
     area.querySelectorAll('.gacha-results-item').forEach((el) => el.remove());
-    clearInsufficientBalanceMessage();
+    area.querySelectorAll('.gacha-results-empty').forEach((el) => el.remove());
+  };
 
-    gachaLog('calling showGachaResultModal', { birdsCount: result.birds.length });
-    showGachaResultModal(result.birds, count);
-    updateAdoptPane();
-    updateAdoptPaneForOnboarding();
-    updateGachaButtonsAndCosts();
-    updateDeckPaneVisibility();
-    const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
-    game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
-    gachaLog('gacha flow done');
+  try {
+    const runResult = await runConfirmBurnThenSuccess({
+      getConfirmResult: () => showGachaConfirmModal(count, cost, bal),
+      amount: cost,
+      context: 'gacha',
+      setProcessingMessage: setGachaAreaMessage,
+      setError: (msg) => setGachaAreaMessage(msg),
+      onSuccess: async () => {
+        if (count === 1 && isFirstAdoptionFree() && !GameStore.state.hasFreeGacha) {
+          GameStore.setState({ hasFreeGacha: true });
+          GameStore.save();
+        }
+        gachaLog('calling pullGacha', { count });
+        const result = GameStore.pullGacha(count);
+        gachaLog('pullGacha result', { ok: result.ok, error: result.error, birdsCount: result.birds?.length });
+
+        if (!area) return;
+        clearGachaAreaMessage();
+        if (!result.ok) {
+          setGachaAreaMessage(result.error ?? 'Error');
+          return;
+        }
+
+        clearInsufficientBalanceMessage();
+        // 結果モーダルを出す前にオンチェーン処理をすべて完了する（MetaMask の送金承認が結果より先になるように）
+        if (cost > 0) await refreshSeedTokenFromChain();
+        const rarityCounts = [0, 0, 0, 0, 0];
+        for (const bird of result.birds) {
+          const idx = RARITY_COLUMN_ORDER.indexOf(bird.rarity);
+          if (idx >= 0 && idx < 5) rarityCounts[idx]++;
+        }
+        let addRarityTx: { wait: () => Promise<unknown> } | undefined;
+        if (rarityCounts.some((c) => c > 0) && hasNetworkStateContract()) {
+          const isTransientRpcError = (err: string) =>
+            /too many errors|retrying in|RPC endpoint|UNKNOWN_ERROR|-32002|coalesce|network error|ECONNREFUSED|ETIMEDOUT/i.test(err);
+          let addResult = await addRarityCountsOnChain(rarityCounts, { waitForConfirmation: false });
+          const maxRetries = 2;
+          for (let r = 0; r < maxRetries && !addResult.ok && isTransientRpcError(addResult.error ?? ''); r++) {
+            gachaLog('addRarityCountsOnChain transient error, retrying', { attempt: r + 2, error: addResult.error });
+            await new Promise((res) => setTimeout(res, 1500));
+            addResult = await addRarityCountsOnChain(rarityCounts, { waitForConfirmation: false });
+          }
+          if (addResult.ok && addResult.tx) addRarityTx = addResult.tx;
+          if (!addResult.ok) {
+            gachaLog('addRarityCountsOnChain failed', addResult.error);
+            if (!isTransientRpcError(addResult.error ?? '')) {
+              await showMessageModal({
+                title: 'Network stats not updated',
+                message: addResult.error + ' Redeploy the NetworkState contract (with addRarityCounts / getGlobalRarityCounts) and set VITE_NETWORK_STATE_ADDRESS to see rarity counts on the NETWORK tab.',
+                success: false,
+              });
+            }
+          }
+        }
+        const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
+        game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
+        gachaLog('gacha flow done');
+        // 結果モーダルを即表示（addRarityCounts の確定は待たない）
+        gachaLog('calling showGachaResultModal', { birdsCount: result.birds.length });
+        showGachaResultModal(result.birds, count);
+        // 結果モーダル表示後にデッキへ切り替え（初回ガチャで「確認前にインベントリにいる」ように見えないようにする）
+        if (step === 'need_gacha' && count === 1) {
+          GameStore.setState({ onboardingStep: 'need_place' });
+          GameStore.save();
+          switchToTab('deck');
+        }
+        updateAdoptPane();
+        updateAdoptPaneForOnboarding();
+        updateGachaButtonsAndCosts();
+        updateDeckPaneVisibility();
+        // ステータス・NETWORKタブの更新はバックグラウンドで実行（モーダル表示をブロックしない）
+        const applyStatus = () => {
+          const state = GameStore.state;
+          updateShellStatus({
+            seed: state.seed,
+            seedPerDay: getProductionRatePerHour(state) * 24,
+            loftLevel: state.loftLevel,
+            networkSharePercent: getNetworkSharePercent(state),
+          });
+          refreshNetworkStats();
+        };
+        if (addRarityTx) {
+          addRarityTx.wait().then(() => refreshNetworkStateFromChain()).then(applyStatus).catch(() => applyStatus());
+        } else {
+          refreshNetworkStateFromChain().then(applyStatus);
+        }
+      },
+    });
+
+    if (!runResult.ok && runResult.error && runResult.error !== 'Cancelled') {
+      setGachaAreaMessage(runResult.error);
+    }
   } catch (err) {
     gachaLog('EXCEPTION in gacha flow', err);
     throw err;
@@ -826,31 +1157,38 @@ function emitGameRefresh(): void {
   game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
 }
 
-/** Network タブ: フロック全体の統計（現状はデモデータ。将来 API で差し替え可能） */
-function refreshNetworkStats(): void {
+/** Network タブ: オンチェーンのシェア％とLOFTレベル分布を表示。Save/ガチャ後にも呼ぶ。 */
+export function refreshNetworkStats(): void {
   const levelList = document.getElementById('network-level-list');
   const distList = document.getElementById('network-dist-list');
   const totalEl = document.getElementById('network-total-birds');
+  const demoNote = document.getElementById('network-demo-note');
+  const myShareEl = document.getElementById('network-my-share');
 
-  const levelData = [
-    { level: 1, users: 21288 },
-    { level: 2, users: 3615 },
-    { level: 3, users: 557 },
-    { level: 4, users: 125 },
-    { level: 5, users: 10 },
-    { level: 6, users: 2 },
-  ];
-  const totalLevelUsers = levelData.reduce((s, d) => s + d.users, 0);
+  const counts = getCachedLevelCounts();
+  const shareBps = getCachedShareBps();
+  const totalLevelUsers = counts.reduce((a, b) => a + b, 0);
+  const hasContract = hasNetworkStateContract() && GameStore.walletAddress;
+
+  if (myShareEl) {
+    if (hasContract && shareBps != null) {
+      myShareEl.textContent = `${(shareBps / 100).toFixed(2)}%`;
+      myShareEl.closest?.('.network-section')?.classList.remove('hidden');
+    } else {
+      myShareEl.textContent = '—';
+    }
+  }
 
   if (levelList) {
     levelList.innerHTML = '';
-    for (const d of levelData) {
-      const pct = totalLevelUsers > 0 ? (d.users / totalLevelUsers) * 100 : 0;
+    for (let level = 1; level <= 6; level++) {
+      const users = counts[level - 1] ?? 0;
+      const pct = totalLevelUsers > 0 ? (users / totalLevelUsers) * 100 : 0;
       const row = document.createElement('div');
       row.className = 'network-stat-row';
       row.innerHTML = `
-        <span class="network-stat-label">Level ${d.level}</span>
-        <span class="network-stat-count">${d.users.toLocaleString()}</span>
+        <span class="network-stat-label">Level ${level}</span>
+        <span class="network-stat-count">${users.toLocaleString()}</span>
         <div class="network-stat-bar-wrap">
           <div class="network-stat-bar" style="width: ${pct}%"></div>
         </div>
@@ -859,17 +1197,12 @@ function refreshNetworkStats(): void {
     }
   }
 
-  const rarityData = [
-    { name: 'Common', count: 45038 },
-    { name: 'Uncommon', count: 22959 },
-    { name: 'Rare', count: 26820 },
-    { name: 'Epic', count: 23196 },
-    { name: 'Legendary', count: 19782 },
-  ];
-  const totalBirds = rarityData.reduce((s, d) => s + d.count, 0);
-
   if (distList) {
     distList.innerHTML = '';
+    const rarityNames = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+    const rarityCounts = getCachedRarityCounts();
+    const rarityData = rarityNames.map((name, i) => ({ name, count: rarityCounts[i] ?? 0 }));
+    const totalBirds = rarityData.reduce((s, d) => s + d.count, 0);
     for (const d of rarityData) {
       const pct = totalBirds > 0 ? (d.count / totalBirds) * 100 : 0;
       const row = document.createElement('div');
@@ -884,7 +1217,25 @@ function refreshNetworkStats(): void {
       distList.appendChild(row);
     }
   }
-  if (totalEl) totalEl.textContent = totalBirds.toLocaleString();
+  if (totalEl) {
+    const totalBirds = getCachedRarityCounts().reduce((a, b) => a + b, 0);
+    totalEl.textContent = String(totalBirds.toLocaleString());
+  }
+  if (demoNote) {
+    const err = getNetworkStateFetchError();
+    const totalBirds = getCachedRarityCounts().reduce((a, b) => a + b, 0);
+    if (err) {
+      demoNote.textContent = err;
+      demoNote.classList.add('network-demo-note--error');
+    } else {
+      demoNote.textContent = hasContract
+        ? totalBirds === 0
+          ? 'On-chain data. Save your deck and pull gacha to update. Redeploy NetworkState (with getGlobalRarityCounts) to see rarity counts.'
+          : 'On-chain data. Refresh page to see latest from other users.'
+        : 'Connect wallet and deploy NetworkState to see live stats.';
+      demoNote.classList.remove('network-demo-note--error');
+    }
+  }
 }
 
 function refreshDebugPane(): void {
@@ -892,9 +1243,18 @@ function refreshDebugPane(): void {
   const birdEl = document.getElementById('dom-debug-bird');
   const loftEl = document.getElementById('dom-debug-loft');
   if (seedEl) seedEl.textContent = String(GameStore.state.seed);
-  if (birdEl) birdEl.textContent = String(GameStore.birdCurrency);
+  if (birdEl) birdEl.textContent = String(GameStore.seedToken);
   if (loftEl) loftEl.textContent = String(GameStore.state.loftLevel);
+  const localPowerEl = document.getElementById('dom-debug-local-power');
+  if (localPowerEl) localPowerEl.textContent = String(Math.floor(getProductionRatePerHour(GameStore.state)));
   updateGachaButtonsAndCosts();
+  // 直近の書き込み結果は常に表示
+  const addRarityEl = document.getElementById('dom-debug-last-addrarity');
+  const updatePowerEl = document.getElementById('dom-debug-last-updatepower');
+  const ar = getLastAddRarityResult();
+  const up = getLastUpdatePowerResult();
+  if (addRarityEl) addRarityEl.textContent = ar == null ? '—' : ar.ok ? 'OK' : `失敗: ${ar.error}`;
+  if (updatePowerEl) updatePowerEl.textContent = up == null ? '—' : up.ok ? 'OK' : `失敗: ${up.error}`;
 }
 
 function initDebugPaneListeners(): void {
@@ -914,11 +1274,11 @@ function initDebugPaneListeners(): void {
   }
   if (birdSetBtn) {
     birdSetBtn.addEventListener('click', () => {
-      const v = window.prompt('$Bird', String(GameStore.birdCurrency));
+      const v = window.prompt('$SEED', String(GameStore.seedToken));
       if (v == null) return;
       const n = Math.floor(Number(v));
       if (!Number.isFinite(n) || n < 0) return;
-      GameStore.birdCurrency = n;
+      GameStore.seedToken = n;
       GameStore.save();
       refreshDebugPane();
       emitGameRefresh();
@@ -937,23 +1297,92 @@ function initDebugPaneListeners(): void {
       emitGameRefresh();
     });
   });
-  const resetBtn = document.getElementById('dom-debug-reset');
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      if (!window.confirm('Reset game state and return to onboarding? (SEED, $Bird, birds, and Loft will be cleared.)')) return;
-      GameStore.resetToInitial();
-      refreshDebugPane();
-      emitGameRefresh();
-      const state = GameStore.state;
-      updateShellStatus({
-        seed: state.seed,
-        seedPerDay: getProductionRatePerHour(state) * 24,
-        loftLevel: state.loftLevel,
-        networkSharePercent: getNetworkSharePercent(state),
-      });
-      switchToTab('adopt');
-      farmingView.refresh();
-      deckView.refresh();
+  const fetchOnchainBtn = document.getElementById('dom-debug-fetch-onchain');
+  if (fetchOnchainBtn) {
+    fetchOnchainBtn.addEventListener('click', async () => {
+      const addr = GameStore.walletAddress;
+      const levelsEl = document.getElementById('dom-debug-onchain-levels');
+      const rarityEl = document.getElementById('dom-debug-onchain-rarity');
+      const powerEl = document.getElementById('dom-debug-onchain-power');
+      const shareEl = document.getElementById('dom-debug-onchain-share');
+      const errorEl = document.getElementById('dom-debug-onchain-error');
+      if (!addr || !hasNetworkStateContract()) {
+        if (levelsEl) levelsEl.textContent = '—';
+        if (rarityEl) rarityEl.textContent = '—';
+        if (powerEl) powerEl.textContent = '—';
+        if (shareEl) shareEl.textContent = '—';
+        if (errorEl) errorEl.textContent = !addr ? 'Wallet not connected' : 'VITE_NETWORK_STATE_ADDRESS not set';
+        return;
+      }
+      if (levelsEl) levelsEl.textContent = '取得中…';
+      if (rarityEl) rarityEl.textContent = '取得中…';
+      if (powerEl) powerEl.textContent = '取得中…';
+      if (shareEl) shareEl.textContent = '取得中…';
+      if (errorEl) errorEl.textContent = '—';
+      const levelCountsPromise = fetchLevelCountsStrict().then((v) => ({ status: 'fulfilled' as const, value: v })).catch((e: unknown) => ({ status: 'rejected' as const, reason: e }));
+      const rarityCountsPromise = fetchGlobalRarityCountsStrict().then((v) => ({ status: 'fulfilled' as const, value: v })).catch((e: unknown) => ({ status: 'rejected' as const, reason: e }));
+      const myPowerPromise = fetchMyPower(addr).then((v) => ({ status: 'fulfilled' as const, value: v })).catch((e: unknown) => ({ status: 'rejected' as const, reason: e }));
+      const mySharePromise = fetchMyShareBps(addr).then((v) => ({ status: 'fulfilled' as const, value: v })).catch((e: unknown) => ({ status: 'rejected' as const, reason: e }));
+      const [levelRes, rarityRes, powerRes, shareRes] = await Promise.all([levelCountsPromise, rarityCountsPromise, myPowerPromise, mySharePromise]);
+      const errParts: string[] = [];
+      if (levelRes.status === 'fulfilled') {
+        if (levelsEl) levelsEl.textContent = `[${levelRes.value.join(',')}]`;
+      } else {
+        if (levelsEl) levelsEl.textContent = 'エラー';
+        errParts.push(`getLevelCounts: ${levelRes.reason instanceof Error ? levelRes.reason.message : String(levelRes.reason)}`);
+      }
+      if (rarityRes.status === 'fulfilled') {
+        if (rarityEl) rarityEl.textContent = `[${rarityRes.value.join(',')}]`;
+      } else {
+        if (rarityEl) rarityEl.textContent = 'エラー';
+        errParts.push(`getGlobalRarityCounts: ${rarityRes.reason instanceof Error ? rarityRes.reason.message : String(rarityRes.reason)}`);
+      }
+      if (powerRes.status === 'fulfilled') {
+        if (powerEl) powerEl.textContent = String(powerRes.value);
+      } else {
+        if (powerEl) powerEl.textContent = 'エラー';
+        errParts.push(`getMyPower: ${powerRes.reason instanceof Error ? powerRes.reason.message : String(powerRes.reason)}`);
+      }
+      if (shareRes.status === 'fulfilled') {
+        if (shareEl) shareEl.textContent = String(shareRes.value);
+      } else {
+        if (shareEl) shareEl.textContent = 'エラー';
+        errParts.push(`getMyShareBps: ${shareRes.reason instanceof Error ? shareRes.reason.message : String(shareRes.reason)}`);
+      }
+      if (errorEl) {
+        if (errParts.length > 0) {
+          errorEl.textContent = errParts.join(' / ');
+          errorEl.title = 'getLevelCounts の BAD_DATA は、デプロイ済みコントラクトが現在の NetworkState（getLevelCounts/getGlobalRarityCounts あり）と一致していない可能性があります。contracts/NetworkState.sol を再デプロイし、.env の VITE_NETWORK_STATE_ADDRESS を新しいアドレスに更新してください。';
+        } else {
+          errorEl.textContent = 'なし';
+          errorEl.title = '';
+        }
+      }
+    });
+  }
+
+  const resetDisconnectBtn = document.getElementById('dom-debug-reset-disconnect');
+  if (resetDisconnectBtn) {
+    resetDisconnectBtn.addEventListener('click', () => {
+      if (!window.confirm('Reset game state and disconnect? (SEED, $SEED, birds, and Loft will be cleared. You will return to the title screen.)\n\nNote: Reset only clears local data; it does not send a transaction.')) return;
+      if (GameStore.walletAddress) {
+        GameStore.clearCurrentWalletData();
+      } else {
+        GameStore.resetToInitial();
+      }
+      clearNetworkStateCache();
+      try {
+        sessionStorage.setItem(SUPPRESS_CHAIN_DISPLAY_KEY, '1');
+      } catch (_) {}
+      if (disconnectCallback) {
+        disconnectCallback();
+      } else {
+        GameStore.disconnectWallet();
+        hideGameShell();
+        destroyPhaserGame();
+        showTitleUI();
+        revokeWalletPermissions().catch(() => {});
+      }
     });
   }
 }
@@ -1002,27 +1431,62 @@ function initTabListeners(): void {
       if (e.target === resultModalBackdrop) closeGachaResultModal();
     });
   }
+  const placeSuccessGoto = document.getElementById('place-success-modal-goto-farming');
+  const placeSuccessBackdrop = document.getElementById('place-success-modal-backdrop');
+  if (placeSuccessGoto) placeSuccessGoto.addEventListener('click', closePlaceSuccessModal);
+  if (placeSuccessBackdrop) {
+    placeSuccessBackdrop.addEventListener('click', (e) => {
+      if (e.target === placeSuccessBackdrop) closePlaceSuccessModal();
+    });
+  }
   farmingView.init();
-  const claimBtn = document.getElementById(STATUS_CLAIM_BTN_ID);
+  const claimBtn = document.getElementById(STATUS_CLAIM_BTN_ID) as HTMLButtonElement | null;
   if (claimBtn) {
     claimBtn.addEventListener('click', () => {
-      const amount = GameStore.claimSeed();
+      const amount = GameStore.state.seed;
       if (amount <= 0) return;
-      GameStore.save();
-      const state = GameStore.state;
-      updateShellStatus({
-        seed: state.seed,
-        seedPerDay: getProductionRatePerHour(state) * 24,
-        loftLevel: state.loftLevel,
-        networkSharePercent: getNetworkSharePercent(state),
+      requestAccounts().then((connectResult) => {
+        if (!connectResult.ok) return;
+        const address = connectResult.address;
+        claimBtn.disabled = true;
+        requestClaim(address, amount).then((result) => {
+          if (!result.ok) {
+            claimBtn.disabled = false;
+            return;
+          }
+          executeClaim(result.signature).then((txResult) => {
+            if (!txResult.ok) {
+              showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false }).then(() => {
+                claimBtn.disabled = false;
+              });
+              return;
+            }
+            // Claim 完了：実際に送金した量(amount)だけローカル SEED から差し引く（承認待ち中に増えた分は残す）
+            const currentSeed = GameStore.state.seed;
+            const newSeed = Math.max(0, currentSeed - amount);
+            GameStore.setState({ seed: newSeed });
+            GameStore.save();
+            const state = GameStore.state;
+            updateShellStatus({
+              seed: state.seed,
+              seedPerDay: getProductionRatePerHour(state) * 24,
+              loftLevel: state.loftLevel,
+              networkSharePercent: getNetworkSharePercent(state),
+            });
+            refreshSeedTokenFromChain().then(() => {
+              updateAdoptPane();
+              updateGachaButtonsAndCosts();
+              updateClaimButton();
+              showMessageModal({
+                title: 'Claim successful',
+                message: `${amount} $SEED acquired!`,
+              }).then(() => {
+                claimBtn.disabled = false;
+              });
+            });
+          });
+        });
       });
-      const hintEl = document.getElementById(FARMING_ACCRUAL_HINT_ID);
-      if (hintEl) {
-        hintEl.textContent = `Claimed ${amount} SEED`;
-        window.setTimeout(() => {
-          hintEl.textContent = '';
-        }, 2000);
-      }
     });
   }
   deckView.init();
@@ -1064,6 +1528,23 @@ export function showGameShell(): void {
   updateTabsForOnboarding();
   updateDeckPaneVisibility();
 
+  /* ログイン時: 残高とネットワーク状態を取得（ステータスカード・NETWORKタブ用） */
+  refreshSeedTokenFromChain().then(() => {
+    updateAdoptPane();
+    updateGachaButtonsAndCosts();
+  });
+  refreshNetworkStateFromChain().then(() => {
+    const state = GameStore.state;
+    updateShellStatus({
+      seed: state.seed,
+      seedPerDay: getProductionRatePerHour(state) * 24,
+      loftLevel: state.loftLevel,
+      networkSharePercent: getNetworkSharePercent(state),
+    });
+    refreshNetworkStats();
+    // 初回のオンチェーン書き込みはデッキ編成後の SAVE 時のみ（Connect 直後に MetaMask を出さない）
+  });
+
   refreshPhaserScale();
 }
 
@@ -1074,7 +1555,7 @@ export function hideGameShell(): void {
   shell.setAttribute('aria-hidden', 'true');
 }
 
-/** Update DOM status cards (Current SEED, SEED/day, Network Share, Loft Lv). Called from GameScene when shell is visible. */
+/** Update DOM status cards (Current SEED, SEED/day, Network Share, Loft Lv). SEED/day と Network Share はオンチェーン契約がある場合はチェーン値を表示。 */
 export function updateShellStatus(payload: {
   seed: number;
   seedPerDay: number;
@@ -1085,10 +1566,43 @@ export function updateShellStatus(payload: {
   const seedPerDayEl = document.getElementById('dom-seed-per-day');
   const networkEl = document.getElementById('dom-network-share');
   const loftEl = document.getElementById('dom-loft-level');
-  if (seedEl) seedEl.textContent = String(payload.seed);
-  if (seedPerDayEl) seedPerDayEl.textContent = String(Math.floor(payload.seedPerDay));
-  if (networkEl) networkEl.textContent = `${payload.networkSharePercent.toFixed(5)}%`;
+  const suppressChain = (() => {
+    try {
+      return sessionStorage.getItem(SUPPRESS_CHAIN_DISPLAY_KEY) === '1';
+    } catch {
+      return false;
+    }
+  })();
+  const step = GameStore.state.onboardingStep;
+  const cachedPower = getCachedPower();
+  const beforeDeckSave = step === 'need_place' || step === 'need_save';
+  const useChain =
+    !beforeDeckSave &&
+    hasNetworkStateContract() &&
+    GameStore.walletAddress &&
+    !suppressChain &&
+    cachedPower != null &&
+    cachedPower > 0;
+  const seedPerDayToShow = beforeDeckSave ? 0 : (useChain ? getSeedPerDayFromChain() : payload.seedPerDay);
+  const networkToShow = beforeDeckSave ? 0 : (useChain ? getNetworkSharePercentFromChain() : payload.networkSharePercent);
+
+  if (seedEl) seedEl.textContent = payload.seed.toFixed(2);
+  const accrualHintEl = document.getElementById(FARMING_ACCRUAL_HINT_ID);
+  if (accrualHintEl) accrualHintEl.textContent = '';
+  if (seedPerDayEl) seedPerDayEl.textContent = seedPerDayToShow.toFixed(2);
+  if (networkEl) networkEl.textContent = `${networkToShow.toFixed(5)}%`;
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
+  const networkErrorEl = document.getElementById('network-state-error');
+  if (networkErrorEl) {
+    const err = getNetworkStateFetchError();
+    if (err) {
+      networkErrorEl.textContent = err.length > 100 ? err.slice(0, 97) + '...' : err;
+      networkErrorEl.style.display = '';
+    } else {
+      networkErrorEl.textContent = '';
+      networkErrorEl.style.display = 'none';
+    }
+  }
   farmingView.updateUpgradeButton();
   updateClaimButton();
 }

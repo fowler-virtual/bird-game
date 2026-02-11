@@ -4,9 +4,10 @@
  */
 
 import { GameStore } from './store/GameStore';
-import { requestAccounts, hasWallet } from './wallet';
+import { requestAccounts, hasWallet, setJustConnectingFlag } from './wallet';
 import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
+import { refreshSeedTokenFromChain } from './seedToken';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -28,10 +29,11 @@ function onConnectClick(): void {
     btn.textContent = 'Connecting...';
   }
   isConnecting = true;
+  setJustConnectingFlag();
 
   const promise = requestAccounts();
   promise
-    .then((result) => {
+    .then(async (result) => {
       isConnecting = false;
       if (btn) {
         btn.disabled = false;
@@ -43,7 +45,7 @@ function onConnectClick(): void {
         return;
       }
       GameStore.setWalletConnected(true, result.address);
-      // シェルを先に表示してから Phaser を作成する。boot 時に親 #app が表示済みになり、初回のキャンバスサイズが正しくなる。
+      await refreshSeedTokenFromChain();
       showGameShell();
       createPhaserGame();
     })

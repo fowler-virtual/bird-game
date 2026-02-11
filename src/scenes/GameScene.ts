@@ -2,8 +2,10 @@ import Phaser from 'phaser';
 import { GameStore } from '../store/GameStore';
 import { hideTitleUI, showTitleUI } from '../titleUI';
 import { destroyPhaserGame } from '../phaserBoot';
-import { isShellVisible, updateShellStatus, setCanvasCardDeckView, setDisconnectCallback, getLastCanvasCardSize } from '../domShell';
+import { isShellVisible, updateShellStatus, setCanvasCardDeckView, setDisconnectCallback, getLastCanvasCardSize, showMessageModal, runConfirmBurnThenSuccess } from '../domShell';
 import { revokeWalletPermissions } from '../wallet';
+import { refreshSeedTokenFromChain } from '../seedToken';
+import { setLoftLevel, refreshNetworkStateFromChain } from '../networkState';
 import {
   getBirdById,
   getActiveSlotIndices,
@@ -22,6 +24,7 @@ import {
   type BirdRarity,
   type GameState,
 } from '../types';
+import { RARITY_IMAGE_SRC } from '../assets';
 import {
   BG_PRIMARY,
   BG_CARD,
@@ -96,8 +99,6 @@ export class GameScene extends Phaser.Scene {
   private seedText!: Phaser.GameObjects.Text;
   private networkShareText!: Phaser.GameObjects.Text;
   private productionPerDayText!: Phaser.GameObjects.Text;
-  private accrualDeltaText: Phaser.GameObjects.Text | null = null;
-  private accrualDeltaTimer: Phaser.Time.TimerEvent | null = null;
   private lastAccrualCheckTime = 0;
   private birdSprites: Phaser.GameObjects.Image[] = [];
   private loftContainer: Phaser.GameObjects.Container | null = null;
@@ -168,18 +169,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    let base = '/';
-    try {
-      const env = (import.meta as unknown as { env?: { BASE_URL?: string } }).env;
-      if (typeof env?.BASE_URL === 'string') base = env.BASE_URL;
-    } catch {
-      /* use '/' */
-    }
-    this.load.image('rarity-common', base + 'common.png');
-    this.load.image('rarity-uncommon', base + 'uncommon.png');
-    this.load.image('rarity-rare', base + 'rare.png');
-    this.load.image('rarity-epic', base + 'epic.png');
-    this.load.image('rarity-legendary', base + 'legendary.png');
+    this.load.image('rarity-common', RARITY_IMAGE_SRC.Common);
+    this.load.image('rarity-uncommon', RARITY_IMAGE_SRC.Uncommon);
+    this.load.image('rarity-rare', RARITY_IMAGE_SRC.Rare);
+    this.load.image('rarity-epic', RARITY_IMAGE_SRC.Epic);
+    this.load.image('rarity-legendary', RARITY_IMAGE_SRC.Legendary);
   }
 
   create(): void {
@@ -188,6 +182,7 @@ export class GameScene extends Phaser.Scene {
     // 再接続で同じシーンが再利用されるため、破棄済み参照を捨てる
     this.slotPickerObjects = [];
     this.unlockModalObjects = [];
+    this.completeModalObjects = [];
 
     GameStore.applyAccrual();
     GameStore.save();
@@ -268,14 +263,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0.5);
     this.leftPanelContainer.add(this.seedText);
 
-    const subY = valueY + 32;
-    this.accrualDeltaText = this.add
-      .text(PANEL_PADDING, valueY + 22, '', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: ACCENT_HEX })
-      .setOrigin(0, 0.5)
-      .setVisible(false);
-    this.leftPanelContainer.add(this.accrualDeltaText!);
-
-    const statY = subY;
+    const statY = valueY + 32;
     this.networkShareText = this.add
       .text(PANEL_PADDING, statY, 'Network Share: 0.00000%', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED })
       .setOrigin(0, 0.5);
@@ -689,7 +677,7 @@ export class GameScene extends Phaser.Scene {
       .setVisible(false);
     this.deckPanel.add([this.deckHeaderBar, this.deckHeaderLine]);
 
-    // Deck 画面上部の SEED / $BIRD 表示は DOM 側のステータスカードと重複するため非表示にする
+    // Deck 画面上部の SEED / $SEED 表示は DOM 側のステータスカードと重複するため非表示にする
     const seedLabel = this.add
       .text(DECK_PANEL_PADDING, headerCenterY, 'SEED', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED })
       .setOrigin(0, 0.5)
@@ -699,7 +687,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0, 0.5)
       .setVisible(false);
     const birdLabel = this.add
-      .text(DECK_PANEL_PADDING + 110, headerCenterY, '$BIRD', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED })
+      .text(DECK_PANEL_PADDING + 110, headerCenterY, '$SEED', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED })
       .setOrigin(0, 0.5)
       .setVisible(false);
     this.birdText = this.add
@@ -1127,12 +1115,12 @@ export class GameScene extends Phaser.Scene {
     const delta = GameStore.applyAccrual();
     GameStore.save();
     const state = GameStore.state;
-    this.seedText.setText(String(state.seed));
+    this.seedText.setText(state.seed.toFixed(2));
     const ratePerHour = getProductionRatePerHour(state);
     const ratePerDay = ratePerHour * 24;
     const share = getNetworkSharePercent(state);
     this.networkShareText.setText(`Network Share: ${share.toFixed(5)}%`);
-    this.productionPerDayText.setText(`SEED/day: ${Math.floor(ratePerDay).toLocaleString()}`);
+    this.productionPerDayText.setText(`SEED/day: ${ratePerDay.toFixed(2)}`);
     const slots = getActiveSlotsByLoftLevel(state.loftLevel);
     this.loftLevelText.setText(`Lv.${state.loftLevel}`);
     this.loftSlotsText.setText(`${slots}/${MAX_LOFT_LEVEL * 2} slots`);
@@ -1152,7 +1140,6 @@ export class GameScene extends Phaser.Scene {
       this.upgradeLoftLabel.setColor(canUpgrade ? TEXT_PRIMARY : TEXT_MUTED);
     }
     this.renderLoftBirds();
-    if (delta > 0) this.showAccrualDelta(delta);
   }
 
   private doUpgradeLoft(): void {
@@ -1209,24 +1196,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private showAccrualDelta(delta: number): void {
-    if (!this.accrualDeltaText) return;
-    if (this.accrualDeltaTimer) {
-      this.accrualDeltaTimer.destroy();
-      this.accrualDeltaTimer = null;
-    }
-    this.accrualDeltaText.setText(`+${delta}`);
-    this.accrualDeltaText.setVisible(true);
-    this.accrualDeltaTimer = this.time.delayedCall(1200, () => {
-      this.accrualDeltaText?.setVisible(false);
-      this.accrualDeltaTimer = null;
-    });
-  }
-
   private renderDeckUI(): void {
     const state = GameStore.state;
-    this.deckSeedText.setText(String(state.seed));
-    this.birdText.setText(String(GameStore.birdCurrency));
+    this.deckSeedText.setText(state.seed.toFixed(2));
+    this.birdText.setText(String(GameStore.seedToken));
 
     const activeBirds = getActiveBirdsInDeck(state);
     const setBonus = evaluateSetBonus(activeBirds);
@@ -1478,40 +1451,80 @@ export class GameScene extends Phaser.Scene {
       .setInteractive()
       .on('pointerdown', () => this.hideUnlockConfirm());
     this.unlockModalObjects.push(bg);
-    const costText = this.add
-      .text(w / 2, centerY + 10, `${cost.bird} $BIRD (you have ${GameStore.birdCurrency})`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: TEXT_PRIMARY })
+    const messageText = this.add
+      .text(w / 2, centerY - 6, `Spend ${cost.bird} $SEED to unlock 2 slots?`, { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY, color: TEXT_PRIMARY })
       .setOrigin(0.5).setDepth(depth + 2);
     const errorText = this.add
-      .text(w / 2, centerY + 32, '', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: '#f87171' })
+      .text(w / 2, centerY + 14, '', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: '#f87171' })
       .setOrigin(0.5).setDepth(depth + 2).setVisible(false);
     this.unlockModalObjects.push(
-      this.add.rectangle(w / 2, centerY, 280, 140, BG_CARD, 1).setStrokeStyle(1, BORDER).setDepth(depth + 1),
-      this.add.text(w / 2, centerY - 40, 'Upgrade Loft?', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2),
-      this.add.text(w / 2, centerY - 14, '2 slots will be unlocked.', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0.5).setDepth(depth + 2),
-      costText,
+      this.add.rectangle(w / 2, centerY, 280, 120, BG_CARD, 1).setStrokeStyle(1, BORDER).setDepth(depth + 1),
+      this.add.text(w / 2, centerY - 32, 'Confirm Upgrade', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2),
+      messageText,
       errorText
     );
     const cancelBtn = this.add
-      .rectangle(w / 2 - 52, centerY + 54, 64, 26, BG_ELEVATED)
+      .rectangle(w / 2 - 52, centerY + 48, 64, 26, BG_ELEVATED)
       .setDepth(depth + 2)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.hideUnlockConfirm());
-    this.unlockModalObjects.push(cancelBtn, this.add.text(w / 2 - 52, centerY + 54, 'Cancel', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
-    const upgradeBtn = this.add
-      .rectangle(w / 2 + 52, centerY + 54, 64, 26, SUCCESS)
+    this.unlockModalObjects.push(cancelBtn, this.add.text(w / 2 - 52, centerY + 48, 'Cancel', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
+    const confirmBtn = this.add
+      .rectangle(w / 2 + 52, centerY + 48, 64, 26, SUCCESS)
       .setDepth(depth + 2)
       .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => {
-        if (!GameStore.unlockNextDeckSlot()) {
-          errorText.setVisible(true).setText('Not enough $BIRD.');
-          return;
-        }
-        GameStore.save();
+      .on('pointerdown', async () => {
+        const cost = getNextUnlockCost(GameStore.state.unlockedDeckCount);
+        if (!cost) return;
         this.hideUnlockConfirm();
-        this.renderMainUI();
-        this.events.emit('refresh');
+        const result = await runConfirmBurnThenSuccess({
+          getConfirmResult: () => Promise.resolve(true),
+          amount: cost.bird,
+          context: 'loft',
+          onSuccess: async () => {
+            if (!GameStore.unlockNextDeckSlot()) {
+              void showMessageModal({ message: 'Not enough $SEED.', success: false });
+              return;
+            }
+            GameStore.save();
+            await refreshSeedTokenFromChain();
+            const levelResult = await setLoftLevel(GameStore.state.loftLevel, { waitForConfirmation: false });
+            if (!levelResult.ok) {
+              GameStore.rollbackLastLoftUpgrade();
+              GameStore.save();
+              this.renderMainUI();
+              this.events.emit('refresh');
+              void showMessageModal({
+                title: 'Upgrade cancelled',
+                message: 'The level update was not sent to the chain. Your Loft is unchanged. The $SEED for the upgrade was already spent; you can try the upgrade again.',
+                success: false,
+              });
+              return;
+            }
+            this.renderMainUI();
+            this.events.emit('refresh');
+            void showMessageModal({ title: 'Upgrade complete', message: '2 slots unlocked.' });
+            if (levelResult.tx) {
+              levelResult.tx.wait().then(() => refreshNetworkStateFromChain()).then(() => {
+                this.renderMainUI();
+                this.events.emit('refresh');
+              }).catch(() => {
+                this.renderMainUI();
+                this.events.emit('refresh');
+              });
+            } else {
+              refreshNetworkStateFromChain().then(() => {
+                this.renderMainUI();
+                this.events.emit('refresh');
+              });
+            }
+          },
+        });
+        if (!result.ok && result.error && result.error !== 'Cancelled') {
+          void showMessageModal({ message: result.error, success: false });
+        }
       });
-    this.unlockModalObjects.push(upgradeBtn, this.add.text(w / 2 + 52, centerY + 54, 'Upgrade', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
+    this.unlockModalObjects.push(confirmBtn, this.add.text(w / 2 + 52, centerY + 48, 'Confirm', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(depth + 2));
   }
 
   private hideUnlockConfirm(): void {
@@ -1533,7 +1546,6 @@ export class GameScene extends Phaser.Scene {
       this.lastAccrualCheckTime = now;
       const delta = GameStore.applyAccrual();
       GameStore.save();
-      if (delta > 0) this.showAccrualDelta(delta);
       this.renderMainUI();
     }
     for (let i = 0; i < this.birdSprites.length; i++) {

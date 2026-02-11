@@ -274,6 +274,10 @@
         gap: 20px;
         overflow: hidden;
       }
+      /* ライトモード: 左右の余白を薄いグレーにして「フレーム」として見せる（白いだけの余白感を減らす） */
+      [data-theme="light"] .shell-content {
+        background: #eaeaea;
+      }
       .shell-content-inner {
         position: relative;
         flex: 1;
@@ -296,12 +300,13 @@
       .tab-pane.active { display: flex; }
       /* 各タブ上部の帯（Farming風の枠）＋タイトル/説明。縦の区間はすべて 20px で均等に。 */
       .adopt-pane-body {
-        padding: 0;
+        padding: 0 16px;
         display: flex;
         flex-direction: column;
         gap: 20px;
         background: linear-gradient(180deg, var(--bg-elevated) 0%, var(--bg-page) 100%);
         border-radius: var(--radius);
+        box-sizing: border-box;
       }
       .adopt-tagline {
         margin: 0;
@@ -328,6 +333,8 @@
         border: 1px solid var(--border);
         border-radius: var(--radius);
         padding: 16px;
+        flex-shrink: 0;
+        min-height: fit-content;
       }
       .adopt-cta-title {
         margin: 0 0 12px 0;
@@ -701,6 +708,40 @@
       .loft-cell:focus, .farming-accrual-hint:focus {
         outline: none;
       }
+      .loft-save-wrap {
+        margin-top: 16px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 12px;
+      }
+      .loft-save-power-hint {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        width: 100%;
+        text-align: center;
+      }
+      .loft-save-btn {
+        padding: 12px 32px;
+        font-size: 16px;
+        font-weight: 500;
+        color: #fff;
+        background: var(--accent);
+        border: 1px solid transparent;
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: opacity 0.15s, transform 0.15s;
+        user-select: none;
+        -webkit-user-select: none;
+        caret-color: transparent;
+      }
+      .loft-save-btn:hover:not(:disabled) {
+        opacity: 0.95;
+        transform: scale(1.02);
+      }
+      .loft-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .loft-save-btn:focus { outline: none; }
 
       /* ----- Deck pane (HTML+CSS) ----- */
       /* 常に上下配置：デッキを上・インベントリを下。デッキの鳥を大きくして主役に。 */
@@ -743,32 +784,61 @@
         position: absolute;
         inset: 0;
         pointer-events: none;
-        z-index: 100;
+        z-index: 250;
       }
+      .deck-onboarding-place-overlay.visible { display: block; }
+      .deck-onboarding-place-overlay-dim-wrap {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+      /* 全面暗転し、Inventory 部分だけ穴あき（ガチャ画面と同じスポットライト方式） */
       .deck-onboarding-place-overlay-dim {
         position: absolute;
-        background: rgba(0, 0, 0, 0.6);
-        border-radius: var(--radius);
+        background: transparent;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+        pointer-events: none;
       }
-      .deck-onboarding-place-overlay.visible { display: flex; }
       .deck-onboarding-place-message-wrap {
         position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
+        left: 0;
+        top: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        min-width: 260px;
+        max-width: calc(100% - 32px);
+        box-sizing: border-box;
+      }
+      .deck-onboarding-place-message-inner {
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 4px;
-        pointer-events: none;
-        max-width: calc(100% - 32px);
-        box-sizing: border-box;
+        animation: deck-onboarding-float 2.5s ease-in-out infinite;
+      }
+      @keyframes deck-onboarding-float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
+      }
+      .deck-onboarding-place-message-inner.deck-onboarding-message-wobble {
+        animation: deck-onboarding-wobble 1.2s ease-in-out infinite;
+      }
+      @keyframes deck-onboarding-wobble {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-6px); }
+        75% { transform: translateX(6px); }
       }
       .deck-onboarding-place-message {
         margin: 0 0 8px 0;
         font-size: 16px;
         font-weight: 600;
-        color: #fff;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        color: #fff !important;
+        -webkit-text-fill-color: #fff;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.25);
         text-align: center;
         max-width: 100%;
         padding: 0 4px;
@@ -777,41 +847,52 @@
         margin: 0;
         font-size: 32px;
         line-height: 1;
+        color: #fff !important;
+        -webkit-text-fill-color: #fff;
       }
-      .inventory-section.onboarding-highlight {
-        box-shadow: 0 0 0 3px var(--accent), 0 0 20px rgba(34, 197, 94, 0.4);
-        position: relative;
-        z-index: 11;
-      }
-      .adopt-cta-card.onboarding-highlight {
-        box-shadow: 0 0 0 3px var(--accent), 0 0 20px rgba(34, 197, 94, 0.4);
-        position: relative;
-        z-index: 11;
+      [data-theme="light"] .deck-onboarding-place-message,
+      [data-theme="light"] .deck-onboarding-place-pointer {
+        color: #fff !important;
+        -webkit-text-fill-color: #fff;
       }
       .adopt-onboarding-overlay {
         display: none;
         position: absolute;
         inset: 0;
+        overflow: hidden;
         pointer-events: none;
         z-index: 100;
       }
       .adopt-onboarding-overlay.visible { display: block; }
-      .adopt-onboarding-dim {
+      /* タブ下エリア全体を暗くし、カード部分だけ穴あきにする（box-shadow で全面暗転） */
+      .adopt-onboarding-spotlight {
         position: absolute;
-        background: rgba(0, 0, 0, 0.6);
-        border-radius: var(--radius);
+        background: transparent;
+        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+        pointer-events: none;
       }
       .adopt-onboarding-message-wrap {
         position: absolute;
-        left: 50%;
-        transform: translateX(-50%);
+        left: 0;
+        top: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        max-width: calc(100% - 32px);
+        box-sizing: border-box;
+      }
+      .adopt-onboarding-message-inner {
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 4px;
-        pointer-events: none;
-        max-width: calc(100% - 32px);
-        box-sizing: border-box;
+        animation: adopt-onboarding-float 2.5s ease-in-out infinite;
+      }
+      @keyframes adopt-onboarding-float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
       }
       .adopt-onboarding-message {
         margin: 0 0 8px 0;
@@ -823,10 +904,20 @@
         max-width: 100%;
         padding: 0 4px;
       }
+      .adopt-onboarding-br-narrow { display: none; }
+      @media (max-width: 570px) {
+        .adopt-onboarding-br-narrow { display: block; }
+      }
       .adopt-onboarding-pointer {
         margin: 0;
         font-size: 32px;
         line-height: 1;
+        color: #fff !important;
+        -webkit-text-fill-color: #fff;
+      }
+      [data-theme="light"] .adopt-onboarding-pointer {
+        color: #fff !important;
+        -webkit-text-fill-color: #fff;
       }
       .deck-section, .inventory-section {
         background: var(--bg-card);
@@ -959,37 +1050,55 @@
       }
       .loft-modal-backdrop.visible { display: flex; }
       .loft-modal {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 24px;
         max-width: 360px;
-        width: 100%;
+        width: calc(100% - 40px);
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        padding: 20px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
       }
-      .loft-modal-title { font-size: 18px; margin: 0 0 12px 0; color: var(--text); }
-      .loft-modal-cost { font-size: 14px; color: var(--text-muted); margin: 0 0 8px 0; }
+      .loft-modal-title {
+        margin: 0 0 12px 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .loft-modal-title.loft-modal-message--success { color: #22c55e; }
+      .loft-modal-cost {
+        margin: 0 0 16px 0;
+        font-size: 14px;
+        color: var(--text-muted);
+      }
       .loft-modal-error { font-size: 13px; color: #f87171; margin: 0 0 16px 0; min-height: 1.2em; }
-      .loft-modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+      .loft-modal-error.loft-modal-message--success { color: #22c55e; }
+      .loft-modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
       .loft-modal-cancel, .loft-modal-confirm {
         min-height: 40px;
-        padding: 0 20px;
+        padding: 0 16px;
         font-size: 14px;
         font-weight: 500;
         border-radius: var(--radius);
+        border: 1px solid var(--border);
         cursor: pointer;
       }
       .loft-modal-cancel {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
-        color: var(--text);
+        background: transparent;
+        color: var(--text-muted);
       }
+      .loft-modal-cancel:hover { background: var(--bg-hover); }
       .loft-modal-confirm {
         background: var(--accent);
-        border: none;
         color: #fff;
+        border-color: transparent;
       }
       .loft-modal-confirm:hover:not(:disabled) { opacity: 0.95; }
       .loft-modal-confirm:disabled { opacity: 0.6; cursor: not-allowed; }
+
 
       .debug-pane-body { padding: 0; display: flex; flex-direction: column; gap: 16px; }
       .debug-section {
@@ -1044,6 +1153,8 @@
         cursor: pointer;
       }
       .debug-loft-btn:hover { background: var(--bg-hover); }
+      .debug-subtitle { margin: 0 0 8px; font-size: 1rem; }
+      .debug-note { margin: 0 0 12px; font-size: 0.85rem; color: var(--text-muted); max-width: 52ch; }
       .debug-section-reset { margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); }
       .debug-reset-btn {
         width: 100%;
@@ -1115,6 +1226,9 @@
         color: var(--text-muted);
         opacity: 0.85;
       }
+      .network-demo-note--error {
+        color: #f87171;
+      }
 
       /* ----- Gacha confirm modal ----- */
       .gacha-modal-backdrop {
@@ -1176,6 +1290,10 @@
         opacity: 0.5;
         cursor: not-allowed;
       }
+      /* Message modal (Claim success, Loft result) reuses gacha-modal look */
+      #message-modal-title:empty { display: none; }
+      .message-modal-text--success { color: #22c55e; font-weight: 600; }
+      .message-modal-text--error { color: #f87171; }
 
       /* ----- Gacha result modal (fullscreen on mobile, centered on desktop) ----- */
       .gacha-result-modal-backdrop {
@@ -1191,6 +1309,68 @@
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       }
       .gacha-result-modal-backdrop.visible { display: flex; }
+      .place-success-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 99999;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      }
+      .place-success-modal-backdrop.visible { display: flex; }
+      .place-success-modal {
+        position: relative;
+        width: 100%;
+        max-width: 360px;
+        margin: 20px;
+        padding: 24px 20px;
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+      }
+      .place-success-modal .gacha-confetti-wrap {
+        position: absolute;
+        inset: 0;
+      }
+      .place-success-modal-title {
+        margin: 0 0 12px 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text);
+        text-align: center;
+        position: relative;
+        z-index: 1;
+      }
+      .place-success-modal-message {
+        margin: 0 0 20px 0;
+        font-size: 14px;
+        color: var(--text-muted);
+        text-align: center;
+        position: relative;
+        z-index: 1;
+      }
+      .place-success-modal-btn {
+        display: block;
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius);
+        cursor: pointer;
+        position: relative;
+        z-index: 1;
+      }
+      .place-success-modal-btn:hover {
+        filter: brightness(1.08);
+      }
       .gacha-result-modal {
         display: flex;
         flex-direction: column;
@@ -1347,6 +1527,15 @@
       }
       .status-cards-global {
         /* No sticky: status bar is outside scroll area, so position is always the same */
+      }
+      .network-state-error {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin: 8px 0 0 0;
+        padding: 0;
+      }
+      .network-state-error:not([style*="display: none"]) {
+        color: #f87171;
       }
       .status-card {
         display: flex;
@@ -1548,11 +1737,11 @@
         </div>
       </header>
       <nav class="shell-tabs">
-        <button type="button" class="shell-tab active" data-tab="farming">Farming</button>
-        <button type="button" class="shell-tab" data-tab="adopt">Adopt</button>
-        <button type="button" class="shell-tab" data-tab="deck">Loft</button>
-        <button type="button" class="shell-tab" data-tab="network">Network</button>
-        <button type="button" class="shell-tab" data-tab="debug">Debug</button>
+        <button type="button" class="shell-tab active" data-tab="farming">FARMING</button>
+        <button type="button" class="shell-tab" data-tab="adopt">ADOPT</button>
+        <button type="button" class="shell-tab" data-tab="deck">LOFT</button>
+        <button type="button" class="shell-tab" data-tab="network">NETWORK</button>
+        <button type="button" class="shell-tab" data-tab="debug">DEBUG</button>
       </nav>
       <main class="shell-content">
         <div class="shell-content-inner" id="shell-content-inner">
@@ -1584,6 +1773,7 @@
                 </div>
               </div>
             </div>
+            <p class="network-state-error" id="network-state-error" aria-live="polite" style="display: none;"></p>
           </div>
           <div id="pane-farming" class="tab-pane active">
             <div class="farming-pane-body">
@@ -1598,9 +1788,9 @@
             <div class="adopt-pane-body">
               <p class="adopt-tagline">Find your next companion.</p>
               <div class="adopt-balance">
-                Balance: <span id="adopt-balance-value">0</span> $BIRD
+                Balance: <span id="adopt-balance-value">0</span> $SEED
               </div>
-              <p class="adopt-description">10 $BIRD per adoption. Place birds on your Loft to earn SEED.</p>
+              <p class="adopt-description">10 $SEED per adoption. Place birds on your Loft to earn SEED.</p>
               <div class="adopt-cta-card" id="adopt-cta-card">
                 <h3 class="adopt-cta-title">Adoption</h3>
                 <div class="gacha-cta-wrap">
@@ -1650,6 +1840,10 @@
                   <div class="deck-grid" id="deck-grid" role="group" aria-label="Loft slots">
                     <!-- 8 slots filled by JS -->
                   </div>
+                  <div class="loft-save-wrap" id="loft-save-wrap" style="display: none;">
+                    <span class="loft-save-power-hint" id="loft-save-power-hint" aria-live="polite"></span>
+                    <button type="button" class="loft-save-btn" id="status-save-deck-btn">Save</button>
+                  </div>
                 </section>
                 <section class="inventory-section" id="inventory-section" aria-label="Inventory">
                   <h3 class="inventory-section-title">Inventory</h3>
@@ -1657,13 +1851,6 @@
                     <!-- cells filled by JS -->
                   </div>
                 </section>
-              </div>
-              <div class="deck-onboarding-place-overlay" id="deck-onboarding-place-overlay" aria-hidden="true" aria-live="polite">
-                <div class="deck-onboarding-place-overlay-dim" id="deck-onboarding-place-overlay-dim" aria-hidden="true"></div>
-                <div class="deck-onboarding-place-message-wrap" id="deck-onboarding-place-message-wrap">
-                  <p class="deck-onboarding-place-message">Tap the bird you want to place on the Loft.</p>
-                  <p class="deck-onboarding-place-pointer" aria-hidden="true">↓</p>
-                </div>
               </div>
             </div>
           </div>
@@ -1695,7 +1882,7 @@
                   <button type="button" class="debug-set-btn" id="dom-debug-seed-set">Set</button>
                 </div>
                 <div class="debug-row">
-                  <span class="debug-label">$Bird</span>
+                  <span class="debug-label">$SEED</span>
                   <span class="debug-value" id="dom-debug-bird">0</span>
                   <button type="button" class="debug-set-btn" id="dom-debug-bird-set">Set</button>
                 </div>
@@ -1711,19 +1898,75 @@
                     <button type="button" class="debug-loft-btn" data-level="6">6</button>
                   </div>
                 </div>
+                <div class="debug-row">
+                  <span class="debug-label">Local deck power</span>
+                  <span class="debug-value" id="dom-debug-local-power">0</span>
+                </div>
+              </div>
+              <div class="debug-section" id="dom-debug-network-section">
+                <h4 class="debug-subtitle">Network State 切り分け</h4>
+                <p class="debug-note" id="dom-debug-network-note">「オンチェーンを再取得」でコントラクトから直接取得した値と、直近の書き込み結果を比較できます。オンチェーン取得値が0 → サーバに届いていない。取得値に数値があるのにUIが0 → クライアント参照の問題。</p>
+                <div class="debug-row">
+                  <button type="button" class="debug-set-btn" id="dom-debug-fetch-onchain">オンチェーンを再取得</button>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">オンチェーン取得値（サーバ側）</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">Level 1–6</span>
+                  <span class="debug-value" id="dom-debug-onchain-levels">—</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">Rarity [C,U,R,E,L]</span>
+                  <span class="debug-value" id="dom-debug-onchain-rarity">—</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">My power</span>
+                  <span class="debug-value" id="dom-debug-onchain-power">—</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">My share (bps)</span>
+                  <span class="debug-value" id="dom-debug-onchain-share">—</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">取得エラー</span>
+                  <span class="debug-value" id="dom-debug-onchain-error">—</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">直近の書き込み</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">addRarityCounts（ガチャ後）</span>
+                  <span class="debug-value" id="dom-debug-last-addrarity">—</span>
+                </div>
+                <div class="debug-row">
+                  <span class="debug-label">updatePower（Save後）</span>
+                  <span class="debug-value" id="dom-debug-last-updatepower">—</span>
+                </div>
               </div>
               <div class="debug-section debug-section-reset">
-                <button type="button" class="debug-reset-btn" id="dom-debug-reset">Reset (return to onboarding)</button>
+                <button type="button" class="debug-reset-btn" id="dom-debug-reset-disconnect">Reset &amp; Disconnect</button>
+              </div>
+            </div>
+          </div>
+          <div class="deck-onboarding-place-overlay" id="deck-onboarding-place-overlay" aria-hidden="true" aria-live="polite">
+            <div class="deck-onboarding-place-overlay-dim-wrap">
+              <div class="deck-onboarding-place-overlay-dim" id="deck-onboarding-place-overlay-dim" aria-hidden="true"></div>
+            </div>
+            <div class="deck-onboarding-place-message-wrap" id="deck-onboarding-place-message-wrap">
+              <div class="deck-onboarding-place-message-inner">
+                <p class="deck-onboarding-place-message">Tap the bird you want to place on the Loft.</p>
+                <span class="deck-onboarding-place-pointer" aria-hidden="true">↓</span>
               </div>
             </div>
           </div>
           <div class="adopt-onboarding-overlay" id="adopt-onboarding-overlay" aria-hidden="true" aria-live="polite">
-            <div class="adopt-onboarding-dim" id="adopt-onboarding-dim-status" aria-hidden="true"></div>
-            <div class="adopt-onboarding-dim" id="adopt-onboarding-dim-middle" aria-hidden="true"></div>
-            <div class="adopt-onboarding-dim" id="adopt-onboarding-dim-rarity" aria-hidden="true"></div>
+            <div class="adopt-onboarding-spotlight" id="adopt-onboarding-dim-spotlight" aria-hidden="true"></div>
             <div class="adopt-onboarding-message-wrap" id="adopt-onboarding-message-wrap">
-              <p class="adopt-onboarding-message">Tap here to adopt your first bird.</p>
-              <p class="adopt-onboarding-pointer" aria-hidden="true">↓</p>
+              <div class="adopt-onboarding-message-inner">
+                <p class="adopt-onboarding-message">Tap here to adopt<br class="adopt-onboarding-br-narrow"> your first bird.</p>
+                <span class="adopt-onboarding-pointer" aria-hidden="true">↓</span>
+              </div>
             </div>
           </div>
           <!-- Gacha confirm modal -->
@@ -1751,6 +1994,15 @@
               </div>
             </div>
           </div>
+          <!-- Place success modal (first bird on Loft: message + confetti, then Go to Farming) -->
+          <div class="place-success-modal-backdrop" id="place-success-modal-backdrop" aria-hidden="true">
+            <div class="place-success-modal" role="dialog" aria-labelledby="place-success-modal-title">
+              <div id="place-success-modal-confetti-wrap" class="gacha-confetti-wrap gacha-confetti-wrap--legendary" aria-hidden="true"></div>
+              <h2 class="place-success-modal-title" id="place-success-modal-title">Bird placed!</h2>
+              <p class="place-success-modal-message">Go to Farming to start earning SEED.</p>
+              <button type="button" class="place-success-modal-btn" id="place-success-modal-goto-farming">Go to Farming</button>
+            </div>
+          </div>
           <div class="canvas-card" id="shell-canvas-card">
             <div id="app"></div>
           </div>
@@ -1758,12 +2010,22 @@
           <!-- Loft upgrade confirm modal (DOM-driven) -->
           <div class="loft-modal-backdrop" id="loft-modal-backdrop" aria-hidden="true">
             <div class="loft-modal" id="loft-modal" role="dialog" aria-labelledby="loft-modal-title">
-              <h2 class="loft-modal-title" id="loft-modal-title">Upgrade Loft</h2>
+              <h2 class="loft-modal-title" id="loft-modal-title">Confirm Upgrade</h2>
               <p class="loft-modal-cost" id="loft-modal-cost"></p>
               <p class="loft-modal-error" id="loft-modal-error" aria-live="polite"></p>
               <div class="loft-modal-actions">
                 <button type="button" class="loft-modal-cancel" id="loft-modal-cancel">Cancel</button>
-                <button type="button" class="loft-modal-confirm" id="loft-modal-confirm">Upgrade</button>
+                <button type="button" class="loft-modal-confirm" id="loft-modal-confirm">Confirm</button>
+              </div>
+            </div>
+          </div>
+          <!-- Unified message modal (Claim success, Loft result) - same look as gacha confirm -->
+          <div class="gacha-modal-backdrop" id="message-modal-backdrop" aria-hidden="true">
+            <div class="gacha-modal" role="dialog" aria-labelledby="message-modal-title">
+              <h2 class="gacha-modal-title" id="message-modal-title"></h2>
+              <p class="gacha-modal-text" id="message-modal-text"></p>
+              <div class="gacha-modal-actions">
+                <button type="button" class="gacha-modal-confirm" id="message-modal-ok">OK</button>
               </div>
             </div>
           </div>

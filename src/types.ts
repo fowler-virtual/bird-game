@@ -135,14 +135,14 @@ export interface GameState {
   hasShownPlacementHint: boolean;
   /** 放置で増える通貨（持ち帰り報酬） */
   seed: number;
-  /** 初回プレイ導線: need_gacha → need_place → need_farming → done */
-  onboardingStep?: 'need_gacha' | 'need_place' | 'need_farming' | 'done';
+  /** 初回プレイ導線: need_gacha → need_place → need_save → need_farming → done */
+  onboardingStep?: 'need_gacha' | 'need_place' | 'need_save' | 'need_farming' | 'done';
 }
 
 const DECK_SLOT_IDS: DeckSlotId[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 export { DECK_SLOT_IDS };
 
-/** Loft解放コスト（$BIRD のみ。ウォレット接続後、残高不足なら処理エラーで返す）2→4→6→8→10→12枠の5回解放 */
+/** Loft解放コスト（$SEED のみ。ウォレット接続後、残高不足なら処理エラーで返す）2→4→6→8→10→12枠の5回解放 */
 export const DECK_UNLOCK_COSTS: { bird: number }[] = [
   { bird: 200 },   // 2→4
   { bird: 500 },   // 4→6

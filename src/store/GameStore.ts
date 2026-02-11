@@ -15,8 +15,9 @@ import {
 export const GACHA_COST = 10;
 
 const GAME_STATE_KEY = 'bird-game-state';
-/** 本番ではウォレット接続時にチェーンから $BIRD トークン残高を取得して表示する想定。現状はゲーム内で消費・保存する値。 */
-const BIRD_CURRENCY_KEY = 'bird-game-currency';
+/** 本番ではウォレット接続時にチェーンから $SEED トークン残高を取得。現状はゲーム内で消費・保存する値。 */
+const SEED_TOKEN_KEY = 'bird-game-seed-token';
+const LEGACY_CURRENCY_KEY = 'bird-game-currency';
 const WALLET_KEY = 'bird-game-wallet';
 
 /** ウォレットアドレスごとのストレージキー用（同一アドレスは大文字小文字同一扱い） */
@@ -29,8 +30,8 @@ function stateKeyFor(prefix: string): string {
   return prefix ? `bird-game-state-${prefix}` : GAME_STATE_KEY;
 }
 
-function currencyKeyFor(prefix: string): string {
-  return prefix ? `bird-game-currency-${prefix}` : BIRD_CURRENCY_KEY;
+function seedTokenKeyFor(prefix: string): string {
+  return prefix ? `bird-game-seed-token-${prefix}` : SEED_TOKEN_KEY;
 }
 
 const DEFAULT_GEMS: Gems = {
@@ -111,7 +112,7 @@ function parseGameState(raw: string | null): GameState {
         : Number(parsed.gems?.diamond) || 0;
     const rawStep = (parsed as GameState).onboardingStep;
     const onboardingStep =
-      rawStep === 'need_gacha' || rawStep === 'need_place' || rawStep === 'need_farming' || rawStep === 'done'
+      rawStep === 'need_gacha' || rawStep === 'need_place' || rawStep === 'need_save' || rawStep === 'need_farming' || rawStep === 'done'
         ? rawStep
         : 'done';
 
@@ -133,7 +134,7 @@ function parseGameState(raw: string | null): GameState {
   }
 }
 
-function parseBirdCurrency(raw: string | null): number {
+function parseSeedToken(raw: string | null): number {
   if (raw == null) return 0;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : 0;
@@ -154,7 +155,7 @@ function parseWallet(raw: string | null): { connected: boolean; address: string 
 
 export const GameStore = {
   state: defaultGameState() as GameState,
-  birdCurrency: 0 as number,
+  seedToken: 0 as number,
   walletConnected: false,
   walletAddress: null as string | null,
   /** load() が一度でも成功していれば true。false の間は save() で上書きしない（接続時にデータが消えるのを防ぐ） */
@@ -175,17 +176,17 @@ export const GameStore = {
   loadStateForCurrentWallet(): void {
     try {
       const prefix = storagePrefix(this.walletAddress);
-      let rawState = localStorage.getItem(stateKeyFor(prefix));
-      let rawCurrency: string | null = null;
+      let rawState: string | null;
+      let rawToken: string | null;
       if (prefix) {
-        if (!rawState) rawState = localStorage.getItem(GAME_STATE_KEY);
-        rawCurrency = localStorage.getItem(currencyKeyFor(prefix));
-        if (rawCurrency == null) rawCurrency = localStorage.getItem(BIRD_CURRENCY_KEY);
+        rawState = localStorage.getItem(stateKeyFor(prefix));
+        rawToken = localStorage.getItem(seedTokenKeyFor(prefix));
       } else {
-        rawCurrency = localStorage.getItem(BIRD_CURRENCY_KEY);
+        rawState = localStorage.getItem(GAME_STATE_KEY);
+        rawToken = localStorage.getItem(SEED_TOKEN_KEY) ?? localStorage.getItem(LEGACY_CURRENCY_KEY);
       }
       this.state = parseGameState(rawState);
-      this.birdCurrency = parseBirdCurrency(rawCurrency);
+      this.seedToken = parseSeedToken(rawToken);
       this.rebuildInventory();
       this.normalizeOnboardingStep();
       this.loadedFromStorage = true;
@@ -227,7 +228,7 @@ export const GameStore = {
     if (!this.loadedFromStorage) return;
     const prefix = storagePrefix(this.walletAddress);
     localStorage.setItem(stateKeyFor(prefix), JSON.stringify(this.state));
-    localStorage.setItem(currencyKeyFor(prefix), String(Math.max(0, Math.floor(this.birdCurrency))));
+    localStorage.setItem(seedTokenKeyFor(prefix), String(Math.max(0, Math.floor(this.seedToken))));
   },
 
   /** 読み込み後: デッキに鳥がいればオンボーディング完了扱いにして Farming を押せるようにする */
@@ -243,8 +244,18 @@ export const GameStore = {
   /** デバッグ用: ゲーム状態を初期化し、オンボーディングからやり直せるようにする */
   resetToInitial(): void {
     this.state = defaultGameState();
-    this.birdCurrency = 0;
+    this.seedToken = 0;
     if (this.loadedFromStorage) this.save();
+  },
+
+  /** 接続中のウォレット用の保存データを削除し、そのウォレットを「初回」の状態にする */
+  clearCurrentWalletData(): void {
+    const prefix = storagePrefix(this.walletAddress);
+    if (!prefix) return;
+    localStorage.removeItem(stateKeyFor(prefix));
+    localStorage.removeItem(seedTokenKeyFor(prefix));
+    this.loadStateForCurrentWallet();
+    this.save();
   },
 
   setState(patch: Partial<GameState>): void {
@@ -305,14 +316,22 @@ export const GameStore = {
   unlockNextDeckSlot(): boolean {
     const cost = getNextUnlockCost(this.state.unlockedDeckCount);
     if (!cost) return false;
-    if (this.birdCurrency < cost.bird) return false;
     const nextCount = this.state.unlockedDeckCount + 2;
     this.state = {
       ...this.state,
       unlockedDeckCount: Math.min(12, nextCount),
       loftLevel: Math.min(6, nextCount / 2),
     };
-    this.spendBirdCurrency(cost.bird);
+    return true;
+  },
+
+  /** setLoftLevel をキャンセルしたときにローカルだけロールバックする。burn 済み $SEED は戻らない。 */
+  rollbackLastLoftUpgrade(): boolean {
+    if (this.state.unlockedDeckCount <= INITIAL_UNLOCKED_DECK_COUNT || this.state.loftLevel <= 1) return false;
+    this.setState({
+      unlockedDeckCount: this.state.unlockedDeckCount - 2,
+      loftLevel: this.state.loftLevel - 1,
+    });
     return true;
   },
 
@@ -396,12 +415,12 @@ export const GameStore = {
     return delta;
   },
 
-  spendBirdCurrency(amount: number): void {
-    this.birdCurrency = Math.max(0, this.birdCurrency - amount);
+  spendSeedToken(amount: number): void {
+    this.seedToken = Math.max(0, this.seedToken - amount);
   },
 
   /**
-   * ガチャを N 回引く。1回引くときのみ初回無料（hasFreeGacha）。10連は常に 100 $BIRD。
+   * ガチャを N 回引く。1回引くときのみ初回無料（hasFreeGacha）。10連は常に 100 $SEED。
    * @returns ok: false のとき error にメッセージ、birds は空。ok: true のとき birds に今回引いた鳥。
    */
   pullGacha(count: 1 | 10): { ok: boolean; error?: string; birds: Bird[] } {
@@ -412,19 +431,19 @@ export const GameStore = {
       count === 1
         ? (this.state.hasFreeGacha ? 0 : GACHA_COST)
         : 10 * GACHA_COST;
-    if (this.birdCurrency < cost) {
-      return { ok: false, error: `Not enough $BIRD. (Required: ${cost})`, birds: [] };
+    if (this.seedToken < cost) {
+      return { ok: false, error: `Not enough $SEED. (Required: ${cost})`, birds: [] };
     }
 
     if (count === 10) {
-      this.spendBirdCurrency(cost);
+      this.spendSeedToken(cost);
       if (this.state.hasFreeGacha) this.setState({ hasFreeGacha: false });
     }
 
     const birds: Bird[] = [];
     for (let i = 0; i < count; i++) {
       const isFree = count === 1 && i === 0 && this.state.hasFreeGacha;
-      if (count === 1 && !isFree) this.spendBirdCurrency(GACHA_COST);
+      if (count === 1 && !isFree) this.spendSeedToken(GACHA_COST);
       if (count === 1 && isFree) this.setState({ hasFreeGacha: false });
 
       const rarity = isFree ? 'Common' : rollGachaRarity();

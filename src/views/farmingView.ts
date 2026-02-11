@@ -6,20 +6,24 @@
 import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
 import { COMMON_FRAME_SRCS } from '../assets';
-import { updateShellStatus } from '../domShell';
+import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay } from '../domShell';
+import { refreshSeedTokenFromChain } from '../seedToken';
+import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getCachedPower } from '../networkState';
 import * as deckView from './deckView';
 
 const LOFT_GRID_ID = 'loft-grid';
 const LOFT_UPGRADE_BTN_ID = 'status-loft-upgrade-btn';
+const LOFT_SAVE_WRAP_ID = 'loft-save-wrap';
+const SAVE_DECK_BTN_ID = 'status-save-deck-btn';
 const FARMING_ACCRUAL_HINT_ID = 'farming-accrual-hint';
 const LOFT_MODAL_BACKDROP_ID = 'loft-modal-backdrop';
 const LOFT_MODAL_COST_ID = 'loft-modal-cost';
 const LOFT_MODAL_ERROR_ID = 'loft-modal-error';
 const LOFT_MODAL_CANCEL_ID = 'loft-modal-cancel';
 const LOFT_MODAL_CONFIRM_ID = 'loft-modal-confirm';
-
 let accrualIntervalId = 0;
 let accrualHintTimer = 0;
+let hasShownSaveReminderThisSession = false;
 let spriteTick = 0;
 let spriteIntervalId = 0;
 const SPRITE_FRAME_COUNT = COMMON_FRAME_SRCS.length;
@@ -99,21 +103,9 @@ function refreshShellStatus(): void {
   });
 }
 
-function showAccrualHint(delta: number): void {
-  const el = getEl(FARMING_ACCRUAL_HINT_ID);
-  if (!el) return;
-  if (accrualHintTimer) window.clearTimeout(accrualHintTimer);
-  el.textContent = `+${delta} SEED`;
-  accrualHintTimer = window.setTimeout(() => {
-    el.textContent = '';
-    accrualHintTimer = 0;
-  }, 1200);
-}
-
 function tickAccrual(): void {
   const delta = GameStore.applyAccrual();
   GameStore.save();
-  if (delta > 0) showAccrualHint(delta);
   refreshShellStatus();
 }
 
@@ -124,12 +116,19 @@ function openUpgradeModal(): void {
   const backdrop = getEl(LOFT_MODAL_BACKDROP_ID);
   const costEl = getEl(LOFT_MODAL_COST_ID);
   const errorEl = getEl(LOFT_MODAL_ERROR_ID);
+  const titleEl = getEl('loft-modal-title');
   const confirmBtn = getEl(LOFT_MODAL_CONFIRM_ID) as HTMLButtonElement | null;
   if (!backdrop || !costEl) return;
 
-  const bal = GameStore.birdCurrency;
-  costEl.textContent = `Cost: ${cost.bird} $BIRD (you have ${bal})`;
-  if (errorEl) errorEl.textContent = '';
+  if (titleEl) {
+    titleEl.textContent = 'Confirm Upgrade';
+    titleEl.classList.remove('loft-modal-message--success');
+  }
+  costEl.textContent = `Spend ${cost.bird} $SEED to unlock 2 slots?`;
+  if (errorEl) {
+    errorEl.textContent = '';
+    errorEl.classList.remove('loft-modal-message--success');
+  }
   if (confirmBtn) confirmBtn.disabled = false;
 
   backdrop.classList.add('visible');
@@ -143,34 +142,106 @@ function closeUpgradeModal(): void {
   backdrop.setAttribute('aria-hidden', 'true');
 }
 
-function confirmUpgrade(): void {
-  if (!GameStore.unlockNextDeckSlot()) {
-    const errorEl = getEl(LOFT_MODAL_ERROR_ID);
-    if (errorEl) errorEl.textContent = 'Not enough $BIRD.';
+async function confirmUpgrade(): Promise<void> {
+  const cost = getNextUnlockCost(GameStore.state.unlockedDeckCount);
+  if (!cost) return;
+  if (!GameStore.walletAddress) {
+    void showMessageModal({ message: 'Connect your wallet to upgrade your Loft.', success: false });
+    closeUpgradeModal();
     return;
   }
-  GameStore.save();
   closeUpgradeModal();
-  refresh();
-  deckView.refresh();
+
+  const result = await runConfirmBurnThenSuccess({
+    getConfirmResult: () => Promise.resolve(true),
+    amount: cost.bird,
+    context: 'loft',
+    onSuccess: async () => {
+      if (!GameStore.unlockNextDeckSlot()) {
+        void showMessageModal({ message: 'Unlock failed.', success: false });
+        return;
+      }
+      GameStore.save();
+      refresh();
+      deckView.refresh();
+      const levelResult = await setLoftLevel(GameStore.state.loftLevel, { waitForConfirmation: false });
+      if (!levelResult.ok) {
+        GameStore.rollbackLastLoftUpgrade();
+        GameStore.save();
+        refresh();
+        deckView.refresh();
+        void showMessageModal({
+          title: 'Upgrade cancelled',
+          message: 'The level update was not sent to the chain. Your Loft is unchanged. The $SEED for the upgrade was already spent; you can try the upgrade again.',
+          success: false,
+        });
+        return;
+      }
+      void showMessageModal({ title: 'Upgrade complete', message: '2 slots unlocked.' });
+      if (levelResult.tx) {
+        levelResult.tx.wait().then(() => refreshNetworkStateFromChain()).then(refresh).catch(refresh);
+      } else {
+        refreshNetworkStateFromChain().then(refresh);
+      }
+    },
+  });
+
+  if (!result.ok && result.error && result.error !== 'Cancelled') {
+    void showMessageModal({ message: result.error ?? 'Loft upgrade failed. Please try again.', success: false });
+  }
 }
 
 function initModalListeners(): void {
   const cancel = getEl(LOFT_MODAL_CANCEL_ID);
   const confirm = getEl(LOFT_MODAL_CONFIRM_ID);
   const backdrop = getEl(LOFT_MODAL_BACKDROP_ID);
-
   cancel?.addEventListener('click', closeUpgradeModal);
-  confirm?.addEventListener('click', confirmUpgrade);
+  // Confirm は単にアップグレード処理をキックする（接続はタイトル画面で済ませる前提）
+  confirm?.addEventListener('click', () => {
+    void confirmUpgrade();
+  });
   backdrop?.addEventListener('click', (e) => {
     if (e.target === backdrop) closeUpgradeModal();
   });
+}
+
+const LOFT_SAVE_POWER_HINT_ID = 'loft-save-power-hint';
+
+/** LOFT セクションでは SAVE ボタン上の文章自体を出さない（デバッグ用にのみパワーを扱う）。 */
+function updateSavePowerHint(): void {
+  const el = document.getElementById(LOFT_SAVE_POWER_HINT_ID);
+  if (!el) return;
+  el.textContent = '';
+}
+
+/** Save ボタンは LOFT タブ内にあるため、LOFT タブ表示時などに表示切替する。 */
+export function updateSaveWrapVisibility(): void {
+  const saveWrap = getEl(LOFT_SAVE_WRAP_ID);
+  if (saveWrap) saveWrap.style.display = hasNetworkStateContract() && GameStore.walletAddress ? 'flex' : 'none';
+  updateSavePowerHint();
 }
 
 /** Call when Farming tab becomes visible. Renders loft, starts accrual interval, updates status. */
 export function refresh(): void {
   renderLoft();
   updateUpgradeButton();
+  updateSaveWrapVisibility();
+  const localPower = Math.floor(getProductionRatePerHour(GameStore.state));
+  const chainPower = getCachedPower();
+  if (
+    hasNetworkStateContract() &&
+    GameStore.walletAddress &&
+    localPower > 0 &&
+    (chainPower === null || chainPower === 0) &&
+    !hasShownSaveReminderThisSession
+  ) {
+    hasShownSaveReminderThisSession = true;
+    showMessageModal({
+      title: 'Save your deck on-chain',
+      message: 'Your Loft has power but it has not been saved on-chain yet. Click the "Save" button below to update SEED/DAY and Network Share.',
+      success: true,
+    });
+  }
   refreshShellStatus();
 
   if (accrualIntervalId) {
@@ -238,6 +309,58 @@ export function init(): void {
   const btn = getEl(LOFT_UPGRADE_BTN_ID);
   btn?.addEventListener('click', () => {
     if (getNextUnlockCost(GameStore.state.unlockedDeckCount) != null) openUpgradeModal();
+  });
+  const saveBtn = getEl(SAVE_DECK_BTN_ID) as HTMLButtonElement | null;
+  saveBtn?.addEventListener('click', async () => {
+    if (!GameStore.walletAddress) return;
+    const power = Math.floor(getProductionRatePerHour(GameStore.state));
+    if (power <= 0) {
+      await showMessageModal({
+        message: 'Place birds on the Loft (Deck tab) first, then return here and click Save to update SEED/DAY and Network Share.',
+        success: false,
+      });
+      return;
+    }
+    // 既にオンチェーンの値と同じパワーならトランザクションを送らない（ガス節約）
+    // 初回オンボーディング(need_save)のときは必ず tx を送る（chain=0 → 90 なのでスキップしない）
+    const chainPower = getCachedPower();
+    const alreadyUpToDate = chainPower != null && Math.floor(chainPower) === power;
+    const isNeedSaveOnboarding = GameStore.state.onboardingStep === 'need_save';
+
+    if (alreadyUpToDate && !isNeedSaveOnboarding) {
+      await showMessageModal({
+        message: 'Your deck power is already up-to-date on-chain. No Save needed.',
+        success: true,
+      });
+      return;
+    }
+
+    saveBtn.disabled = true;
+    try {
+      const result = await updatePowerOnChain(power);
+      if (result.ok) {
+        clearSuppressChainDisplay();
+        // モーダルを先に表示し、ステータス更新はバックグラウンドで実行
+        refreshNetworkStateFromChain().then(() => {
+          refreshShellStatus();
+          refreshNetworkStats();
+        });
+        const wasNeedSave = GameStore.state.onboardingStep === 'need_save';
+        if (wasNeedSave) {
+          GameStore.setState({ onboardingStep: 'need_farming' });
+          GameStore.save();
+          deckView.refresh();
+          updateDeckOnboardingPlaceOverlay();
+          showPlaceSuccessModal();
+        } else {
+          await showMessageModal({ title: 'Deck saved', message: 'Your power has been updated on-chain.' });
+        }
+      } else {
+        await showMessageModal({ message: result.error ?? 'Save failed.', success: false });
+      }
+    } finally {
+      saveBtn.disabled = false;
+    }
   });
   updateUpgradeButton();
 }

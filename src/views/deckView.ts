@@ -14,7 +14,8 @@ import {
   getNetworkSharePercent,
 } from '../types';
 import { RARITY_IMAGE_SRC } from '../assets';
-import { updateShellStatus, switchToTab, updateTabsForOnboarding } from '../domShell';
+import { hasNetworkStateContract } from '../networkState';
+import { updateShellStatus, switchToTab, updateTabsForOnboarding, updateDeckOnboardingPlaceOverlay } from '../domShell';
 
 const DECK_GRID_ID = 'deck-grid';
 const INVENTORY_GRID_ID = 'inventory-grid';
@@ -152,12 +153,14 @@ function renderInventory(): void {
         }
         const ok = GameStore.placeBirdOnDeck(firstEmpty, key);
         if (ok) {
-          // オンボーディング中: 初めて鳥をデッキに置いたら Farming 解放ステップへ
-          if (GameStore.state.onboardingStep === 'need_place') {
-            GameStore.setState({ onboardingStep: 'need_farming' });
+          // オンボーディング中: 初めて鳥をデッキに置いたら need_save へ。SAVE 後にモーダル表示
+          const wasNeedPlace = GameStore.state.onboardingStep === 'need_place';
+          if (wasNeedPlace) {
+            GameStore.setState({ onboardingStep: 'need_save' });
           }
           GameStore.save();
           refresh();
+          // おめでとうモーダルは SAVE 成功後に farmingView で表示
         }
       });
 
@@ -183,22 +186,24 @@ export function refresh(): void {
   const step = GameStore.state.onboardingStep;
   const ctaEl = document.getElementById('deck-onboarding-cta');
   const gotoBtn = document.getElementById('deck-onboarding-goto-farming');
-  if (ctaEl) ctaEl.style.display = step === 'need_farming' ? 'block' : 'none';
+  if (ctaEl) ctaEl.style.display = 'none';
   if (gotoBtn && !(gotoBtn as HTMLButtonElement).dataset.listener) {
     (gotoBtn as HTMLButtonElement).dataset.listener = '1';
     gotoBtn.addEventListener('click', () => switchToTab('farming'));
   }
 
   const placeOverlay = document.getElementById('deck-onboarding-place-overlay');
-  const inventorySection = document.getElementById('inventory-section');
   if (placeOverlay) {
-    const show = step === 'need_place';
+    const show = step === 'need_place' || step === 'need_save';
     placeOverlay.classList.toggle('visible', show);
     placeOverlay.setAttribute('aria-hidden', show ? 'false' : 'true');
   }
-  if (inventorySection) {
-    inventorySection.classList.toggle('onboarding-highlight', step === 'need_place');
+  if (step === 'need_place' || step === 'need_save') {
+    updateDeckOnboardingPlaceOverlay();
   }
+
+  const saveWrap = document.getElementById('loft-save-wrap');
+  if (saveWrap) saveWrap.style.display = hasNetworkStateContract() && GameStore.walletAddress ? 'flex' : 'none';
 
   updateTabsForOnboarding();
 }

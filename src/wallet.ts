@@ -5,6 +5,7 @@
 
 export interface EthereumProvider {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
+  on?(event: string, callback: (...args: unknown[]) => void): void;
 }
 
 declare global {
@@ -92,6 +93,64 @@ export function requestAccounts(): Promise<ConnectResult> {
 /** 接続（Gacha 等）。ユーザージェスチャ外で呼ぶとポップアップが出ない場合あり。 */
 export function connectWallet(): Promise<ConnectResult> {
   return requestAccounts();
+}
+
+/**
+ * メッセージ署名（personal_sign）。Claim 等で「ウォレットで承認」を必ず出したいときに使う。
+ * 戻りが ok ならユーザーが署名したことを意味する。
+ */
+export function signMessage(message: string, address: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const provider = getProvider();
+  if (!provider) return Promise.resolve({ ok: false, error: 'No wallet' });
+  const hexMessage =
+    '0x' +
+    Array.from(new TextEncoder().encode(message))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  return (provider.request({ method: 'personal_sign', params: [hexMessage, address] }) as Promise<unknown>)
+    .then(() => ({ ok: true as const }))
+    .catch((err: unknown) => {
+      const code = (err as { code?: number }).code;
+      if (code === 4001) return { ok: false as const, error: 'Signature rejected' };
+      return { ok: false as const, error: formatError(err) };
+    });
+}
+
+/** TOP の Connect Wallet から接続した直後はリロードしない（承認→Farming へ進むため） */
+const JUST_CONNECTING_KEY = 'bird-game-just-connecting';
+export function setJustConnectingFlag(): void {
+  try {
+    sessionStorage.setItem(JUST_CONNECTING_KEY, '1');
+  } catch (_) {}
+}
+export function clearJustConnectingFlag(): void {
+  try {
+    sessionStorage.removeItem(JUST_CONNECTING_KEY);
+  } catch (_) {}
+}
+export function isJustConnecting(): boolean {
+  try {
+    return sessionStorage.getItem(JUST_CONNECTING_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * アカウント変更時にページをリロードするリスナーを登録する。
+ * ウォレットの切り替えや Disconnect 時に、正しいアドレスで状態を読み直すため。
+ * TOP から Connect 承認直後はリロードしない（承認→Farming の流れを維持）。
+ */
+export function setupAccountChangeReload(): void {
+  const provider = getProvider();
+  if (!provider || typeof provider.on !== 'function') return;
+  provider.on('accountsChanged', () => {
+    if (isJustConnecting()) {
+      clearJustConnectingFlag();
+      return;
+    }
+    setTimeout(() => window.location.reload(), 150);
+  });
 }
 
 /**
