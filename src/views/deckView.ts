@@ -14,8 +14,8 @@ import {
   getNetworkSharePercent,
 } from '../types';
 import { RARITY_IMAGE_SRC } from '../assets';
-import { hasNetworkStateContract } from '../networkState';
 import { updateShellStatus, switchToTab, updateTabsForOnboarding, updateDeckOnboardingPlaceOverlay } from '../domShell';
+import * as farmingView from './farmingView';
 
 const DECK_GRID_ID = 'deck-grid';
 const INVENTORY_GRID_ID = 'inventory-grid';
@@ -202,8 +202,7 @@ export function refresh(): void {
     updateDeckOnboardingPlaceOverlay();
   }
 
-  const saveWrap = document.getElementById('loft-save-wrap');
-  if (saveWrap) saveWrap.style.display = hasNetworkStateContract() && GameStore.walletAddress ? 'flex' : 'none';
+  farmingView.updateSaveWrapVisibility();
 
   updateTabsForOnboarding();
 }
