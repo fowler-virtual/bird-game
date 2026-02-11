@@ -214,9 +214,14 @@ function updateSavePowerHint(): void {
 }
 
 /** Save ボタンは LOFT タブ内にあるため、LOFT タブ表示時などに表示切替する。 */
+/** 初回オンボーディング(need_save)のときも表示する（契約未設定の環境では押下時にメッセージを出してフローを進める）。 */
 export function updateSaveWrapVisibility(): void {
   const saveWrap = getEl(LOFT_SAVE_WRAP_ID);
-  if (saveWrap) saveWrap.style.display = hasNetworkStateContract() && GameStore.walletAddress ? 'flex' : 'none';
+  const hasContract = hasNetworkStateContract();
+  const hasWallet = !!GameStore.walletAddress;
+  const isNeedSave = GameStore.state.onboardingStep === 'need_save';
+  const show = (hasContract && hasWallet) || (hasWallet && isNeedSave);
+  if (saveWrap) saveWrap.style.display = show ? 'flex' : 'none';
   updateSavePowerHint();
 }
 
@@ -312,6 +317,18 @@ export function init(): void {
   const saveBtn = getEl(SAVE_DECK_BTN_ID) as HTMLButtonElement | null;
   saveBtn?.addEventListener('click', async () => {
     if (!GameStore.walletAddress) return;
+    if (GameStore.state.onboardingStep === 'need_save' && !hasNetworkStateContract()) {
+      GameStore.setState({ onboardingStep: 'need_farming' });
+      GameStore.save();
+      deckView.refresh();
+      updateDeckOnboardingPlaceOverlay();
+      await showMessageModal({
+        title: 'Save (offline)',
+        message: 'Network is not configured for on-chain save. Your progress is saved locally. You can continue playing.',
+        success: true,
+      });
+      return;
+    }
     const power = Math.floor(getProductionRatePerHour(GameStore.state));
     if (power <= 0) {
       await showMessageModal({
