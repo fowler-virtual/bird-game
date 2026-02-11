@@ -888,14 +888,29 @@ export async function runConfirmBurnThenSuccess(options: {
   const ok = await options.getConfirmResult();
   if (!ok) return { ok: false, error: 'Cancelled' };
 
+  let processingShown = false;
+  const showBurnProcessing = () => {
+    if (processingShown) return;
+    processingShown = true;
+    const msg =
+      options.context === 'gacha'
+        ? 'Burning $SEED for adoption… This may take a few seconds.'
+        : 'Burning $SEED for Loft upgrade… This may take a few seconds.';
+    showProcessingModal(msg);
+    options.setProcessingMessage?.('Waiting for the transaction to be confirmed…');
+  };
+
   if (options.amount > 0) {
-    options.setProcessingMessage?.('Please confirm the transaction in your wallet.');
+    showBurnProcessing();
     const burnResult = await burnSeedForAction(options.amount, options.context);
-    options.setProcessingMessage?.('');
     if (!burnResult.ok) {
+      hideProcessingModal();
+      options.setProcessingMessage?.('');
       options.setError?.(burnResult.error ?? 'Transaction failed.');
       return { ok: false, error: burnResult.error };
     }
+    options.setProcessingMessage?.('');
+    hideProcessingModal();
   }
 
   await options.onSuccess();
@@ -979,6 +994,23 @@ export function showMessageModal(options: { title?: string; message: string; suc
     okBtn?.addEventListener('click', onOk);
     backdrop.addEventListener('click', onBackdrop);
   });
+}
+
+/** 長い処理中（burn 待ち / claim 実行中など）のシンプルな Processing モーダル */
+function showProcessingModal(message: string): void {
+  const backdrop = document.getElementById('processing-modal-backdrop');
+  const textEl = document.getElementById('processing-modal-text');
+  if (!backdrop || !textEl) return;
+  textEl.textContent = message;
+  backdrop.classList.add('visible');
+  backdrop.setAttribute('aria-hidden', 'false');
+}
+
+function hideProcessingModal(): void {
+  const backdrop = document.getElementById('processing-modal-backdrop');
+  if (!backdrop) return;
+  backdrop.classList.remove('visible');
+  backdrop.setAttribute('aria-hidden', 'true');
 }
 
 /** ガチャタブの「1回回す」「10回回す」から呼ぶ。引いた鳥をモーダルで表示し、閉じたらメインエリアにも表示。 */
