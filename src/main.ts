@@ -2,7 +2,6 @@ import { GameStore } from './store/GameStore';
 import { initTitleUI, showTitleUI, hideTitleUI } from './titleUI';
 import { setupAccountChangeReload } from './wallet';
 import { createPhaserGame } from './phaserBoot';
-import { hasNetworkStateContract, getLoftLevelRaw } from './networkState';
 
 try {
   GameStore.load();
@@ -21,22 +20,7 @@ initTitleUI();
 if (!GameStore.walletConnected || !GameStore.walletAddress) {
   showTitleUI();
 } else {
-  // 接続済み: オンチェーン未登録（初回ログイン）なら TOP を表示し、登録済みならゲーム画面へ
   showTitleUI();
-  const addr = GameStore.walletAddress;
-  const goToGame = (): void => {
-    hideTitleUI();
-    createPhaserGame();
-  };
-  if (!hasNetworkStateContract()) {
-    goToGame();
-  } else {
-    getLoftLevelRaw(addr!)
-      .then((raw) => {
-        if (raw > 0) goToGame();
-      })
-      .catch(() => {
-        goToGame();
-      });
-  }
+  hideTitleUI();
+  createPhaserGame();
 }

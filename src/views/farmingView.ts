@@ -7,7 +7,7 @@ import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
 import { COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
-import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getCachedPower } from '../networkState';
+import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getCachedPower, getLoftLevelRaw } from '../networkState';
 import * as deckView from './deckView';
 
 const LOFT_GRID_ID = 'loft-grid';
@@ -325,6 +325,22 @@ export function init(): void {
     saveBtn.disabled = true;
     showProcessingModal('Saving your deck to the network… This may take a few seconds.');
     try {
+      // 初回SAVE時: オンチェーンに Loft レベルが未登録なら level 1 を登録してから updatePower する
+      const addr = GameStore.walletAddress;
+      if (addr && hasNetworkStateContract()) {
+        try {
+          const rawLevel = await getLoftLevelRaw(addr);
+          if (rawLevel <= 0) {
+            const levelResult = await setLoftLevel(1);
+            if (!levelResult.ok) {
+              // ユーザーが拒否してもデッキ保存は続行する
+              console.warn('[FarmingView] setLoftLevel(1) failed, continuing with deck save:', levelResult.error);
+            }
+          }
+        } catch (e) {
+          console.warn('[FarmingView] getLoftLevelRaw/setLoftLevel failed, continuing with deck save', e);
+        }
+      }
       const result = await updatePowerOnChain(power);
       if (result.ok) {
         clearSuppressChainDisplay();
