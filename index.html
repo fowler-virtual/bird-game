@@ -779,10 +779,10 @@
       }
       .deck-onboarding-cta-text { margin: 0 0 12px 0; font-size: 14px; color: var(--text); }
       .deck-pane-body { position: relative; min-height: 200px; }
-      /* オンボーディング暗転: Claim確認モーダルと同じ色・同じ範囲（viewport全体） */
+      /* オンボーディング暗転: コンテンツと一緒にスクロールするよう absolute（親は shell-content-inner） */
       .deck-onboarding-place-overlay {
         display: none;
-        position: fixed;
+        position: absolute;
         inset: 0;
         pointer-events: none;
         z-index: 150;
@@ -855,10 +855,10 @@
         color: #fff !important;
         -webkit-text-fill-color: #fff;
       }
-      /* オンボーディング暗転: Claim確認モーダルと同じ色・同じ範囲（viewport全体） */
+      /* オンボーディング暗転: コンテンツと一緒にスクロールするよう absolute（親は shell-content-inner） */
       .adopt-onboarding-overlay {
         display: none;
-        position: fixed;
+        position: absolute;
         inset: 0;
         overflow: hidden;
         pointer-events: none;
@@ -2014,34 +2014,33 @@
               </div>
             </div>
           </div>
+          <!-- オンボーディング: shell-content-inner 内で position:absolute にし、スクロールで暗転も一緒に動く -->
+          <div class="deck-onboarding-place-overlay" id="deck-onboarding-place-overlay" aria-hidden="true" aria-live="polite">
+            <div class="deck-onboarding-place-overlay-dim-wrap">
+              <div class="deck-onboarding-place-overlay-dim" id="deck-onboarding-place-overlay-dim" aria-hidden="true"></div>
+            </div>
+            <div class="deck-onboarding-place-message-wrap" id="deck-onboarding-place-message-wrap">
+              <div class="deck-onboarding-place-message-inner">
+                <p class="deck-onboarding-place-message">Tap the bird you want to place on the Loft.</p>
+                <span class="deck-onboarding-place-pointer" aria-hidden="true">↓</span>
+              </div>
+            </div>
+          </div>
+          <div class="adopt-onboarding-overlay" id="adopt-onboarding-overlay" aria-hidden="true" aria-live="polite">
+            <div class="adopt-onboarding-spotlight" id="adopt-onboarding-dim-spotlight" aria-hidden="true"></div>
+            <div class="adopt-onboarding-message-wrap" id="adopt-onboarding-message-wrap">
+              <div class="adopt-onboarding-message-inner">
+                <p class="adopt-onboarding-message">Tap here to adopt<br class="adopt-onboarding-br-narrow"> your first bird.</p>
+                <span class="adopt-onboarding-pointer" aria-hidden="true">↓</span>
+              </div>
+            </div>
+          </div>
           <div class="canvas-card" id="shell-canvas-card">
             <div id="app"></div>
           </div>
 
         </div>
       </main>
-    </div>
-
-    <!-- オンボーディング（チュートリアル）も body 直下: MetaMask 等で viewport 基準にし白抜きずれを防ぐ -->
-    <div class="deck-onboarding-place-overlay" id="deck-onboarding-place-overlay" aria-hidden="true" aria-live="polite">
-      <div class="deck-onboarding-place-overlay-dim-wrap">
-        <div class="deck-onboarding-place-overlay-dim" id="deck-onboarding-place-overlay-dim" aria-hidden="true"></div>
-      </div>
-      <div class="deck-onboarding-place-message-wrap" id="deck-onboarding-place-message-wrap">
-        <div class="deck-onboarding-place-message-inner">
-          <p class="deck-onboarding-place-message">Tap the bird you want to place on the Loft.</p>
-          <span class="deck-onboarding-place-pointer" aria-hidden="true">↓</span>
-        </div>
-      </div>
-    </div>
-    <div class="adopt-onboarding-overlay" id="adopt-onboarding-overlay" aria-hidden="true" aria-live="polite">
-      <div class="adopt-onboarding-spotlight" id="adopt-onboarding-dim-spotlight" aria-hidden="true"></div>
-      <div class="adopt-onboarding-message-wrap" id="adopt-onboarding-message-wrap">
-        <div class="adopt-onboarding-message-inner">
-          <p class="adopt-onboarding-message">Tap here to adopt<br class="adopt-onboarding-br-narrow"> your first bird.</p>
-          <span class="adopt-onboarding-pointer" aria-hidden="true">↓</span>
-        </div>
-      </div>
     </div>
 
     <!-- 全モーダルを body 直下に配置: position:fixed が常に viewport 基準になり右端まで確実に暗転 -->
