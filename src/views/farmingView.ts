@@ -6,7 +6,7 @@
 import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
 import { COMMON_FRAME_SRCS } from '../assets';
-import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay } from '../domShell';
+import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
 import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getCachedPower } from '../networkState';
 import * as deckView from './deckView';
 
@@ -320,7 +320,10 @@ export function init(): void {
       });
       return;
     }
+    const confirmed = await showSaveConfirmModal();
+    if (!confirmed) return;
     saveBtn.disabled = true;
+    showProcessingModal('Saving your deck to the network… This may take a few seconds.');
     try {
       const result = await updatePowerOnChain(power);
       if (result.ok) {
@@ -336,12 +339,15 @@ export function init(): void {
           GameStore.save();
           deckView.refresh();
           updateDeckOnboardingPlaceOverlay();
+          hideProcessingModal();
           showPlaceSuccessModal();
         } else {
+          hideProcessingModal();
           await showMessageModal({ title: 'Deck saved', message: 'Your power has been updated on-chain.' });
         }
       } else {
-        await showMessageModal({ message: result.error ?? 'Save failed.', success: false });
+        showMessageModal({ message: result.error ?? 'Save failed.', success: false });
+        hideProcessingModal();
       }
     } finally {
       saveBtn.disabled = false;

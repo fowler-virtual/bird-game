@@ -919,7 +919,17 @@
         color: #fff !important;
         -webkit-text-fill-color: #fff;
       }
-      /* ----- Processing modal (tx wait / long operations) ----- */
+      /* body 直下のモーダル用: viewport 全体を確実に覆う（右端・スクロールバーまで） */
+      .modal-viewport-cover {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 100%;
+      }
+      /* ----- Processing modal: gacha-modal-backdrop と同じ書き方（Gacha / Loft / Claim の待機中） ----- */
       .processing-modal-backdrop {
         position: fixed;
         inset: 0;
@@ -927,7 +937,7 @@
         display: none;
         align-items: center;
         justify-content: center;
-        z-index: 2000;
+        z-index: 200;
       }
       .processing-modal-backdrop.visible { display: flex; }
       .processing-modal {
@@ -2024,80 +2034,76 @@
               </div>
             </div>
           </div>
-          <!-- Gacha confirm modal -->
-          <div class="gacha-modal-backdrop" id="gacha-modal-backdrop" aria-hidden="true">
-            <div class="gacha-modal" role="dialog" aria-labelledby="gacha-modal-title">
-              <h2 class="gacha-modal-title" id="gacha-modal-title">Confirm Adoption</h2>
-              <p class="gacha-modal-text" id="gacha-modal-text"></p>
-              <div class="gacha-modal-actions">
-                <button type="button" class="gacha-modal-cancel" id="gacha-modal-cancel">Cancel</button>
-                <button type="button" class="gacha-modal-confirm" id="gacha-modal-confirm">Confirm</button>
-              </div>
-            </div>
-          </div>
-          <!-- Gacha result modal (shown after pull, closes to main area) -->
-          <div class="gacha-result-modal-backdrop" id="gacha-result-modal-backdrop" aria-hidden="true">
-            <div class="gacha-result-modal" role="dialog" aria-labelledby="gacha-result-modal-title">
-              <div class="gacha-result-modal-header">
-                <h2 class="gacha-result-modal-title" id="gacha-result-modal-title">Adopted birds</h2>
-                <button type="button" class="gacha-result-modal-close" id="gacha-result-modal-close" aria-label="Close">×</button>
-              </div>
-              <div class="gacha-result-modal-body">
-                <div class="gacha-result-modal-feedback" id="gacha-result-modal-feedback"></div>
-                <div id="gacha-result-modal-confetti-wrap" class="gacha-confetti-wrap" aria-hidden="true"></div>
-                <div class="gacha-results-area" id="gacha-result-modal-area"></div>
-              </div>
-            </div>
-          </div>
-          <!-- Place success modal (first bird on Loft: message + confetti, then Go to Farming) -->
-          <div class="place-success-modal-backdrop" id="place-success-modal-backdrop" aria-hidden="true">
-            <div class="place-success-modal" role="dialog" aria-labelledby="place-success-modal-title">
-              <div id="place-success-modal-confetti-wrap" class="gacha-confetti-wrap gacha-confetti-wrap--legendary" aria-hidden="true"></div>
-              <h2 class="place-success-modal-title" id="place-success-modal-title">Bird placed!</h2>
-              <p class="place-success-modal-message">Go to Farming to start earning SEED.</p>
-              <button type="button" class="place-success-modal-btn" id="place-success-modal-goto-farming">Go to Farming</button>
-            </div>
-          </div>
           <div class="canvas-card" id="shell-canvas-card">
             <div id="app"></div>
           </div>
 
-          <!-- Loft upgrade confirm modal (DOM-driven) -->
-          <div class="loft-modal-backdrop" id="loft-modal-backdrop" aria-hidden="true">
-            <div class="loft-modal" id="loft-modal" role="dialog" aria-labelledby="loft-modal-title">
-              <h2 class="loft-modal-title" id="loft-modal-title">Confirm Upgrade</h2>
-              <p class="loft-modal-cost" id="loft-modal-cost"></p>
-              <p class="loft-modal-error" id="loft-modal-error" aria-live="polite"></p>
-              <div class="loft-modal-actions">
-                <button type="button" class="loft-modal-cancel" id="loft-modal-cancel">Cancel</button>
-                <button type="button" class="loft-modal-confirm" id="loft-modal-confirm">Confirm</button>
-              </div>
-            </div>
-          </div>
-          <!-- Processing modal (tx wait / long operations) -->
-          <div class="processing-modal-backdrop" id="processing-modal-backdrop" aria-hidden="true">
-            <div class="processing-modal" role="alertdialog" aria-live="polite">
-              <p class="processing-modal-title">Processing…</p>
-              <p class="processing-modal-text" id="processing-modal-text">Waiting for confirmation on the network.</p>
-              <div class="processing-modal-spinner" aria-hidden="true">
-                <span class="processing-modal-dot"></span>
-                <span class="processing-modal-dot"></span>
-                <span class="processing-modal-dot"></span>
-              </div>
-            </div>
-          </div>
-          <!-- Unified message modal (Claim success, Loft result) - same look as gacha confirm -->
-          <div class="gacha-modal-backdrop" id="message-modal-backdrop" aria-hidden="true">
-            <div class="gacha-modal" role="dialog" aria-labelledby="message-modal-title">
-              <h2 class="gacha-modal-title" id="message-modal-title"></h2>
-              <p class="gacha-modal-text" id="message-modal-text"></p>
-              <div class="gacha-modal-actions">
-                <button type="button" class="gacha-modal-confirm" id="message-modal-ok">OK</button>
-              </div>
-            </div>
-          </div>
         </div>
       </main>
+    </div>
+
+    <!-- 全モーダルを body 直下に配置: position:fixed が常に viewport 基準になり右端まで確実に暗転 -->
+    <div class="gacha-modal-backdrop modal-viewport-cover" id="gacha-modal-backdrop" aria-hidden="true">
+      <div class="gacha-modal" role="dialog" aria-labelledby="gacha-modal-title">
+        <h2 class="gacha-modal-title" id="gacha-modal-title">Confirm Adoption</h2>
+        <p class="gacha-modal-text" id="gacha-modal-text"></p>
+        <div class="gacha-modal-actions">
+          <button type="button" class="gacha-modal-cancel" id="gacha-modal-cancel">Cancel</button>
+          <button type="button" class="gacha-modal-confirm" id="gacha-modal-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+    <div class="gacha-result-modal-backdrop modal-viewport-cover" id="gacha-result-modal-backdrop" aria-hidden="true">
+      <div class="gacha-result-modal" role="dialog" aria-labelledby="gacha-result-modal-title">
+        <div class="gacha-result-modal-header">
+          <h2 class="gacha-result-modal-title" id="gacha-result-modal-title">Adopted birds</h2>
+          <button type="button" class="gacha-result-modal-close" id="gacha-result-modal-close" aria-label="Close">×</button>
+        </div>
+        <div class="gacha-result-modal-body">
+          <div class="gacha-result-modal-feedback" id="gacha-result-modal-feedback"></div>
+          <div id="gacha-result-modal-confetti-wrap" class="gacha-confetti-wrap" aria-hidden="true"></div>
+          <div class="gacha-results-area" id="gacha-result-modal-area"></div>
+        </div>
+      </div>
+    </div>
+    <div class="place-success-modal-backdrop modal-viewport-cover" id="place-success-modal-backdrop" aria-hidden="true">
+      <div class="place-success-modal" role="dialog" aria-labelledby="place-success-modal-title">
+        <div id="place-success-modal-confetti-wrap" class="gacha-confetti-wrap gacha-confetti-wrap--legendary" aria-hidden="true"></div>
+        <h2 class="place-success-modal-title" id="place-success-modal-title">Bird placed!</h2>
+        <p class="place-success-modal-message">Go to Farming to start earning SEED.</p>
+        <button type="button" class="place-success-modal-btn" id="place-success-modal-goto-farming">Go to Farming</button>
+      </div>
+    </div>
+    <div class="loft-modal-backdrop modal-viewport-cover" id="loft-modal-backdrop" aria-hidden="true">
+      <div class="loft-modal" id="loft-modal" role="dialog" aria-labelledby="loft-modal-title">
+        <h2 class="loft-modal-title" id="loft-modal-title">Confirm Upgrade</h2>
+        <p class="loft-modal-cost" id="loft-modal-cost"></p>
+        <p class="loft-modal-error" id="loft-modal-error" aria-live="polite"></p>
+        <div class="loft-modal-actions">
+          <button type="button" class="loft-modal-cancel" id="loft-modal-cancel">Cancel</button>
+          <button type="button" class="loft-modal-confirm" id="loft-modal-confirm">Confirm</button>
+        </div>
+      </div>
+    </div>
+    <div class="gacha-modal-backdrop modal-viewport-cover" id="message-modal-backdrop" aria-hidden="true">
+      <div class="gacha-modal" role="dialog" aria-labelledby="message-modal-title">
+        <h2 class="gacha-modal-title" id="message-modal-title"></h2>
+        <p class="gacha-modal-text" id="message-modal-text"></p>
+        <div class="gacha-modal-actions">
+          <button type="button" class="gacha-modal-confirm" id="message-modal-ok">OK</button>
+        </div>
+      </div>
+    </div>
+    <div class="processing-modal-backdrop modal-viewport-cover" id="processing-modal-backdrop" aria-hidden="true">
+      <div class="processing-modal" role="alertdialog" aria-live="polite">
+        <p class="processing-modal-title">Processing…</p>
+        <p class="processing-modal-text" id="processing-modal-text">Waiting for confirmation on the network.</p>
+        <div class="processing-modal-spinner" aria-hidden="true">
+          <span class="processing-modal-dot"></span>
+          <span class="processing-modal-dot"></span>
+          <span class="processing-modal-dot"></span>
+        </div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

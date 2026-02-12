@@ -904,16 +904,16 @@ export async function runConfirmBurnThenSuccess(options: {
     showBurnProcessing();
     const burnResult = await burnSeedForAction(options.amount, options.context);
     if (!burnResult.ok) {
-      hideProcessingModal();
+      if (processingShown) hideProcessingModal();
       options.setProcessingMessage?.('');
       options.setError?.(burnResult.error ?? 'Transaction failed.');
       return { ok: false, error: burnResult.error };
     }
     options.setProcessingMessage?.('');
-    hideProcessingModal();
   }
 
   await options.onSuccess();
+  if (processingShown) hideProcessingModal();
   return { ok: true };
 }
 
@@ -945,6 +945,84 @@ function showGachaConfirmModal(count: 1 | 10, cost: number, _bal: number): Promi
 
     const cancelBtn = document.getElementById('gacha-modal-cancel');
     const confirmBtn = document.getElementById('gacha-modal-confirm');
+    const onCancel = () => finish(false);
+    const onConfirm = () => finish(true);
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === backdrop) finish(false);
+    };
+
+    cancelBtn?.addEventListener('click', onCancel);
+    confirmBtn?.addEventListener('click', onConfirm);
+    backdrop.addEventListener('click', onBackdrop);
+  });
+}
+
+/** SAVE 確認モーダル（ガチャ・Claim と同様の Confirm/Cancel）。Confirm で true、Cancel で false。 */
+export function showSaveConfirmModal(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = document.getElementById('gacha-modal-backdrop');
+    const titleEl = document.getElementById('gacha-modal-title');
+    const textEl = document.getElementById('gacha-modal-text');
+    const cancelBtn = document.getElementById('gacha-modal-cancel');
+    const confirmBtn = document.getElementById('gacha-modal-confirm');
+    if (!backdrop || !textEl) {
+      resolve(false);
+      return;
+    }
+    if (titleEl) titleEl.textContent = 'Confirm Save';
+    textEl.textContent = 'Save your deck power to the network? This will update your SEED/day and Network Share.';
+    backdrop.classList.add('visible');
+    backdrop.setAttribute('aria-hidden', 'false');
+
+    const finish = (value: boolean) => {
+      backdrop.classList.remove('visible');
+      backdrop.setAttribute('aria-hidden', 'true');
+      if (titleEl) titleEl.textContent = 'Confirm Adoption';
+      cancelBtn?.removeEventListener('click', onCancel);
+      confirmBtn?.removeEventListener('click', onConfirm);
+      backdrop.removeEventListener('click', onBackdrop);
+      resolve(value);
+    };
+
+    const onCancel = () => finish(false);
+    const onConfirm = () => finish(true);
+    const onBackdrop = (e: MouseEvent) => {
+      if (e.target === backdrop) finish(false);
+    };
+
+    cancelBtn?.addEventListener('click', onCancel);
+    confirmBtn?.addEventListener('click', onConfirm);
+    backdrop.addEventListener('click', onBackdrop);
+  });
+}
+
+/** Claim 確認モーダル（ガチャ・LOFT と同様の Confirm/Cancel）。Confirm で true、Cancel で false。 */
+function showClaimConfirmModal(amount: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = document.getElementById('gacha-modal-backdrop');
+    const titleEl = document.getElementById('gacha-modal-title');
+    const textEl = document.getElementById('gacha-modal-text');
+    const cancelBtn = document.getElementById('gacha-modal-cancel');
+    const confirmBtn = document.getElementById('gacha-modal-confirm');
+    if (!backdrop || !textEl) {
+      resolve(false);
+      return;
+    }
+    if (titleEl) titleEl.textContent = 'Confirm Claim';
+    textEl.textContent = `Claim ${amount} $SEED? The rewards will be sent to your connected wallet.`;
+    backdrop.classList.add('visible');
+    backdrop.setAttribute('aria-hidden', 'false');
+
+    const finish = (value: boolean) => {
+      backdrop.classList.remove('visible');
+      backdrop.setAttribute('aria-hidden', 'true');
+      if (titleEl) titleEl.textContent = 'Confirm Adoption';
+      cancelBtn?.removeEventListener('click', onCancel);
+      confirmBtn?.removeEventListener('click', onConfirm);
+      backdrop.removeEventListener('click', onBackdrop);
+      resolve(value);
+    };
+
     const onCancel = () => finish(false);
     const onConfirm = () => finish(true);
     const onBackdrop = (e: MouseEvent) => {
@@ -996,8 +1074,8 @@ export function showMessageModal(options: { title?: string; message: string; suc
   });
 }
 
-/** 長い処理中（burn 待ち / claim 実行中など）のシンプルな Processing モーダル */
-function showProcessingModal(message: string): void {
+/** 長い処理中（burn 待ち / claim / SAVE 実行中など）のシンプルな Processing モーダル */
+export function showProcessingModal(message: string): void {
   const backdrop = document.getElementById('processing-modal-backdrop');
   const textEl = document.getElementById('processing-modal-text');
   if (!backdrop || !textEl) return;
@@ -1006,7 +1084,7 @@ function showProcessingModal(message: string): void {
   backdrop.setAttribute('aria-hidden', 'false');
 }
 
-function hideProcessingModal(): void {
+export function hideProcessingModal(): void {
   const backdrop = document.getElementById('processing-modal-backdrop');
   if (!backdrop) return;
   backdrop.classList.remove('visible');
@@ -1078,8 +1156,11 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
       getConfirmResult: () => showGachaConfirmModal(count, cost, bal),
       amount: cost,
       context: 'gacha',
-      setProcessingMessage: setGachaAreaMessage,
-      setError: (msg) => setGachaAreaMessage(msg),
+      // 待機中は「Adopted birds」ボックスを出さない（ガチャ結果モーダルが出た後にメインエリアへ反映）
+      setProcessingMessage: undefined,
+      setError: (msg) => {
+        void showMessageModal({ title: 'Adoption failed', message: msg, success: false });
+      },
       onSuccess: async () => {
         if (count === 1 && isFirstAdoptionFree() && !GameStore.state.hasFreeGacha) {
           GameStore.setState({ hasFreeGacha: true });
@@ -1469,20 +1550,24 @@ function initTabListeners(): void {
     claimBtn.addEventListener('click', () => {
       const amount = GameStore.state.seed;
       if (amount <= 0) return;
-      requestAccounts().then((connectResult) => {
-        if (!connectResult.ok) return;
-        const address = connectResult.address;
-        claimBtn.disabled = true;
-        requestClaim(address, amount).then((result) => {
+      showClaimConfirmModal(amount).then((confirmed) => {
+        if (!confirmed) return;
+        requestAccounts().then((connectResult) => {
+          if (!connectResult.ok) return;
+          const address = connectResult.address;
+          claimBtn.disabled = true;
+          requestClaim(address, amount).then((result) => {
           if (!result.ok) {
             claimBtn.disabled = false;
             return;
           }
+          showProcessingModal('Claiming your $SEED rewards… This may take a few seconds.');
           executeClaim(result.signature).then((txResult) => {
             if (!txResult.ok) {
               showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false }).then(() => {
                 claimBtn.disabled = false;
               });
+              hideProcessingModal();
               return;
             }
             // Claim 完了：実際に送金した量(amount)だけローカル SEED から差し引く（承認待ち中に増えた分は残す）
@@ -1501,6 +1586,7 @@ function initTabListeners(): void {
               updateAdoptPane();
               updateGachaButtonsAndCosts();
               updateClaimButton();
+              hideProcessingModal();
               showMessageModal({
                 title: 'Claim successful',
                 message: `${amount} $SEED acquired!`,
@@ -1512,6 +1598,7 @@ function initTabListeners(): void {
         });
       });
     });
+  });
   }
   deckView.init();
   if (typeof window !== 'undefined') {
