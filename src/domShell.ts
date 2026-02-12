@@ -371,18 +371,6 @@ function positionDeckOnboardingMessageAboveInventory(): void {
   const messageWrap = document.getElementById('deck-onboarding-place-message-wrap');
   const inventorySection = document.getElementById('inventory-section');
   if (!placeOverlay || !overlayDim || !messageWrap || !inventorySection || !placeOverlay.classList.contains('visible')) return;
-  const contentInner = document.getElementById('shell-content-inner');
-  const loftCard = document.querySelector('.status-card-loft');
-  if (loftCard && contentInner) {
-    const innerRect = contentInner.getBoundingClientRect();
-    const cardRect = loftCard.getBoundingClientRect();
-    const width = Math.max(0, Math.floor(cardRect.right - innerRect.left) - 1);
-    placeOverlay.style.left = '0';
-    placeOverlay.style.top = '0';
-    placeOverlay.style.bottom = '0';
-    placeOverlay.style.width = `${width}px`;
-    placeOverlay.style.right = 'auto';
-  }
   const overlayRect2 = placeOverlay.getBoundingClientRect();
   const toOverlayTop2 = (y: number) => y - overlayRect2.top;
   const toOverlayLeft2 = (x: number) => x - overlayRect2.left;
@@ -411,28 +399,17 @@ function positionDeckOnboardingMessageForNeedSave(): void {
   const saveBtn = document.getElementById('status-save-deck-btn') as HTMLButtonElement | null;
   if (!placeOverlay || !overlayDim || !messageWrap || !saveWrap || !saveBtn || !placeOverlay.classList.contains('visible')) return;
 
-  const contentInner = document.getElementById('shell-content-inner');
-  const loftCard = document.querySelector('.status-card-loft');
-  if (loftCard && contentInner) {
-    const innerRect = contentInner.getBoundingClientRect();
-    const cardRect = loftCard.getBoundingClientRect();
-    const width = Math.max(0, Math.floor(cardRect.right - innerRect.left) - 1);
-    placeOverlay.style.left = '0';
-    placeOverlay.style.top = '0';
-    placeOverlay.style.bottom = '0';
-    placeOverlay.style.width = `${width}px`;
-    placeOverlay.style.right = 'auto';
-  }
   const overlayRect = placeOverlay.getBoundingClientRect();
   const toOverlayTop = (y: number) => y - overlayRect.top;
   const toOverlayLeft = (x: number) => x - overlayRect.left;
 
-  // 白抜き（穴）のサイズは SAVE ボタンそのものに合わせる
+  // 白抜き（穴）のサイズは SAVE ボタンよりわずかに大きく（矢印とかぶらない程度）
+  const SAVE_CUTOUT_PADDING = 12;
   const saveRect = saveBtn.getBoundingClientRect();
-  overlayDim.style.left = `${toOverlayLeft(saveRect.left)}px`;
-  overlayDim.style.top = `${toOverlayTop(saveRect.top)}px`;
-  overlayDim.style.width = `${Math.max(0, saveRect.width)}px`;
-  overlayDim.style.height = `${Math.max(0, saveRect.height)}px`;
+  overlayDim.style.left = `${toOverlayLeft(saveRect.left) - SAVE_CUTOUT_PADDING}px`;
+  overlayDim.style.top = `${toOverlayTop(saveRect.top) - SAVE_CUTOUT_PADDING}px`;
+  overlayDim.style.width = `${Math.max(0, saveRect.width) + 2 * SAVE_CUTOUT_PADDING}px`;
+  overlayDim.style.height = `${Math.max(0, saveRect.height) + 2 * SAVE_CUTOUT_PADDING}px`;
 
   const wrapHeight = messageWrap.getBoundingClientRect().height || DECK_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
   const msgTop = toOverlayTop(saveRect.top) - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
@@ -524,19 +501,7 @@ function positionAdoptOnboardingOverlay(): void {
   const spotlight = document.getElementById('adopt-onboarding-dim-spotlight');
   const messageWrap = document.getElementById('adopt-onboarding-message-wrap');
   const adoptCtaCard = document.getElementById('adopt-cta-card');
-  const loftCard = document.querySelector('.status-card-loft');
-  const contentInner = document.getElementById('shell-content-inner');
   if (!overlay || !spotlight || !messageWrap || !adoptCtaCard || !overlay.classList.contains('visible')) return;
-  if (loftCard && contentInner) {
-    const innerRect = contentInner.getBoundingClientRect();
-    const cardRect = loftCard.getBoundingClientRect();
-    const width = Math.max(0, Math.floor(cardRect.right - innerRect.left) - 1);
-    overlay.style.left = '0';
-    overlay.style.top = '0';
-    overlay.style.bottom = '0';
-    overlay.style.width = `${width}px`;
-    overlay.style.right = 'auto';
-  }
   const overlayRect = overlay.getBoundingClientRect();
   const ctaRect = adoptCtaCard.getBoundingClientRect();
   const toOverlayTop = (y: number) => y - overlayRect.top;

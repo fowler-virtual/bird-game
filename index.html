@@ -779,12 +779,13 @@
       }
       .deck-onboarding-cta-text { margin: 0 0 12px 0; font-size: 14px; color: var(--text); }
       .deck-pane-body { position: relative; min-height: 200px; }
+      /* オンボーディング暗転: Claim確認モーダルと同じ色・同じ範囲（viewport全体） */
       .deck-onboarding-place-overlay {
         display: none;
-        position: absolute;
+        position: fixed;
         inset: 0;
         pointer-events: none;
-        z-index: 250;
+        z-index: 150;
       }
       .deck-onboarding-place-overlay.visible { display: block; }
       .deck-onboarding-place-overlay-dim-wrap {
@@ -793,7 +794,6 @@
         overflow: hidden;
         pointer-events: none;
       }
-      /* 全面暗転し、Inventory 部分だけ穴あき（ガチャ画面と同じスポットライト方式） */
       .deck-onboarding-place-overlay-dim {
         position: absolute;
         background: transparent;
@@ -855,16 +855,16 @@
         color: #fff !important;
         -webkit-text-fill-color: #fff;
       }
+      /* オンボーディング暗転: Claim確認モーダルと同じ色・同じ範囲（viewport全体） */
       .adopt-onboarding-overlay {
         display: none;
-        position: absolute;
+        position: fixed;
         inset: 0;
         overflow: hidden;
         pointer-events: none;
-        z-index: 100;
+        z-index: 150;
       }
       .adopt-onboarding-overlay.visible { display: block; }
-      /* タブ下エリア全体を暗くし、カード部分だけ穴あきにする（box-shadow で全面暗転） */
       .adopt-onboarding-spotlight {
         position: absolute;
         background: transparent;
