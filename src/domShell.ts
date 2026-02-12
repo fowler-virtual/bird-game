@@ -425,6 +425,16 @@ function positionDeckOnboardingMessageForNeedSave(): void {
   if (innerEl) innerEl.classList.add('deck-onboarding-message-wobble');
 }
 
+/** チュートリアル（デッキ/Adopt オンボーディング）表示中はスクロール禁止。白抜きがずれないようにする。 */
+function updateOnboardingScrollLock(): void {
+  const deckVisible = document.getElementById('deck-onboarding-place-overlay')?.classList.contains('visible') ?? false;
+  const adoptVisible = document.getElementById('adopt-onboarding-overlay')?.classList.contains('visible') ?? false;
+  const locked = deckVisible || adoptVisible;
+  const value = locked ? 'hidden' : '';
+  document.body.style.overflow = value;
+  document.documentElement.style.overflow = value;
+}
+
 /** need_place / need_save 時にオーバーレイを表示。need_place=インベントリ穴、need_save=SAVEボタンのみ穴。タブ切替時と SAVE 成功後のクリア用に export */
 export function updateDeckOnboardingPlaceOverlay(): void {
   const step = GameStore.state.onboardingStep;
@@ -441,6 +451,7 @@ export function updateDeckOnboardingPlaceOverlay(): void {
   if (placeOverlay) {
     placeOverlay.classList.toggle('visible', show);
     placeOverlay.setAttribute('aria-hidden', show ? 'false' : 'true');
+    updateOnboardingScrollLock();
     if (show) {
       placeOverlay.style.top = '0';
       placeOverlay.style.bottom = '0';
@@ -541,6 +552,7 @@ function updateAdoptOnboardingOverlay(adoptTabActive?: boolean): void {
   if (overlay) {
     overlay.classList.toggle('visible', show);
     overlay.setAttribute('aria-hidden', show ? 'false' : 'true');
+    updateOnboardingScrollLock();
     if (!show) {
       overlay.style.width = '';
       overlay.style.left = '';
