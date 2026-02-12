@@ -375,16 +375,25 @@ function positionDeckOnboardingMessageAboveInventory(): void {
   const toOverlayTop2 = (y: number) => y - overlayRect2.top;
   const toOverlayLeft2 = (x: number) => x - overlayRect2.left;
   const invRect = inventorySection.getBoundingClientRect();
-  overlayDim.style.top = `${toOverlayTop2(invRect.top)}px`;
-  overlayDim.style.left = `${toOverlayLeft2(invRect.left)}px`;
-  overlayDim.style.width = `${invRect.width}px`;
-  overlayDim.style.height = `${invRect.height}px`;
+  const ow2 = overlayRect2.width;
+  const oh2 = overlayRect2.height;
+  let dTop = toOverlayTop2(invRect.top);
+  let dLeft = toOverlayLeft2(invRect.left);
+  let dW = invRect.width;
+  let dH = invRect.height;
+  dTop = Math.max(0, Math.min(dTop, oh2 - 1));
+  dLeft = Math.max(0, Math.min(dLeft, ow2 - 1));
+  dW = Math.max(0, Math.min(dW, ow2 - dLeft));
+  dH = Math.max(0, Math.min(dH, oh2 - dTop));
+  overlayDim.style.top = `${dTop}px`;
+  overlayDim.style.left = `${dLeft}px`;
+  overlayDim.style.width = `${dW}px`;
+  overlayDim.style.height = `${dH}px`;
   const wrapRect = messageWrap.getBoundingClientRect();
   const wrapHeight = wrapRect.height > 0 ? wrapRect.height : DECK_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
-  const invSectionTop = invRect.top;
-  let top = toOverlayTop2(invSectionTop) - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
+  let top = dTop - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
   top = Math.max(8, top);
-  const left = toOverlayLeft2(invRect.left) + invRect.width / 2;
+  const left = dLeft + dW / 2;
   messageWrap.style.top = `${top}px`;
   messageWrap.style.left = `${left}px`;
   messageWrap.style.transform = 'translateX(-50%)';
@@ -403,18 +412,28 @@ function positionDeckOnboardingMessageForNeedSave(): void {
   const toOverlayTop = (y: number) => y - overlayRect.top;
   const toOverlayLeft = (x: number) => x - overlayRect.left;
 
-  // 白抜き（穴）のサイズは SAVE ボタンよりわずかに大きく（矢印とかぶらない程度）
+  // 白抜き（穴）のサイズは SAVE ボタンよりわずかに大きく（矢印とかぶらない程度）。オーバーレイ内にクランプ。
   const SAVE_CUTOUT_PADDING = 12;
   const saveRect = saveBtn.getBoundingClientRect();
-  overlayDim.style.left = `${toOverlayLeft(saveRect.left) - SAVE_CUTOUT_PADDING}px`;
-  overlayDim.style.top = `${toOverlayTop(saveRect.top) - SAVE_CUTOUT_PADDING}px`;
-  overlayDim.style.width = `${Math.max(0, saveRect.width) + 2 * SAVE_CUTOUT_PADDING}px`;
-  overlayDim.style.height = `${Math.max(0, saveRect.height) + 2 * SAVE_CUTOUT_PADDING}px`;
+  const ow = overlayRect.width;
+  const oh = overlayRect.height;
+  let dTop = toOverlayTop(saveRect.top) - SAVE_CUTOUT_PADDING;
+  let dLeft = toOverlayLeft(saveRect.left) - SAVE_CUTOUT_PADDING;
+  let dW = Math.max(0, saveRect.width) + 2 * SAVE_CUTOUT_PADDING;
+  let dH = Math.max(0, saveRect.height) + 2 * SAVE_CUTOUT_PADDING;
+  dTop = Math.max(0, Math.min(dTop, oh - 1));
+  dLeft = Math.max(0, Math.min(dLeft, ow - 1));
+  dW = Math.max(0, Math.min(dW, ow - dLeft));
+  dH = Math.max(0, Math.min(dH, oh - dTop));
+  overlayDim.style.left = `${dLeft}px`;
+  overlayDim.style.top = `${dTop}px`;
+  overlayDim.style.width = `${dW}px`;
+  overlayDim.style.height = `${dH}px`;
 
   const wrapHeight = messageWrap.getBoundingClientRect().height || DECK_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
-  const msgTop = toOverlayTop(saveRect.top) - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
+  const msgTop = dTop - wrapHeight - DECK_ONBOARDING_MESSAGE_GAP;
   messageWrap.style.top = `${Math.max(8, msgTop)}px`;
-  messageWrap.style.left = `${toOverlayLeft(saveRect.left) + saveRect.width / 2}px`;
+  messageWrap.style.left = `${dLeft + dW / 2}px`;
   messageWrap.style.transform = 'translateX(-50%)';
 
   const msgEl = messageWrap.querySelector('.deck-onboarding-place-message');
@@ -517,13 +536,24 @@ function positionAdoptOnboardingOverlay(): void {
   const ctaRect = adoptCtaCard.getBoundingClientRect();
   const toOverlayTop = (y: number) => y - overlayRect.top;
   const toOverlayLeft = (x: number) => x - overlayRect.left;
-  spotlight.style.top = `${toOverlayTop(ctaRect.top)}px`;
-  spotlight.style.left = `${toOverlayLeft(ctaRect.left)}px`;
-  spotlight.style.width = `${ctaRect.width}px`;
-  spotlight.style.height = `${ctaRect.height}px`;
+  // 白抜きをオーバーレイ内に収める（MetaMask 等で viewport 差によるタブ部分の白抜きを防ぐ）
+  const ow = overlayRect.width;
+  const oh = overlayRect.height;
+  let sTop = toOverlayTop(ctaRect.top);
+  let sLeft = toOverlayLeft(ctaRect.left);
+  let sW = ctaRect.width;
+  let sH = ctaRect.height;
+  sTop = Math.max(0, Math.min(sTop, oh - 1));
+  sLeft = Math.max(0, Math.min(sLeft, ow - 1));
+  sW = Math.max(0, Math.min(sW, ow - sLeft));
+  sH = Math.max(0, Math.min(sH, oh - sTop));
+  spotlight.style.top = `${sTop}px`;
+  spotlight.style.left = `${sLeft}px`;
+  spotlight.style.width = `${sW}px`;
+  spotlight.style.height = `${sH}px`;
   const wrapRect = messageWrap.getBoundingClientRect();
   const wrapHeight = wrapRect.height > 0 ? wrapRect.height : ADOPT_ONBOARDING_MESSAGE_FALLBACK_HEIGHT;
-  let top = toOverlayTop(ctaRect.top) - wrapHeight - ADOPT_ONBOARDING_MESSAGE_GAP;
+  let top = sTop - wrapHeight - ADOPT_ONBOARDING_MESSAGE_GAP;
   const statusPanel = document.getElementById('status-panel');
   if (statusPanel) {
     const statusBottom = statusPanel.getBoundingClientRect().bottom;
@@ -531,7 +561,7 @@ function positionAdoptOnboardingOverlay(): void {
     top = Math.max(minTop, top);
   }
   top = Math.max(12, top);
-  const left = toOverlayLeft(ctaRect.left) + ctaRect.width / 2;
+  const left = sLeft + sW / 2;
   messageWrap.style.top = `${top}px`;
   messageWrap.style.left = `${left}px`;
   messageWrap.style.transform = 'translateX(-50%)';

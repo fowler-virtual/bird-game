@@ -2014,32 +2014,34 @@
               </div>
             </div>
           </div>
-          <div class="deck-onboarding-place-overlay" id="deck-onboarding-place-overlay" aria-hidden="true" aria-live="polite">
-            <div class="deck-onboarding-place-overlay-dim-wrap">
-              <div class="deck-onboarding-place-overlay-dim" id="deck-onboarding-place-overlay-dim" aria-hidden="true"></div>
-            </div>
-            <div class="deck-onboarding-place-message-wrap" id="deck-onboarding-place-message-wrap">
-              <div class="deck-onboarding-place-message-inner">
-                <p class="deck-onboarding-place-message">Tap the bird you want to place on the Loft.</p>
-                <span class="deck-onboarding-place-pointer" aria-hidden="true">↓</span>
-              </div>
-            </div>
-          </div>
-          <div class="adopt-onboarding-overlay" id="adopt-onboarding-overlay" aria-hidden="true" aria-live="polite">
-            <div class="adopt-onboarding-spotlight" id="adopt-onboarding-dim-spotlight" aria-hidden="true"></div>
-            <div class="adopt-onboarding-message-wrap" id="adopt-onboarding-message-wrap">
-              <div class="adopt-onboarding-message-inner">
-                <p class="adopt-onboarding-message">Tap here to adopt<br class="adopt-onboarding-br-narrow"> your first bird.</p>
-                <span class="adopt-onboarding-pointer" aria-hidden="true">↓</span>
-              </div>
-            </div>
-          </div>
           <div class="canvas-card" id="shell-canvas-card">
             <div id="app"></div>
           </div>
 
         </div>
       </main>
+    </div>
+
+    <!-- オンボーディング（チュートリアル）も body 直下: MetaMask 等で viewport 基準にし白抜きずれを防ぐ -->
+    <div class="deck-onboarding-place-overlay" id="deck-onboarding-place-overlay" aria-hidden="true" aria-live="polite">
+      <div class="deck-onboarding-place-overlay-dim-wrap">
+        <div class="deck-onboarding-place-overlay-dim" id="deck-onboarding-place-overlay-dim" aria-hidden="true"></div>
+      </div>
+      <div class="deck-onboarding-place-message-wrap" id="deck-onboarding-place-message-wrap">
+        <div class="deck-onboarding-place-message-inner">
+          <p class="deck-onboarding-place-message">Tap the bird you want to place on the Loft.</p>
+          <span class="deck-onboarding-place-pointer" aria-hidden="true">↓</span>
+        </div>
+      </div>
+    </div>
+    <div class="adopt-onboarding-overlay" id="adopt-onboarding-overlay" aria-hidden="true" aria-live="polite">
+      <div class="adopt-onboarding-spotlight" id="adopt-onboarding-dim-spotlight" aria-hidden="true"></div>
+      <div class="adopt-onboarding-message-wrap" id="adopt-onboarding-message-wrap">
+        <div class="adopt-onboarding-message-inner">
+          <p class="adopt-onboarding-message">Tap here to adopt<br class="adopt-onboarding-br-narrow"> your first bird.</p>
+          <span class="adopt-onboarding-pointer" aria-hidden="true">↓</span>
+        </div>
+      </div>
     </div>
 
     <!-- 全モーダルを body 直下に配置: position:fixed が常に viewport 基準になり右端まで確実に暗転 -->
