@@ -95,6 +95,70 @@ export function connectWallet(): Promise<ConnectResult> {
   return requestAccounts();
 }
 
+/** 本番用: Sepolia テストネットの chainId（EIP-155）。ガス・コントラクトは Sepolia 向け。 */
+export const SEPOLIA_CHAIN_ID = '0xaa36a7'; // 11155111
+
+/**
+ * ウォレットが Sepolia でない場合に切り替えを要求する。接続直後に呼ぶと以降のトランザクションが Sepolia に向く。
+ * 切り替えはガス不要（メタデータの更新のみ）。ユーザーが拒否した場合は { ok: false } を返す。
+ */
+export function ensureSepolia(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const provider = getProvider();
+  if (!provider) return Promise.resolve({ ok: false, error: 'No wallet' });
+  return (provider.request({ method: 'eth_chainId', params: [] }) as Promise<string>)
+    .then(async (chainId) => {
+      const normalized = typeof chainId === 'string' && chainId.startsWith('0x') ? chainId : `0x${Number(chainId).toString(16)}`;
+      if (normalized.toLowerCase() === SEPOLIA_CHAIN_ID.toLowerCase()) return { ok: true as const };
+      const switchResult = await switchToSepolia(provider);
+      if (switchResult.ok) return { ok: true as const };
+      if (isUnrecognizedChainError(switchResult.error)) {
+        const addResult = await addSepoliaChain(provider);
+        if (!addResult.ok) return addResult;
+        return switchToSepolia(provider);
+      }
+      return switchResult;
+    })
+    .catch((err: unknown) => ({
+      ok: false as const,
+      error: formatError(err),
+    }));
+}
+
+function isUnrecognizedChainError(msg: string): boolean {
+  return /unrecognized|4902|unknown chain|network.*not added/i.test(msg);
+}
+
+function switchToSepolia(provider: EthereumProvider): Promise<{ ok: true } | { ok: false; error: string }> {
+  return (provider.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: SEPOLIA_CHAIN_ID }] }) as Promise<unknown>)
+    .then(() => ({ ok: true as const }))
+    .catch((err: unknown) => {
+      const code = (err as { code?: number }).code;
+      if (code === 4001) return { ok: false as const, error: 'User rejected network switch' };
+      return { ok: false as const, error: formatError(err) };
+    });
+}
+
+function addSepoliaChain(provider: EthereumProvider): Promise<{ ok: true } | { ok: false; error: string }> {
+  return (provider.request({
+    method: 'wallet_addEthereumChain',
+    params: [
+      {
+        chainId: SEPOLIA_CHAIN_ID,
+        chainName: 'Sepolia',
+        nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+        rpcUrls: ['https://rpc.sepolia.org'],
+        blockExplorerUrls: ['https://sepolia.etherscan.io'],
+      },
+    ],
+  }) as Promise<unknown>)
+    .then(() => ({ ok: true as const }))
+    .catch((err: unknown) => {
+      const code = (err as { code?: number }).code;
+      if (code === 4001) return { ok: false as const, error: 'User rejected adding network' };
+      return { ok: false as const, error: formatError(err) };
+    });
+}
+
 /**
  * メッセージ署名（personal_sign）。Claim 等で「ウォレットで承認」を必ず出したいときに使う。
  * 戻りが ok ならユーザーが署名したことを意味する。

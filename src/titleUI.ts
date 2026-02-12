@@ -4,7 +4,7 @@
  */
 
 import { GameStore } from './store/GameStore';
-import { requestAccounts, hasWallet, setJustConnectingFlag } from './wallet';
+import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia } from './wallet';
 import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
@@ -47,6 +47,15 @@ function onConnectClick(): void {
       const address = result.address;
       GameStore.setWalletConnected(true, address);
       await refreshSeedTokenFromChain();
+
+      // 本番は Sepolia 用のため、接続直後に Sepolia へ切り替え（ガス不要）。未追加時は追加してから切り替え。
+      const networkOk = await ensureSepolia();
+      if (!networkOk.ok) {
+        console.warn('[TitleUI] ensureSepolia failed:', networkOk.error);
+        alert(
+          'Please switch to Sepolia network in MetaMask to use adoption, save deck, and claim. (You can switch from the network selector in MetaMask.)'
+        );
+      }
 
       showGameShell();
       createPhaserGame();
