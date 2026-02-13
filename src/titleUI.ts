@@ -12,7 +12,20 @@ import { refreshSeedTokenFromChain } from './seedToken';
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
 
+/** 接続後のネットワーク切り替え・残高取得の最大待ち時間（メタマスクブラウザでハングしないように） */
+const POST_CONNECT_TIMEOUT_MS = 25_000;
+/** ensureSepolia 単体のタイムアウト（ダイアログが応答しない場合に備える） */
+const ENSURE_SEPOLIA_TIMEOUT_MS = 15_000;
+
 let isConnecting = false;
+
+function resetButton(btn: HTMLButtonElement | null): void {
+  isConnecting = false;
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = 'Connect Wallet';
+  }
+}
 
 /** 接続成功後に GameScene へ遷移するフラグ（TitleScene.update で参照） */
 export let pendingStartGameScene = false;
@@ -34,41 +47,59 @@ function onConnectClick(): void {
   const promise = requestAccounts();
   promise
     .then(async (result) => {
-      isConnecting = false;
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Connect Wallet';
-      }
       if (!result.ok) {
+        resetButton(btn);
         console.error('[TitleUI] Connect failed:', result.error);
         alert(`Connection failed: ${result.error}`);
         return;
       }
       const address = result.address;
       GameStore.setWalletConnected(true, address);
-      await refreshSeedTokenFromChain();
 
-      // 本番は Sepolia 用のため、接続直後に Sepolia へ切り替え（ガス不要）。未追加時は追加してから切り替え。
-      const networkOk = await ensureSepolia();
-      if (!networkOk.ok) {
-        console.warn('[TitleUI] ensureSepolia failed:', networkOk.error);
-        alert(
-          'Please switch to Sepolia network in MetaMask to use adoption, save deck, and claim. (You can switch from the network selector in MetaMask.)'
+      const runPostConnect = async (): Promise<void> => {
+        // 先に Sepolia へ切り替え（残高取得は正しいチェーンで行う）。メタマスクブラウザでダイアログが応答しない場合に備えタイムアウト付き。
+        const networkPromise = ensureSepolia();
+        const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
+          setTimeout(() => resolve({ ok: false as const, error: 'Network switch timed out' }), ENSURE_SEPOLIA_TIMEOUT_MS)
         );
-      }
+        const networkOk = await Promise.race([networkPromise, timeoutPromise]);
+        if (!networkOk.ok) {
+          console.warn('[TitleUI] ensureSepolia failed or timed out:', networkOk.error);
+          alert(
+            'Please switch to Sepolia network in MetaMask to use adoption, save deck, and claim. (You can switch from the network selector in MetaMask.)'
+          );
+        }
+        await refreshSeedTokenFromChain();
+        showGameShell();
+        createPhaserGame();
+      };
 
-      showGameShell();
-      createPhaserGame();
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Connection step timed out. The game will open; please switch to Sepolia in MetaMask if needed.')), POST_CONNECT_TIMEOUT_MS)
+      );
+      try {
+        await Promise.race([runPostConnect(), timeoutPromise]);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('[TitleUI] Post-connect step failed or timed out:', msg);
+        if (!/timed out/i.test(msg)) alert(`Error: ${msg}`);
+        else alert(msg);
+        showGameShell();
+        createPhaserGame();
+      }
+      resetButton(btn);
     })
     .catch((err) => {
-      isConnecting = false;
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Connect Wallet';
-      }
+      resetButton(btn);
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[TitleUI] Connect error:', err);
-      alert(`Error: ${msg}`);
+      if (/timeout/i.test(msg)) {
+        alert(
+          'Connection timed out. If you are using the MetaMask in-app browser, try: 1) Reload the page and tap Connect again, or 2) Open this site in your device browser and connect with MetaMask.'
+        );
+      } else {
+        alert(`Error: ${msg}`);
+      }
     });
 }
 
