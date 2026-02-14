@@ -30,8 +30,10 @@ export function getTreasuryAddress(): string | null {
 /**
  * 接続中のウォレットの $SEED 残高をチェーンから取得し、GameStore.seedToken に反映する。
  * アドレス未設定・取得失敗時は何もしない（既存の localStorage 値のまま）。
+ * E2E モード時はチェーンに触れず即 resolve（モック接続用）。
  */
 export async function refreshSeedTokenFromChain(): Promise<void> {
+  if (import.meta.env.VITE_E2E_MODE === '1') return;
   const tokenAddress = getTokenAddress();
   const address = GameStore.walletAddress;
   if (!tokenAddress || !address || typeof window === 'undefined' || !window.ethereum) return;

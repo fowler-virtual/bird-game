@@ -3,24 +3,42 @@ import { initTitleUI, showTitleUI, hideTitleUI } from './titleUI';
 import { setupAccountChangeReload } from './wallet';
 import { createPhaserGame } from './phaserBoot';
 
-try {
-  GameStore.load();
-} catch (e) {
-  console.error('[Bird Game] GameStore.load failed:', e);
+function runApp(): void {
+  try {
+    GameStore.load();
+  } catch (e) {
+    console.error('[Bird Game] GameStore.load failed:', e);
+  }
+
+  setupAccountChangeReload();
+  initTitleUI();
+
+  if (!GameStore.walletConnected || !GameStore.walletAddress) {
+    showTitleUI();
+  } else {
+    document.getElementById('title-ui')?.classList.remove('visible');
+    import('./domShell').then(({ showGameShell }) => showGameShell());
+    createPhaserGame();
+  }
 }
 
-// createPhaserGame / destroyPhaserGame は phaserBoot.ts にあり、titleUI と GameScene から直接 import する
-export { createPhaserGame, destroyPhaserGame } from './phaserBoot';
+function start(): void {
+  try {
+    runApp();
+  } catch (e) {
+    console.error('[Bird Game] Startup error:', e);
+    const titleEl = document.getElementById('title-ui');
+    if (titleEl) {
+      titleEl.classList.add('visible');
+      titleEl.setAttribute('aria-hidden', 'false');
+    }
+  }
+}
 
-// ウォレットのアカウント切り替え時にリロードして状態を切り替え（Connect 直後に accountsChanged でリロードすることがある）
-setupAccountChangeReload();
-
-initTitleUI();
-
-if (!GameStore.walletConnected || !GameStore.walletAddress) {
-  showTitleUI();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', start);
 } else {
-  showTitleUI();
-  hideTitleUI();
-  createPhaserGame();
+  start();
 }
+
+export { createPhaserGame, destroyPhaserGame } from './phaserBoot';

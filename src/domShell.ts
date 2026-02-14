@@ -6,7 +6,8 @@
 import { GameStore, GACHA_COST } from './store/GameStore';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
-import { requestClaim } from './claimApi';
+import { requestClaim, signInForClaim, postClaimConfirm } from './claimApi';
+import type { ClaimSignature } from './claimApi';
 import { executeClaim } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
 import { showTitleUI } from './titleUI';
@@ -1329,10 +1330,11 @@ export function refreshNetworkStats(): void {
       demoNote.textContent = err;
       demoNote.classList.add('network-demo-note--error');
     } else {
+      const disclaimer = ' (表示は参考値です。公式の確定値ではありません。)';
       demoNote.textContent = hasContract
-        ? totalBirds === 0
+        ? (totalBirds === 0
           ? 'On-chain data. Save your deck and pull gacha to update. Redeploy NetworkState (with getGlobalRarityCounts) to see rarity counts.'
-          : 'On-chain data. Refresh page to see latest from other users.'
+          : 'On-chain data. Refresh page to see latest from other users.') + disclaimer
         : 'Connect wallet and deploy NetworkState to see live stats.';
       demoNote.classList.remove('network-demo-note--error');
     }
@@ -1550,51 +1552,97 @@ function initTabListeners(): void {
         if (!confirmed) return;
         requestAccounts().then((connectResult) => {
           if (!connectResult.ok) return;
-          const address = connectResult.address;
+          const address = connectResult.address as string;
           claimBtn.disabled = true;
-          requestClaim(address, amount).then((result) => {
-          if (!result.ok) {
-            claimBtn.disabled = false;
-            return;
+
+          function doRequestClaim() {
+            return requestClaim(address);
           }
-          showProcessingModal('Claiming your $SEED rewards… This may take a few seconds.');
-          executeClaim(result.signature).then((txResult) => {
-            if (!txResult.ok) {
-              showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false }).then(() => {
+
+          doRequestClaim().then((result) => {
+            if (!result.ok) {
+              if (result.error === 'No claimable amount.') {
+                showMessageModal({
+                  title: 'Nothing to claim',
+                  message: 'There is nothing to claim right now. Earn more SEED or try again later.',
+                  success: false,
+                }).then(() => { claimBtn.disabled = false; });
+                return;
+              }
+              if (result.error === 'Not logged in. Sign in with your wallet first.') {
+                showMessageModal({
+                  title: 'Sign in to claim',
+                  message: 'Your wallet will open. Sign the message to verify you own this address and enable claiming.',
+                  success: true,
+                }).then(() => {
+                  signInForClaim(address).then((authResult) => {
+                    if (!authResult.ok) {
+                      showMessageModal({ title: 'Sign-in failed', message: authResult.error ?? 'Unknown error.', success: false }).then(() => {
+                        claimBtn.disabled = false;
+                      });
+                      return;
+                    }
+                    doRequestClaim().then((retryResult) => {
+                      if (!retryResult.ok) {
+                        showMessageModal({ title: 'Claim failed', message: retryResult.error ?? 'Unknown error.', success: false }).then(() => {
+                          claimBtn.disabled = false;
+                        });
+                        return;
+                      }
+                      runClaimWithSignature(retryResult.signature);
+                    });
+                  });
+                });
+                return;
+              }
+              showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown error.', success: false }).then(() => {
                 claimBtn.disabled = false;
               });
-              hideProcessingModal();
               return;
             }
-            // Claim 完了：実際に送金した量(amount)だけローカル SEED から差し引く（承認待ち中に増えた分は残す）
-            const currentSeed = GameStore.state.seed;
-            const newSeed = Math.max(0, currentSeed - amount);
-            GameStore.setState({ seed: newSeed });
-            GameStore.save();
-            const state = GameStore.state;
-            updateShellStatus({
-              seed: state.seed,
-              seedPerDay: getProductionRatePerHour(state) * 24,
-              loftLevel: state.loftLevel,
-              networkSharePercent: getNetworkSharePercent(state),
-            });
-            refreshSeedTokenFromChain().then(() => {
-              updateAdoptPane();
-              updateGachaButtonsAndCosts();
-              updateClaimButton();
-              hideProcessingModal();
-              showMessageModal({
-                title: 'Claim successful',
-                message: `${amount} $SEED acquired!`,
-              }).then(() => {
-                claimBtn.disabled = false;
-              });
-            });
+            runClaimWithSignature(result.signature);
           });
+
+          function runClaimWithSignature(signature: ClaimSignature): void {
+            showProcessingModal('Claiming your $SEED rewards… This may take a few seconds.');
+            executeClaim(signature).then((txResult) => {
+              if (!txResult.ok) {
+                showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false }).then(() => {
+                  claimBtn.disabled = false;
+                });
+                hideProcessingModal();
+                return;
+              }
+              const claimedAmount = Math.floor(Number(BigInt(signature.amountWei) / 10n ** 18n));
+              const currentSeed = GameStore.state.seed;
+              const newSeed = Math.max(0, currentSeed - claimedAmount);
+              GameStore.setState({ seed: newSeed });
+              GameStore.save();
+              const state = GameStore.state;
+              updateShellStatus({
+                seed: state.seed,
+                seedPerDay: getProductionRatePerHour(state) * 24,
+                loftLevel: state.loftLevel,
+                networkSharePercent: getNetworkSharePercent(state),
+              });
+              refreshSeedTokenFromChain().then(() => {
+                updateAdoptPane();
+                updateGachaButtonsAndCosts();
+                updateClaimButton();
+                hideProcessingModal();
+                showMessageModal({
+                  title: 'Claim successful',
+                  message: `${claimedAmount} $SEED acquired!`,
+                }).then(() => {
+                  claimBtn.disabled = false;
+                });
+              });
+              postClaimConfirm(signature.nonce, signature.amountWei).catch(() => {});
+            });
+          }
         });
       });
     });
-  });
   }
   deckView.init();
   if (typeof window !== 'undefined') {
@@ -1700,7 +1748,10 @@ export function updateShellStatus(payload: {
   const accrualHintEl = document.getElementById(FARMING_ACCRUAL_HINT_ID);
   if (accrualHintEl) accrualHintEl.textContent = '';
   if (seedPerDayEl) seedPerDayEl.textContent = seedPerDayToShow.toFixed(2);
-  if (networkEl) networkEl.textContent = `${networkToShow.toFixed(5)}%`;
+  if (networkEl) {
+    networkEl.textContent = `${networkToShow.toFixed(5)}%`;
+    networkEl.title = '参考値。公式の確定値ではありません。';
+  }
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
   const networkErrorEl = document.getElementById('network-state-error');
   if (networkErrorEl) {

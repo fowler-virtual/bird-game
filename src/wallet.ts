@@ -1,6 +1,7 @@
 /**
  * EIP-1193 ウォレット接続
  * eth_requestAccounts は必ず「ユーザー操作の直接の応答」で同期的に呼ぶこと。
+ * E2E: VITE_E2E_MODE=1 のときのみモック接続（本番挙動は変更しない）。
  */
 
 export interface EthereumProvider {
@@ -16,6 +17,14 @@ declare global {
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
+/** E2E モード時のみ true。本番では絶対に true にしない。 */
+function isE2EMode(): boolean {
+  return import.meta.env.VITE_E2E_MODE === '1';
+}
+
+/** E2E モック用の固定アドレス（署名・MetaMask は使わない） */
+export const E2E_MOCK_ADDRESS = '0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2';
+
 export type ConnectResult =
   | { ok: true; address: string }
   | { ok: false; error: string; code?: number };
@@ -26,6 +35,7 @@ export function getProvider(): EthereumProvider | undefined {
 }
 
 export function hasWallet(): boolean {
+  if (isE2EMode()) return true;
   return !!getProvider();
 }
 
@@ -57,6 +67,8 @@ function formatError(err: unknown): string {
  * async/await をハンドラに使うとユーザージェスチャが失われるため使わないこと。
  */
 export function requestAccounts(): Promise<ConnectResult> {
+  if (isE2EMode()) return Promise.resolve({ ok: true, address: E2E_MOCK_ADDRESS });
+
   const provider = getProvider();
   if (!provider)
     return Promise.resolve({ ok: false, error: 'No wallet (window.ethereum). Install MetaMask etc.' });
@@ -103,6 +115,7 @@ export const SEPOLIA_CHAIN_ID = '0xaa36a7'; // 11155111
  * 切り替えはガス不要（メタデータの更新のみ）。ユーザーが拒否した場合は { ok: false } を返す。
  */
 export function ensureSepolia(): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isE2EMode()) return Promise.resolve({ ok: true });
   const provider = getProvider();
   if (!provider) return Promise.resolve({ ok: false, error: 'No wallet' });
   return (provider.request({ method: 'eth_chainId', params: [] }) as Promise<string>)
@@ -206,6 +219,7 @@ export function isJustConnecting(): boolean {
  * TOP から Connect 承認直後はリロードしない（承認→Farming の流れを維持）。
  */
 export function setupAccountChangeReload(): void {
+  if (isE2EMode()) return;
   const provider = getProvider();
   if (!provider || typeof provider.on !== 'function') return;
   provider.on('accountsChanged', () => {

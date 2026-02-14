@@ -1,62 +1,62 @@
-// Vercel serverless function for Claim API
-// POST /api/claim で署名を返し、フロント側で RewardClaim.claim() を実行する。
-// ローカルの server/index.cjs と同じロジックを、Vercel Runtime 用に簡略化したものです。
+// Vercel serverless: Claim API（A寄せ最小仕様）
+// 認証必須・amount は受け取らない・CORS 自ドメイン推奨・rate limit 補助。
+// 署名返却は Express サーバ（永続層あり）で行い、Vercel では claimable 未実装のため 503 を返す。
 
-import { Wallet, getAddress, keccak256, solidityPacked, getBytes, Signature } from 'ethers';
-
-const DECIMALS = 18n;
+import { getSessionAddress } from "./_lib/sessionCookie.js";
+import { checkRateLimit, getClientKey } from "./_lib/rateLimit.js";
 
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') {
+  const allowedOrigin = process.env.ALLOWED_CLAIM_ORIGIN || "*";
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") {
     return res.status(204).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const signerKey = (process.env.CLAIM_SIGNER_PRIVATE_KEY || '').trim();
+  // 認証必須: セッションがなければ 401
+  const sessionAddress = getSessionAddress(req);
+  if (!sessionAddress) {
+    return res.status(401).json({ error: "Not logged in. Sign in with your wallet first." });
+  }
+
+  // rate limit（IP 単位・同一インスタンス内）
+  const clientKey = getClientKey(req);
+  if (!checkRateLimit(clientKey)) {
+    return res.status(429).json({ error: "Too many requests. Try again later." });
+  }
+
+  if (process.env.CLAIM_DISABLED === "true") {
+    return res.status(503).json({ error: "Claim is temporarily disabled." });
+  }
+
+  const body = req.body || {};
+  if (body.amount !== undefined && body.amount !== null) {
+    return res.status(400).json({
+      error: "Do not send amount. Claimable amount is determined by the server only.",
+    });
+  }
+
+  // body.address があればセッションと一致することを要求（本人のみ）
+  if (body.address !== undefined && body.address !== null) {
+    const lower = (body.address || "").toLowerCase();
+    if (sessionAddress.toLowerCase() !== lower) {
+      return res.status(403).json({ error: "Address does not match session." });
+    }
+  }
+
+  // Vercel では永続層がないため署名を返さず 503（本番 claim は Express サーバを利用）
+  const signerKey = (process.env.CLAIM_SIGNER_PRIVATE_KEY || "").trim();
   if (!signerKey) {
-    return res.status(500).json({ error: 'Server not configured (CLAIM_SIGNER_PRIVATE_KEY).' });
+    return res.status(503).json({ error: "Server not configured (CLAIM_SIGNER_PRIVATE_KEY)." });
   }
 
-  const { address, amount } = req.body || {};
-  if (!address || typeof address !== 'string' || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    return res.status(400).json({ error: 'Invalid address' });
-  }
-  const amountNum = Number(amount);
-  if (!Number.isInteger(amountNum) || amountNum <= 0) {
-    return res.status(400).json({ error: 'Invalid amount (positive integer required)' });
-  }
-
-  const amountWei = BigInt(amountNum) * 10n ** DECIMALS;
-  const userAddress = getAddress(address);
-  const nonce = BigInt(Date.now()) * 1000n + BigInt(Math.floor(Math.random() * 1000));
-
-  try {
-    const wallet = new Wallet(signerKey);
-    const hash = keccak256(solidityPacked(['address', 'uint256', 'uint256'], [userAddress, amountWei, nonce]));
-    const sig = await wallet.signMessage(getBytes(hash));
-    const sigObj = Signature.from(sig);
-    const payload = {
-      ok: true,
-      amountWei: amountWei.toString(),
-      nonce: nonce.toString(),
-      v: Number(sigObj.v),
-      r: String(sigObj.r),
-      s: String(sigObj.s),
-    };
-    // eslint-disable-next-line no-console
-    console.log('[claim] OK', address, amountNum, 'SEED');
-    return res.status(200).json(payload);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[claim]', err?.message || err);
-    return res.status(500).json({ error: err?.message || String(err) });
-  }
+  return res.status(503).json({
+    error: "Claim is being updated. Server-side claimable is not yet available. Use the Express server for full claim flow.",
+  });
 }
-

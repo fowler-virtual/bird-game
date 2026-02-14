@@ -4,3 +4,11 @@ dist
 artifacts
 cache
 *.log
+
+# Playwright
+playwright-report/
+test-results/
+
+# IDE / tooling
+.cursor/
+.vite/

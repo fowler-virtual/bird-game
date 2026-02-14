@@ -70,6 +70,7 @@ function onConnectClick(): void {
           );
         }
         await refreshSeedTokenFromChain();
+        document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
         showGameShell();
         createPhaserGame();
       };
@@ -84,6 +85,7 @@ function onConnectClick(): void {
         console.warn('[TitleUI] Post-connect step failed or timed out:', msg);
         if (!/timed out/i.test(msg)) alert(`Error: ${msg}`);
         else alert(msg);
+        document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
         showGameShell();
         createPhaserGame();
       }
@@ -124,6 +126,7 @@ export function showTitleUI(): void {
     el.classList.add('visible');
     el.setAttribute('aria-hidden', 'false');
   }
+  initTitleUI();
   const btn = document.getElementById(CONNECT_BTN_ID) as HTMLButtonElement | null;
   if (btn) {
     btn.textContent = 'Connect Wallet';
