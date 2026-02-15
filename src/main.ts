@@ -4,7 +4,6 @@ import { Buffer } from 'buffer';
 import { GameStore } from './store/GameStore';
 import { initTitleUI, showTitleUI } from './titleUI';
 import { setupAccountChangeReload } from './wallet';
-import { createPhaserGame } from './phaserBoot';
 
 function runApp(): void {
   try {
