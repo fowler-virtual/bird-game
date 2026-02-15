@@ -92,6 +92,22 @@ export async function refreshNetworkStateFromChain(): Promise<void> {
     }
     return;
   }
+  // 想定チェーン（Sepolia 本番 / localhost ローカル）以外では取得しない。他チェーンではエラーを出さずスキップする。
+  const expectedChainIds = [11155111, 31337]; // Sepolia, Hardhat local
+  try {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      const provider = new BrowserProvider(window.ethereum);
+      const network = await provider.getNetwork();
+      const chainId = Number(network.chainId);
+      if (!expectedChainIds.includes(chainId)) {
+        cachedPower = null;
+        cachedShareBps = null;
+        return;
+      }
+    }
+  } catch {
+    return;
+  }
   const [powerResult, shareBpsResult, countsResult, rarityResult] = await Promise.allSettled([
     fetchMyPower(addr),
     fetchMyShareBps(addr),
