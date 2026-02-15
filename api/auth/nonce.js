@@ -4,14 +4,10 @@
  */
 
 import { createNonce } from "../_lib/signedNonce.js";
-
-const allowedOrigin = process.env.ALLOWED_CLAIM_ORIGIN || "*";
+import { setCorsHeaders } from "../_lib/cors.js";
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
+  setCorsHeaders(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
