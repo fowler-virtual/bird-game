@@ -1553,7 +1553,7 @@ function initTabListeners(): void {
         requestAccounts().then((connectResult) => {
           if (!connectResult.ok) return;
           const address = connectResult.address as string;
-          claimBtn.disabled = true;
+          if (claimBtn) claimBtn.disabled = true;
 
           function doRequestClaim() {
             return requestClaim(address);
@@ -1566,7 +1566,7 @@ function initTabListeners(): void {
                   title: 'Nothing to claim',
                   message: 'There is nothing to claim right now. Earn more SEED or try again later.',
                   success: false,
-                }).then(() => { claimBtn.disabled = false; });
+                }).then(() => { if (claimBtn) claimBtn.disabled = false; });
                 return;
               }
               if (result.error === 'Not logged in. Sign in with your wallet first.') {
@@ -1578,14 +1578,14 @@ function initTabListeners(): void {
                   signInForClaim(address).then((authResult) => {
                     if (!authResult.ok) {
                       showMessageModal({ title: 'Sign-in failed', message: authResult.error ?? 'Unknown error.', success: false }).then(() => {
-                        claimBtn.disabled = false;
+                        if (claimBtn) claimBtn.disabled = false;
                       });
                       return;
                     }
                     doRequestClaim().then((retryResult) => {
                       if (!retryResult.ok) {
                         showMessageModal({ title: 'Claim failed', message: retryResult.error ?? 'Unknown error.', success: false }).then(() => {
-                          claimBtn.disabled = false;
+                          if (claimBtn) claimBtn.disabled = false;
                         });
                         return;
                       }
@@ -1596,7 +1596,7 @@ function initTabListeners(): void {
                 return;
               }
               showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown error.', success: false }).then(() => {
-                claimBtn.disabled = false;
+                if (claimBtn) claimBtn.disabled = false;
               });
               return;
             }
@@ -1608,7 +1608,7 @@ function initTabListeners(): void {
             executeClaim(signature).then((txResult) => {
               if (!txResult.ok) {
                 showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false }).then(() => {
-                  claimBtn.disabled = false;
+                  if (claimBtn) claimBtn.disabled = false;
                 });
                 hideProcessingModal();
                 return;
@@ -1634,7 +1634,7 @@ function initTabListeners(): void {
                   title: 'Claim successful',
                   message: `${claimedAmount} $SEED acquired!`,
                 }).then(() => {
-                  claimBtn.disabled = false;
+                  if (claimBtn) claimBtn.disabled = false;
                 });
               });
               postClaimConfirm(signature.nonce, signature.amountWei).catch(() => {});
