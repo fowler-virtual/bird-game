@@ -272,7 +272,13 @@
         display: flex;
         flex-direction: column;
         gap: 20px;
-        overflow: hidden;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        scrollbar-gutter: stable;
+      }
+      @supports not (scrollbar-gutter: stable) {
+        .shell-content { overflow-y: scroll; }
       }
       /* ライトモード: 左右の余白を薄いグレーにして「フレーム」として見せる（白いだけの余白感を減らす） */
       [data-theme="light"] .shell-content {
@@ -280,21 +286,15 @@
       }
       .shell-content-inner {
         position: relative;
-        flex: 1;
-        min-height: 0;
+        flex: none;
+        min-height: auto;
         max-width: var(--content-max);
         margin: 0 auto;
         width: 100%;
         display: flex;
         flex-direction: column;
         gap: 20px;
-        overflow: auto;
-        -webkit-overflow-scrolling: touch;
-        touch-action: pan-y;
-        scrollbar-gutter: stable;
-      }
-      @supports not (scrollbar-gutter: stable) {
-        .shell-content-inner { overflow-y: scroll; }
+        overflow: visible;
       }
       .tab-pane { display: none; flex-direction: column; gap: 20px; }
       .tab-pane.active { display: flex; }
