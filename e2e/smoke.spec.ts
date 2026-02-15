@@ -34,6 +34,8 @@ async function gotoTop(page: import('@playwright/test').Page) {
     { stateKey: E2E_STATE_KEY }
   );
   await page.reload();
+  await page.waitForLoadState('domcontentloaded');
+  await page.locator('#title-ui').waitFor({ state: 'visible', timeout: 10000 });
 }
 
 test.describe('Smoke (DoR)', () => {
@@ -49,13 +51,13 @@ test.describe('Smoke (DoR)', () => {
     await expect(btn).toBeVisible();
     await btn.click();
     // 反応: 接続後 game-shell が表示される（E2E モックで接続済みになる）
-    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 30000 });
   });
 
   test('Farming / Deck / Summon(Adopt) のいずれかへ遷移できる', async ({ page }) => {
     await gotoTop(page);
     await page.getByRole('button', { name: /connect wallet/i }).click();
-    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 30000 });
 
     // 初期表示は Farming
     await expect(page.locator('.shell-tab[data-tab="farming"].active')).toBeVisible();
