@@ -83,8 +83,13 @@ export async function refreshNetworkStateFromChain(): Promise<void> {
   if (!addr || !contractAddr) {
     cachedPower = null;
     cachedShareBps = null;
-    if (!contractAddr) lastFetchError = 'VITE_NETWORK_STATE_ADDRESS not set in .env. Add it and restart the dev server (npm run dev).';
-    else if (!addr) lastFetchError = 'Wallet not connected.';
+    if (!contractAddr) {
+      lastFetchError = import.meta.env.DEV
+        ? 'VITE_NETWORK_STATE_ADDRESS not set in .env. Add it and restart the dev server (npm run dev).'
+        : 'ネットワーク統計は利用できません。';
+    } else if (!addr) {
+      lastFetchError = 'Wallet not connected.';
+    }
     return;
   }
   const [powerResult, shareBpsResult, countsResult, rarityResult] = await Promise.allSettled([
@@ -98,7 +103,7 @@ export async function refreshNetworkStateFromChain(): Promise<void> {
     const raw = r.reason?.message ?? String(r.reason);
     lastFetchError =
       /CALL_EXCEPTION|missing revert|BAD_DATA|could not decode/i.test(raw)
-        ? 'ネットワーク状態の取得に失敗しました。接続と VITE_NETWORK_STATE_ADDRESS を確認してください。'
+        ? 'ネットワーク統計を取得できませんでした。ウォレットが正しいネットワーク（例: Sepolia）に接続されているか確認してください。'
         : raw.length > 120
           ? raw.slice(0, 117) + '...'
           : raw;
