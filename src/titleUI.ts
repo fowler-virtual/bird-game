@@ -4,7 +4,7 @@
  */
 
 import { GameStore } from './store/GameStore';
-import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia } from './wallet';
+import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS } from './wallet';
 import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
@@ -42,8 +42,18 @@ function onConnectClick(): void {
     btn.textContent = 'Connecting...';
   }
   isConnecting = true;
-  setJustConnectingFlag();
 
+  if (import.meta.env.VITE_E2E_MODE === '1') {
+    GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
+    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+    showGameShell();
+    createPhaserGame();
+    resetButton(btn);
+    isConnecting = false;
+    return;
+  }
+
+  setJustConnectingFlag();
   const promise = requestAccounts();
   promise
     .then(async (result) => {
