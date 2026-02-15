@@ -1,0 +1,63 @@
+プロジェクト名：bird-game
+
+【目的】
+Web3放置型ゲーム。
+Addicted / HyperNinjaモデルを参考に、
+短期シーズン制で回す設計。
+
+---
+
+【技術構成】
+- フロント：Vite + Phaser
+- 状態管理：GameStore（localStorageベース）
+- E2E：Playwright
+- CI：GitHub Actions
+- デプロイ：Vercel
+- コントラクト：RewardClaim（EIP-712対応）
+- トークン：$SEED
+- 入場料：チェーンのネイティブトークン
+
+---
+
+【エコシステム構想】
+- 入場料あり
+- ガチャ消費はバーン
+- Loftレベルアップもバーン
+- 週1回半減期
+- シーズン制（短期決戦型）
+- オンチェーンは表示寄り（A寄せ設計）
+- Claimはサーバ権威（EIP-712 + deadline + reserve方式）
+
+---
+
+【現在の問題】
+GitHub Actions の E2E が CI で失敗。
+
+エラー：
+#game-shell.visible が見つからず timeout
+
+状況：
+- VITE_E2E_MODE=1 は workflow で設定済み
+- src/titleUI.ts にE2E分岐あり
+- #game-shell は index.html に存在
+- visible付与箇所は titleUI.ts と domShell.ts
+- Cursorが重く落ちやすい
+
+---
+
+【制約】
+- 本番挙動は絶対に壊さない
+- 修正は最小差分
+- 1回の指示は小さく
+- Cursorが落ちる前提で進める
+- 私はPMで、実装はCursorにやらせる
+
+---
+
+【ここからの優先順位】
+1) CIのE2Eを安定させる
+2) 監査対応の完成度確認
+3) エコシステム設計の詰め
+4) 自律型ワークフロー構築（researcher / tester / pm分離）
+
+ここから再開してください。
