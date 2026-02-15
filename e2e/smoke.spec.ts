@@ -34,8 +34,9 @@ async function gotoTop(page: import('@playwright/test').Page) {
     { stateKey: E2E_STATE_KEY }
   );
   await page.reload();
-  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('load');
   await page.locator('#title-ui').waitFor({ state: 'visible', timeout: 10000 });
+  await page.getByRole('button', { name: /connect wallet/i }).waitFor({ state: 'visible', timeout: 5000 });
 }
 
 test.describe('Smoke (DoR)', () => {

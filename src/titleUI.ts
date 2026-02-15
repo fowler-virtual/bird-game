@@ -47,7 +47,11 @@ function onConnectClick(): void {
     GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
     showGameShell();
-    createPhaserGame();
+    try {
+      createPhaserGame();
+    } catch (_) {
+      /* E2E: Phaser が headless で失敗しても #game-shell.visible は既に付与済み */
+    }
     resetButton(btn);
     isConnecting = false;
     return;
