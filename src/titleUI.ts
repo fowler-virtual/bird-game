@@ -4,7 +4,7 @@
  */
 
 import { GameStore } from './store/GameStore';
-import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS } from './wallet';
+import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS, getConnectedAccounts, getCurrentChainId, SEPOLIA_CHAIN_ID } from './wallet';
 import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
@@ -70,66 +70,136 @@ function onConnectClick(): void {
     return;
   }
 
-  setJustConnectingFlag();
-  const promise = requestAccounts();
-  promise
-    .then(async (result) => {
-      if (!result.ok) {
-        resetButton(btn);
-        console.error('[TitleUI] Connect failed:', result.error);
-        alert(`Connection failed: ${result.error}`);
-        return;
-      }
-      const address = result.address;
-      GameStore.setWalletConnected(true, address);
-
-      const runPostConnect = async (): Promise<void> => {
-        // 先に Sepolia へ切り替え（残高取得は正しいチェーンで行う）。メタマスクブラウザでダイアログが応答しない場合に備えタイムアウト付き。
-        const networkPromise = ensureSepolia();
-        const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
-          setTimeout(() => resolve({ ok: false as const, error: 'Network switch timed out' }), ENSURE_SEPOLIA_TIMEOUT_MS)
-        );
-        const networkOk = await Promise.race([networkPromise, timeoutPromise]);
-        if (!networkOk.ok) {
-          console.warn('[TitleUI] ensureSepolia failed or timed out:', networkOk.error);
-          alert(
-            'Please switch to Sepolia network in MetaMask to use adoption, save deck, and claim. (You can switch from the network selector in MetaMask.)'
-          );
-        }
-        await refreshSeedTokenFromChain();
-        document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-        showGameShell();
-        createPhaserGame();
-      };
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Connection step timed out. The game will open; please switch to Sepolia in MetaMask if needed.')), POST_CONNECT_TIMEOUT_MS)
+  const runPostConnect = async (): Promise<void> => {
+    const networkPromise = ensureSepolia();
+    const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
+      setTimeout(() => resolve({ ok: false as const, error: 'Network switch timed out' }), ENSURE_SEPOLIA_TIMEOUT_MS)
+    );
+    const networkOk = await Promise.race([networkPromise, timeoutPromise]);
+    if (!networkOk.ok) {
+      console.warn('[TitleUI] ensureSepolia failed or timed out:', networkOk.error);
+      alert(
+        'Please switch to Sepolia network in MetaMask to use adoption, save deck, and claim. (You can switch from the network selector in MetaMask.)'
       );
-      try {
-        await Promise.race([runPostConnect(), timeoutPromise]);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.warn('[TitleUI] Post-connect step failed or timed out:', msg);
-        if (!/timed out/i.test(msg)) alert(`Error: ${msg}`);
-        else alert(msg);
-        document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-        showGameShell();
-        createPhaserGame();
+    }
+    await refreshSeedTokenFromChain();
+    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+    showGameShell();
+    createPhaserGame();
+  };
+
+  Promise.all([getConnectedAccounts(), getCurrentChainId()])
+    .then(([accounts, chainId]) => {
+      const sepoliaId = SEPOLIA_CHAIN_ID.toLowerCase();
+      const currentChain = (chainId ?? '').toLowerCase();
+      if (Array.isArray(accounts) && accounts.length === 1 && currentChain === sepoliaId) {
+        setJustConnectingFlag();
+        GameStore.setWalletConnected(true, accounts[0]);
+        return runPostConnect()
+          .then(() => {
+            resetButton(btn);
+            isConnecting = false;
+          })
+          .catch((e) => {
+            console.warn('[TitleUI] Silent connect post-step failed:', e);
+            resetButton(btn);
+            isConnecting = false;
+          });
       }
-      resetButton(btn);
+      setJustConnectingFlag();
+      return requestAccounts()
+        .then(async (result) => {
+          if (!result.ok) {
+            resetButton(btn);
+            console.error('[TitleUI] Connect failed:', result.error);
+            alert(`Connection failed: ${result.error}`);
+            return;
+          }
+          GameStore.setWalletConnected(true, result.address);
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Connection step timed out. The game will open; please switch to Sepolia in MetaMask if needed.')), POST_CONNECT_TIMEOUT_MS)
+          );
+          try {
+            await Promise.race([runPostConnect(), timeoutPromise]);
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.warn('[TitleUI] Post-connect step failed or timed out:', msg);
+            if (!/timed out/i.test(msg)) alert(`Error: ${msg}`);
+            else alert(msg);
+            document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+            showGameShell();
+            createPhaserGame();
+          }
+          resetButton(btn);
+        })
+        .catch((err) => {
+          resetButton(btn);
+          isConnecting = false;
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error('[TitleUI] Connect error:', err);
+          if (/timeout/i.test(msg)) {
+            alert(
+              'Connection timed out. If you are using the MetaMask in-app browser, try: 1) Reload the page and tap Connect again, or 2) Open this site in your device browser and connect with MetaMask.'
+            );
+          } else {
+            alert(`Error: ${msg}`);
+          }
+        });
     })
-    .catch((err) => {
-      resetButton(btn);
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error('[TitleUI] Connect error:', err);
-      if (/timeout/i.test(msg)) {
-        alert(
-          'Connection timed out. If you are using the MetaMask in-app browser, try: 1) Reload the page and tap Connect again, or 2) Open this site in your device browser and connect with MetaMask.'
+    .catch(() => {
+      setJustConnectingFlag();
+      requestAccounts().then(async (result) => {
+        if (!result.ok) {
+          resetButton(btn);
+          console.error('[TitleUI] Connect failed:', result.error);
+          alert(`Connection failed: ${result.error}`);
+          return;
+        }
+        GameStore.setWalletConnected(true, result.address);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Connection step timed out. The game will open; please switch to Sepolia in MetaMask if needed.')), POST_CONNECT_TIMEOUT_MS)
         );
-      } else {
-        alert(`Error: ${msg}`);
-      }
+        try {
+          await Promise.race([runPostConnect(), timeoutPromise]);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn('[TitleUI] Post-connect step failed or timed out:', msg);
+          if (!/timed out/i.test(msg)) alert(`Error: ${msg}`);
+          else alert(msg);
+          document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+          showGameShell();
+          createPhaserGame();
+        }
+        resetButton(btn);
+      })
+      .catch((err) => {
+        resetButton(btn);
+        isConnecting = false;
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[TitleUI] Connect error:', err);
+        if (/timeout/i.test(msg)) {
+          alert(
+            'Connection timed out. If you are using the MetaMask in-app browser, try: 1) Reload the page and tap Connect again, or 2) Open this site in your device browser and connect with MetaMask.'
+          );
+        } else {
+          alert(`Error: ${msg}`);
+        }
+      });
     });
+  })
+  .catch((err) => {
+    resetButton(btn);
+    isConnecting = false;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[TitleUI] Connect error:', err);
+    if (/timeout/i.test(msg)) {
+      alert(
+        'Connection timed out. If you are using the MetaMask in-app browser, try: 1) Reload the page and tap Connect again, or 2) Open this site in your device browser and connect with MetaMask.'
+      );
+    } else {
+      alert(`Error: ${msg}`);
+    }
+  });
 }
 
 let listenerAttached = false;

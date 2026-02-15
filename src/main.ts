@@ -16,13 +16,8 @@ function runApp(): void {
   setupAccountChangeReload();
   initTitleUI();
 
-  if (!GameStore.walletConnected || !GameStore.walletAddress) {
-    showTitleUI();
-  } else {
-    document.getElementById('title-ui')?.classList.remove('visible');
-    import('./domShell').then(({ showGameShell }) => showGameShell());
-    createPhaserGame();
-  }
+  // 仕様: 必ず TOP を表示する。ゲーム画面へは Connect Wallet 押下後のみ遷移する。
+  showTitleUI();
 }
 
 function start(): void {

@@ -111,6 +111,23 @@ export function connectWallet(): Promise<ConnectResult> {
 export const SEPOLIA_CHAIN_ID = '0xaa36a7'; // 11155111
 
 /**
+ * 現在のチェーン ID を取得（プロンプトなし）。Connect 押下時に「既に Sepolia か」を判定するために使う。
+ */
+export async function getCurrentChainId(): Promise<string | null> {
+  if (isE2EMode()) return null;
+  const provider = getProvider();
+  if (!provider) return null;
+  try {
+    const chainId = (await provider.request({ method: 'eth_chainId', params: [] })) as string | number | undefined;
+    if (typeof chainId === 'string' && chainId.startsWith('0x')) return chainId.toLowerCase();
+    if (typeof chainId === 'number') return '0x' + chainId.toString(16);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * ウォレットが Sepolia でない場合に切り替えを要求する。接続直後に呼ぶと以降のトランザクションが Sepolia に向く。
  * 切り替えはガス不要（メタデータの更新のみ）。ユーザーが拒否した場合は { ok: false } を返す。
  */
