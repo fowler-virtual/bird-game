@@ -7,8 +7,7 @@
 import { SiweMessage } from "siwe";
 import { verifyNonce } from "../_lib/signedNonce.js";
 import { setSessionCookie, getSecret } from "../_lib/sessionCookie.js";
-
-const allowedOrigin = process.env.ALLOWED_CLAIM_ORIGIN || "*";
+import { setCorsHeaders } from "../_lib/cors.js";
 
 function getAddress(s) {
   if (!s || typeof s !== "string") return null;
@@ -18,10 +17,7 @@ function getAddress(s) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
+  setCorsHeaders(req, res);
   if (req.method === "OPTIONS") return res.status(204).end();
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 

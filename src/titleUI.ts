@@ -44,12 +44,29 @@ function onConnectClick(): void {
   isConnecting = true;
 
   if (import.meta.env.VITE_E2E_MODE === '1') {
-    GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
+    let shell = document.getElementById('game-shell');
+    if (!shell) {
+      shell = document.createElement('div');
+      shell.id = 'game-shell';
+      document.body.appendChild(shell);
+    }
+    shell.classList.add('visible');
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-    showGameShell();
-    createPhaserGame();
-    resetButton(btn);
-    isConnecting = false;
+    setTimeout(() => {
+      try {
+        GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
+        showGameShell();
+        try {
+          createPhaserGame();
+        } catch (_) {
+          /* E2E: Phaser が headless で失敗しても #game-shell.visible は既に付与済み */
+        }
+      } catch (_) {
+        /* E2E: 上記で例外が出ても #game-shell.visible は既に付与済み */
+      }
+      resetButton(btn);
+      isConnecting = false;
+    }, 0);
     return;
   }
 

@@ -4,13 +4,10 @@
 
 import { getSessionAddress } from "./_lib/sessionCookie.js";
 import { checkRateLimit, getClientKey } from "./_lib/rateLimit.js";
+import { setCorsHeaders } from "./_lib/cors.js";
 
 export default async function handler(req, res) {
-  const allowedOrigin = process.env.ALLOWED_CLAIM_ORIGIN || "*";
-  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
+  setCorsHeaders(req, res);
   if (req.method === "OPTIONS") {
     return res.status(204).end();
   }

@@ -16,11 +16,26 @@ const { setSessionCookie, getSessionAddress, getSecret } = require("./sessionCoo
 
 const PORT = Number(process.env.CLAIM_API_PORT) || 3001;
 
+/** 許可オリジン（カンマ区切り）。リクエストの Origin がリストにあればそれを使う（ローカルでポート可変に対応）。 */
+function getAllowedOrigins() {
+  const raw = process.env.ALLOWED_CLAIM_ORIGIN || "";
+  if (!raw.trim()) return [];
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function chooseCorsOrigin(req, allowedOrigins) {
+  const origin = req.headers && req.headers.origin;
+  if (origin && allowedOrigins.length > 0 && allowedOrigins.includes(origin)) return origin;
+  if (allowedOrigins.length > 0) return allowedOrigins[0];
+  return "*";
+}
+
 const app = express();
 app.use(express.json());
 
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_CLAIM_ORIGIN || "*");
+  const allowed = getAllowedOrigins();
+  res.setHeader("Access-Control-Allow-Origin", chooseCorsOrigin(req, allowed));
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Credentials", "true");
