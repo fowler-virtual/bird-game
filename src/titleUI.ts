@@ -75,11 +75,6 @@ function onConnectClick(): void {
 
   setJustConnectingFlag();
 
-  /** ゲーム状態 API が未設定か（未設定ならサーバー同期なしでゲームを開いてよい） */
-  function isGameStateApiConfigured(gs: { ok: false; error: string }): boolean {
-    return !gs.error.includes('not configured') && !gs.error.includes('VITE_CLAIM_API_URL');
-  }
-
   async function runPostConnectSteps(): Promise<void> {
     const address = GameStore.walletAddress;
     if (address) {
@@ -88,15 +83,14 @@ function onConnectClick(): void {
         console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
       }
     }
-    const gs = await getGameState();
+    let gs = await getGameState();
+    if (!gs.ok && gs.error === 'Not logged in.') {
+      await new Promise((r) => setTimeout(r, 400));
+      gs = await getGameState();
+    }
     if (gs.ok) {
       GameStore.setStateFromServer(gs.state, gs.version);
       GameStore.save();
-    } else if (isGameStateApiConfigured(gs)) {
-      alert(
-        'サインインに失敗したか、進行データの取得に失敗しました。同じアドレスで他デバイスのデータと揃えられません。\n通信環境を確認し、もう一度 Connect を押してウォレットの署名を行ってください。'
-      );
-      return;
     }
     const networkPromise = ensureSepolia();
     const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
