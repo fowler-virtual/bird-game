@@ -91,6 +91,8 @@ function onConnectClick(): void {
     if (gs.ok) {
       GameStore.setStateFromServer(gs.state, gs.version);
       GameStore.save();
+    } else {
+      console.warn('[TitleUI] getGameState failed:', gs.error, '- showing local data. Sync with other devices will not work.');
     }
     const networkPromise = ensureSepolia();
     const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>

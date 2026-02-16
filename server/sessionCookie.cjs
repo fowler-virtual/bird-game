@@ -32,7 +32,7 @@ function setSessionCookie(res, address) {
   const payload = JSON.stringify({ address: address.toLowerCase(), sig });
   const value = Buffer.from(payload, "utf8").toString("base64url");
   res.setHeader("Set-Cookie", [
-    `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_MS / 1000}`,
+    `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${MAX_AGE_MS / 1000}`,
   ].join(""));
   return true;
 }
@@ -59,7 +59,7 @@ function getSessionAddress(req) {
 }
 
 function clearSessionCookie(res) {
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+  res.setHeader("Set-Cookie", `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0`);
 }
 
 module.exports = {
