@@ -1787,8 +1787,8 @@ export function updateShellStatus(payload: {
   }
   const seedPerDayCard = seedPerDayEl?.closest('.status-card');
   const networkCard = networkEl?.closest('.status-card');
-  if (seedPerDayCard) (seedPerDayCard as HTMLElement).style.display = beforeDeckSave ? 'none' : '';
-  if (networkCard) (networkCard as HTMLElement).style.display = beforeDeckSave ? 'none' : '';
+  if (seedPerDayCard) (seedPerDayCard as HTMLElement).style.display = '';
+  if (networkCard) (networkCard as HTMLElement).style.display = '';
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
   const networkErrorEl = document.getElementById('network-state-error');
   if (networkErrorEl) {
