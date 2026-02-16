@@ -4,7 +4,7 @@
  */
 
 import { GameStore } from './store/GameStore';
-import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS, getConnectedAccounts } from './wallet';
+import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS } from './wallet';
 import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
@@ -92,8 +92,10 @@ function onConnectClick(): void {
       GameStore.setStateFromServer(gs.state, gs.version);
       GameStore.save();
     } else {
-      GameStore.loadStateForCurrentWallet();
-      console.warn('[TitleUI] getGameState failed:', gs.error, '- showing local data. Sync with other devices will not work.');
+      GameStore.resetToInitial();
+      GameStore.serverStateVersion = 0;
+      GameStore.loadedFromStorage = true;
+      console.warn('[TitleUI] getGameState failed:', gs.error, '- using initial state. Sync with other devices will not work.');
     }
     const networkPromise = ensureSepolia();
     const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
@@ -130,20 +132,8 @@ function onConnectClick(): void {
     });
   };
 
-  getConnectedAccounts()
-    .then((accounts) => {
-      if (accounts.length > 0) {
-        GameStore.setWalletConnected(true, accounts[0], { skipLoadState: true });
-        return postConnectWithTimeout().then(() => {
-          resetButton(btn);
-          return undefined as undefined;
-        });
-      }
-      return requestAccounts();
-    })
-    .then(async (resultOrUndefined) => {
-      if (resultOrUndefined === undefined) return;
-      const result = resultOrUndefined;
+  requestAccounts()
+    .then(async (result) => {
       if (!result.ok) {
         resetButton(btn);
         console.error('[TitleUI] Connect failed:', result.error);
