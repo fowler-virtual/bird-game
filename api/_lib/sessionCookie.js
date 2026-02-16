@@ -24,7 +24,7 @@ export function setSessionCookie(res, address) {
   const sig = signPayload(address);
   const payload = JSON.stringify({ address: address.toLowerCase(), sig });
   const value = Buffer.from(payload, "utf8").toString("base64url");
-  res.setHeader("Set-Cookie", `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_SEC}`);
+  res.setHeader("Set-Cookie", `${COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${MAX_AGE_SEC}`);
   return true;
 }
 
