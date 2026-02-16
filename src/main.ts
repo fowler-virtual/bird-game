@@ -3,7 +3,7 @@ import { Buffer } from 'buffer';
 
 import { GameStore } from './store/GameStore';
 import { initTitleUI, showTitleUI } from './titleUI';
-import { setupAccountChangeReload } from './wallet';
+import { setupAccountChangeReload, revokeWalletPermissions } from './wallet';
 
 function runApp(): void {
   try {
@@ -17,6 +17,8 @@ function runApp(): void {
 
   // 仕様: 必ず TOP を表示する。ゲーム画面へは Connect Wallet 押下後のみ遷移する。
   showTitleUI();
+  // タイトル表示時に接続許可を取り消し、Connect 押下で必ずウォレット接続ダイアログが出るようにする。
+  revokeWalletPermissions().catch(() => {});
 }
 
 function start(): void {
