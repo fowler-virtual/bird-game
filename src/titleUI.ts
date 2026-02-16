@@ -9,6 +9,7 @@ import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
 import { getGameState } from './gameStateApi';
+import { signInForClaim } from './claimApi';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -87,9 +88,17 @@ function onConnectClick(): void {
       );
     }
     await refreshSeedTokenFromChain();
+    const address = GameStore.walletAddress;
+    if (address) {
+      const auth = await signInForClaim(address);
+      if (!auth.ok) {
+        console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
+      }
+    }
     const gs = await getGameState();
     if (gs.ok) {
       GameStore.setStateFromServer(gs.state, gs.version);
+      GameStore.save();
     }
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
     showGameShell();

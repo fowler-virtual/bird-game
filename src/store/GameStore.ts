@@ -16,12 +16,14 @@ import { putGameState } from '../gameStateApi';
 const SERVER_SAVE_DEBOUNCE_MS = 2000;
 let _serverSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let _onStale: (() => void) | null = null;
+let _onSaveFailed: (() => void) | null = null;
 
 function _flushServerSave(): void {
   if (GameStore.serverStateVersion <= 0) return;
   putGameState(GameStore.state, GameStore.serverStateVersion).then((r) => {
     if (r.ok) GameStore.serverStateVersion = r.version;
     else if (r.stale) _onStale?.();
+    else _onSaveFailed?.();
   });
 }
 
@@ -259,6 +261,20 @@ export const GameStore = {
   /** 409（別デバイスで更新済み）時に呼ばれるコールバックを登録。domShell で設定。 */
   setOnStaleCallback(cb: (() => void) | null): void {
     _onStale = cb;
+  },
+
+  /** PUT が 409 以外で失敗したとき（ネットエラー等）に呼ばれるコールバック。domShell で設定。 */
+  setOnSaveFailedCallback(cb: (() => void) | null): void {
+    _onSaveFailed = cb;
+  },
+
+  /** デバウンスをキャンセルし、未送信の状態を即時に PUT する（beforeunload 用）。 */
+  flushServerSave(): void {
+    if (_serverSaveTimer != null) {
+      clearTimeout(_serverSaveTimer);
+      _serverSaveTimer = null;
+    }
+    _flushServerSave();
   },
 
   /** サーバーから取得した状態で上書き（同期の正をサーバーにする）。 */

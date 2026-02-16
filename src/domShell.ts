@@ -1494,6 +1494,7 @@ function initDebugPaneListeners(): void {
 let tabListenersInited = false;
 let gachaInProgress = false;
 let disconnectCallback: (() => void) | null = null;
+let beforeUnloadAttachedForGameState = false;
 
 function setGachaButtonsDisabled(disabled: boolean): void {
   const gacha1 = document.getElementById('shell-gacha-1') as HTMLButtonElement | null;
@@ -1672,9 +1673,24 @@ export function showGameShell(): void {
         return getGameState();
       })
       .then((gs) => {
-        if (gs?.ok) GameStore.setStateFromServer(gs.state, gs.version);
+        if (gs?.ok) {
+          GameStore.setStateFromServer(gs.state, gs.version);
+          GameStore.save();
+        }
       });
   });
+
+  GameStore.setOnSaveFailedCallback(() => {
+    showMessageModal({
+      message: '保存に失敗しました。通信環境を確認のうえ、再度お試しください。',
+      success: false,
+    });
+  });
+
+  if (typeof window !== 'undefined' && !beforeUnloadAttachedForGameState) {
+    beforeUnloadAttachedForGameState = true;
+    window.addEventListener('beforeunload', () => GameStore.flushServerSave());
+  }
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
   if (canvasCard) {

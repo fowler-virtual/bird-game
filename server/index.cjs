@@ -184,6 +184,10 @@ app.put("/game-state", requireSession, (req, res) => {
   if (typeof version !== "number" || version < 1) {
     return res.status(400).json({ error: "Missing or invalid version." });
   }
+  const validation = gameStateStore.validateState(state);
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error });
+  }
   const result = gameStateStore.set(req.sessionAddress, state, version);
   if (!result.ok) {
     return res.status(409).json({ code: "STALE_DATA", message: "Data was updated from another device." });
