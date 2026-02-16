@@ -1,8 +1,9 @@
 /**
  * Game state store for Vercel serverless (ESM).
- * In-memory only; state may not persist across cold starts. For production consider Vercel KV or DB.
+ * Uses Redis when REDIS_URL or (KV_REST_API_URL + KV_REST_API_TOKEN) is set; otherwise in-memory (no persistence).
  */
 const key = (address) => (address || "").toLowerCase();
+const KV_PREFIX = "game-state:";
 
 function getInitialState() {
   return {
@@ -20,18 +21,102 @@ function getInitialState() {
   };
 }
 
-const store = new Map();
+const memoryStore = new Map();
 
-export function get(address) {
-  const k = key(address);
-  const row = store.get(k);
+/** Cached backend: { type, client } or null */
+let redisClientPromise;
+async function getRedisBackend() {
+  if (redisClientPromise !== undefined) return redisClientPromise;
+  if (process.env.REDIS_URL) {
+    redisClientPromise = (async () => {
+      try {
+        const { createClient } = await import("redis");
+        const client = createClient({ url: process.env.REDIS_URL });
+        await client.connect();
+        return { type: "redis", client };
+      } catch (e) {
+        console.warn("[gameStateStore] redis (REDIS_URL) not available:", e?.message);
+        return null;
+      }
+    })();
+    return redisClientPromise;
+  }
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    redisClientPromise = (async () => {
+      try {
+        const m = await import("@vercel/kv");
+        return { type: "vercel-kv", client: m.kv };
+      } catch (e) {
+        console.warn("[gameStateStore] @vercel/kv not available:", e?.message);
+        return null;
+      }
+    })();
+    return redisClientPromise;
+  }
+  redisClientPromise = Promise.resolve(null);
+  return redisClientPromise;
+}
+
+/**
+ * Get stored state (async). Uses Redis if configured, else in-memory.
+ */
+export async function getAsync(address) {
+  const backend = await getRedisBackend();
+  const storeKey = `${KV_PREFIX}${key(address)}`;
+  if (backend) {
+    try {
+      if (backend.type === "redis") {
+        const raw = await backend.client.get(storeKey);
+        if (!raw) return null;
+        const row = JSON.parse(raw);
+        if (!row || typeof row !== "object") return null;
+        return { version: row.version, state: row.state, updatedAt: row.updatedAt };
+      }
+      const row = await backend.client.get(storeKey);
+      if (!row || typeof row !== "object") return null;
+      return { version: row.version, state: row.state, updatedAt: row.updatedAt };
+    } catch (e) {
+      console.error("[gameStateStore] get failed:", e);
+      return null;
+    }
+  }
+  const row = memoryStore.get(key(address));
   if (!row) return null;
   return { version: row.version, state: row.state, updatedAt: row.updatedAt };
 }
 
-function getCurrentVersion(address) {
-  const row = store.get(key(address));
-  return row ? row.version : 0;
+/**
+ * Set state (async). Uses Redis if configured, else in-memory.
+ */
+export async function setAsync(address, state, clientVersion) {
+  const backend = await getRedisBackend();
+  const k = key(address);
+  const storeKey = `${KV_PREFIX}${k}`;
+  const currentData = await getAsync(address);
+  const current = currentData ? currentData.version : 0;
+  const allowed = current === clientVersion || (current === 0 && clientVersion === 1);
+  if (!allowed) return { ok: false, reason: "STALE" };
+  const nextVersion = current === 0 ? 1 : current + 1;
+  const row = {
+    version: nextVersion,
+    state,
+    updatedAt: new Date().toISOString(),
+  };
+  if (backend) {
+    try {
+      if (backend.type === "redis") {
+        await backend.client.set(storeKey, JSON.stringify(row));
+      } else {
+        await backend.client.set(storeKey, row);
+      }
+      return { ok: true, version: nextVersion };
+    } catch (e) {
+      console.error("[gameStateStore] set failed:", e);
+      return { ok: false, reason: "STALE" };
+    }
+  }
+  memoryStore.set(k, row);
+  return { ok: true, version: nextVersion };
 }
 
 export function getInitialStateExport() {
@@ -62,18 +147,4 @@ export function validateState(state) {
     return { ok: false, error: "seed must be a non-negative number." };
   }
   return { ok: true };
-}
-
-export function set(address, state, clientVersion) {
-  const k = key(address);
-  const current = getCurrentVersion(address);
-  const allowed = current === clientVersion || (current === 0 && clientVersion === 1);
-  if (!allowed) return { ok: false, reason: "STALE" };
-  const nextVersion = current === 0 ? 1 : current + 1;
-  store.set(k, {
-    version: nextVersion,
-    state,
-    updatedAt: new Date().toISOString(),
-  });
-  return { ok: true, version: nextVersion };
 }
