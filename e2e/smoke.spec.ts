@@ -10,11 +10,11 @@ const E2E_MOCK_ADDRESS = '0xe2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2';
 /** E2E 用アドレスの state キー（GameStore と同一ロジック） */
 const E2E_STATE_KEY = `bird-game-state-${E2E_MOCK_ADDRESS}`;
 
-/** 最小の健全性チェック: E2E で起動し #game-shell.visible が成立していることを検証する。 */
+/** 最小の健全性チェック: E2E で起動し TOP（タイトル画面）が表示されることを検証する。 */
 async function gotoTop(page: import('@playwright/test').Page) {
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('data-e2e', '1');
-  await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('#title-ui')).toBeVisible({ timeout: 15000 });
 }
 
 test.describe('Smoke (DoR)', () => {
@@ -36,29 +36,35 @@ test.describe('Smoke (DoR)', () => {
 
   test('Connect Wallet ボタンをクリックすると何らかの反応がある（DOM 変化 or ログ）', async ({ page }) => {
     await gotoTop(page);
-    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 30000 });
     const btn = page.getByRole('button', { name: /connect wallet/i });
     await expect(btn).toBeVisible();
     await btn.click();
+    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 30000 });
   });
 
   test('Farming / Deck / Summon(Adopt) のいずれかへ遷移できる', async ({ page }) => {
     await gotoTop(page);
     await page.getByRole('button', { name: /connect wallet/i }).click();
-    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 30000 }); // Connect でゲーム画面へ
 
-    // 初期表示は Farming
-    await expect(page.locator('.shell-tab[data-tab="farming"].active')).toBeVisible();
+    // 初期表示は onboarding に応じて Adopt または Farming のどちらか。いずれかのタブが active になるまで待つ
+    await expect(
+      page.locator('.shell-tab.active').first()
+    ).toBeVisible({ timeout: 10000 });
+
+    // Farming へ遷移
+    await page.locator('.shell-tab[data-tab="farming"]').click();
+    await expect(page.locator('.shell-tab[data-tab="farming"].active')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('#pane-farming')).toHaveClass(/active/);
 
     // Deck (LOFT) へ遷移
     await page.locator('.shell-tab[data-tab="deck"]').click();
-    await expect(page.locator('.shell-tab[data-tab="deck"].active')).toBeVisible();
+    await expect(page.locator('.shell-tab[data-tab="deck"].active')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('#pane-deck')).toHaveClass(/active/);
 
     // Adopt (Summon) へ遷移
     await page.locator('.shell-tab[data-tab="adopt"]').click();
-    await expect(page.locator('.shell-tab[data-tab="adopt"].active')).toBeVisible();
+    await expect(page.locator('.shell-tab[data-tab="adopt"].active')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('#pane-adopt')).toHaveClass(/active/);
   });
 });

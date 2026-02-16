@@ -56,6 +56,7 @@ function onConnectClick(): void {
     setTimeout(() => {
       try {
         GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
+        GameStore.setState({ onboardingStep: 'done' }); // E2E: 全タブをクリック可能にしてスモークテストを通す
         showGameShell();
         try {
           createPhaserGame();
