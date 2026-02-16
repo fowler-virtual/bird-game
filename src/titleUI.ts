@@ -8,7 +8,7 @@ import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_M
 import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
-import { getGameState } from './gameStateApi';
+import { getGameState, putGameState } from './gameStateApi';
 import { signInForClaim } from './claimApi';
 
 const TITLE_UI_ID = 'title-ui';
@@ -93,9 +93,15 @@ function onConnectClick(): void {
       GameStore.save();
     } else {
       GameStore.resetToInitial();
-      GameStore.serverStateVersion = 0;
       GameStore.loadedFromStorage = true;
-      console.warn('[TitleUI] getGameState failed:', gs.error, '- using initial state. Sync with other devices will not work.');
+      console.warn('[TitleUI] getGameState failed:', gs.error, '- using initial state. Will try to bootstrap server.');
+      const putResult = await putGameState(GameStore.state, 1);
+      if (putResult.ok) {
+        GameStore.serverStateVersion = putResult.version;
+        GameStore.save();
+      } else {
+        GameStore.serverStateVersion = 0;
+      }
     }
     const networkPromise = ensureSepolia();
     const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
