@@ -17,6 +17,11 @@ const SERVER_SAVE_DEBOUNCE_MS = 2000;
 let _serverSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let _onStale: (() => void) | null = null;
 let _onSaveFailed: (() => void) | null = null;
+/** serverStateVersion が 0 のとき、初回 save() で 1 回だけ PUT(1) を試す */
+let _bootstrapPutAttempted = false;
+function _resetBootstrapPutAttempted(): void {
+  _bootstrapPutAttempted = false;
+}
 
 function _flushServerSave(): void {
   if (GameStore.serverStateVersion <= 0) return;
@@ -241,6 +246,7 @@ export const GameStore = {
     this.walletConnected = false;
     this.walletAddress = null;
     this.serverStateVersion = 0;
+    _resetBootstrapPutAttempted();
   },
 
   save(): void {
@@ -254,6 +260,11 @@ export const GameStore = {
         _serverSaveTimer = null;
         _flushServerSave();
       }, SERVER_SAVE_DEBOUNCE_MS);
+    } else if (!_bootstrapPutAttempted && this.walletAddress) {
+      _bootstrapPutAttempted = true;
+      putGameState(this.state, 1).then((r) => {
+        if (r.ok) this.serverStateVersion = r.version;
+      });
     }
   },
 
