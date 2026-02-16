@@ -1765,7 +1765,8 @@ export function updateShellStatus(payload: {
   })();
   const step = GameStore.state.onboardingStep;
   const cachedPower = getCachedPower();
-  const beforeDeckSave = step === 'need_place' || step === 'need_save';
+  const hasBirdsOnDeck = GameStore.state.deckSlots.some((id) => id != null);
+  const beforeDeckSave = step === 'need_gacha' || step === 'need_place' || step === 'need_save' || !hasBirdsOnDeck;
   const useChain =
     !beforeDeckSave &&
     hasNetworkStateContract() &&
@@ -1784,6 +1785,10 @@ export function updateShellStatus(payload: {
     networkEl.textContent = `${networkToShow.toFixed(5)}%`;
     networkEl.title = '参考値。公式の確定値ではありません。';
   }
+  const seedPerDayCard = seedPerDayEl?.closest('.status-card');
+  const networkCard = networkEl?.closest('.status-card');
+  if (seedPerDayCard) (seedPerDayCard as HTMLElement).style.display = beforeDeckSave ? 'none' : '';
+  if (networkCard) (networkCard as HTMLElement).style.display = beforeDeckSave ? 'none' : '';
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
   const networkErrorEl = document.getElementById('network-state-error');
   if (networkErrorEl) {
