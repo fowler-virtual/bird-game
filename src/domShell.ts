@@ -75,6 +75,25 @@ function getConfettiColorsForRarity(rarity: string): string[] {
 const SHELL_ID = 'game-shell';
 const TAB_ACTIVE = 'active';
 
+/** 同期ステータス表示用（取得/保存の結果） */
+let _syncGet: 'ok' | 'fail' | null = null;
+let _syncPut: 'ok' | 'fail' | null = null;
+function updateSyncStatusEl(): void {
+  const el = document.getElementById('sync-status');
+  if (!el) return;
+  const parts: string[] = [];
+  if (_syncGet === 'ok') parts.push('取得: OK');
+  else if (_syncGet === 'fail') parts.push('取得: 未認証');
+  if (_syncPut === 'ok') parts.push('保存: OK');
+  else if (_syncPut === 'fail') parts.push('保存: 失敗');
+  el.textContent = parts.length ? parts.join('  ') : '';
+}
+/** Connect 直後の getGameState 結果を表示用に渡す（titleUI から呼ぶ） */
+export function setSyncStatusGet(r: 'ok' | 'fail'): void {
+  _syncGet = r;
+  updateSyncStatusEl();
+}
+
 function getShell(): HTMLElement | null {
   return document.getElementById(SHELL_ID);
 }
@@ -1685,6 +1704,18 @@ export function showGameShell(): void {
       message: '保存に失敗しました。通信環境を確認のうえ、再度お試しください。',
       success: false,
     });
+  });
+
+  _syncGet = null;
+  _syncPut = null;
+  updateSyncStatusEl();
+  GameStore.setOnSaveSuccessCallback(() => {
+    _syncPut = 'ok';
+    updateSyncStatusEl();
+  });
+  GameStore.setOnBootstrapPutResult((ok) => {
+    _syncPut = ok ? 'ok' : 'fail';
+    updateSyncStatusEl();
   });
 
   if (typeof window !== 'undefined' && !beforeUnloadAttachedForGameState) {

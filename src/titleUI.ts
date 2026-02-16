@@ -5,7 +5,7 @@
 
 import { GameStore } from './store/GameStore';
 import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS } from './wallet';
-import { showGameShell, hideGameShell } from './domShell';
+import { showGameShell, hideGameShell, setSyncStatusGet } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
 import { getGameState, putGameState } from './gameStateApi';
@@ -118,6 +118,7 @@ function onConnectClick(): void {
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
     showGameShell();
     createPhaserGame();
+    setSyncStatusGet(gs.ok ? 'ok' : 'fail');
   }
 
   const postConnectWithTimeout = (): Promise<void> => {
@@ -135,6 +136,7 @@ function onConnectClick(): void {
       document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
       showGameShell();
       createPhaserGame();
+      setSyncStatusGet('fail');
     });
   };
 

@@ -17,6 +17,8 @@ const SERVER_SAVE_DEBOUNCE_MS = 2000;
 let _serverSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let _onStale: (() => void) | null = null;
 let _onSaveFailed: (() => void) | null = null;
+let _onSaveSuccess: (() => void) | null = null;
+let _onBootstrapPutResult: ((ok: boolean) => void) | null = null;
 /** serverStateVersion が 0 のとき、初回 save() で 1 回だけ PUT(1) を試す */
 let _bootstrapPutAttempted = false;
 function _resetBootstrapPutAttempted(): void {
@@ -26,8 +28,10 @@ function _resetBootstrapPutAttempted(): void {
 function _flushServerSave(): void {
   if (GameStore.serverStateVersion <= 0) return;
   putGameState(GameStore.state, GameStore.serverStateVersion).then((r) => {
-    if (r.ok) GameStore.serverStateVersion = r.version;
-    else if (r.stale) _onStale?.();
+    if (r.ok) {
+      GameStore.serverStateVersion = r.version;
+      _onSaveSuccess?.();
+    } else if (r.stale) _onStale?.();
     else _onSaveFailed?.();
   });
 }
@@ -262,9 +266,13 @@ export const GameStore = {
       }, SERVER_SAVE_DEBOUNCE_MS);
     } else if (!_bootstrapPutAttempted && this.walletAddress) {
       _bootstrapPutAttempted = true;
-      putGameState(this.state, 1).then((r) => {
-        if (r.ok) this.serverStateVersion = r.version;
-      });
+      putGameState(this.state, 1).then(
+        (r) => {
+          if (r.ok) this.serverStateVersion = r.version;
+          _onBootstrapPutResult?.(r.ok);
+        },
+        () => _onBootstrapPutResult?.(false)
+      );
     }
   },
 
@@ -276,6 +284,16 @@ export const GameStore = {
   /** PUT が 409 以外で失敗したとき（ネットエラー等）に呼ばれるコールバック。domShell で設定。 */
   setOnSaveFailedCallback(cb: (() => void) | null): void {
     _onSaveFailed = cb;
+  },
+
+  /** PUT 成功時に呼ばれるコールバック（同期ステータス表示用）。 */
+  setOnSaveSuccessCallback(cb: (() => void) | null): void {
+    _onSaveSuccess = cb;
+  },
+
+  /** 初回 save 時の bootstrap PUT の結果（ok/fail）で呼ばれるコールバック。 */
+  setOnBootstrapPutResult(cb: ((ok: boolean) => void) | null): void {
+    _onBootstrapPutResult = cb;
   },
 
   /** デバウンスをキャンセルし、未送信の状態を即時に PUT する（beforeunload 用）。 */
