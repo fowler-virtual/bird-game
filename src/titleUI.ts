@@ -92,6 +92,7 @@ function onConnectClick(): void {
       GameStore.setStateFromServer(gs.state, gs.version);
       GameStore.save();
     } else {
+      GameStore.loadStateForCurrentWallet();
       console.warn('[TitleUI] getGameState failed:', gs.error, '- showing local data. Sync with other devices will not work.');
     }
     const networkPromise = ensureSepolia();
@@ -132,7 +133,7 @@ function onConnectClick(): void {
   getConnectedAccounts()
     .then((accounts) => {
       if (accounts.length > 0) {
-        GameStore.setWalletConnected(true, accounts[0]);
+        GameStore.setWalletConnected(true, accounts[0], { skipLoadState: true });
         return postConnectWithTimeout().then(() => {
           resetButton(btn);
           return undefined as undefined;
@@ -149,7 +150,7 @@ function onConnectClick(): void {
         alert(`Connection failed: ${result.error}`);
         return;
       }
-      GameStore.setWalletConnected(true, result.address);
+      GameStore.setWalletConnected(true, result.address, { skipLoadState: true });
       await postConnectWithTimeout();
       resetButton(btn);
     })

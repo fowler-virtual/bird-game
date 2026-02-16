@@ -180,14 +180,13 @@ export const GameStore = {
   /** サーバーから取得した状態のバージョン。PUT 時に送る。0 は未取得。 */
   serverStateVersion: 0 as number,
 
+  /** 起動時はウォレットを復元しない（毎回タイトルから Connect させ、その都度サーバー状態を取得する） */
   load(): void {
     try {
-      const wallet = parseWallet(localStorage.getItem(WALLET_KEY));
-      this.walletConnected = wallet.connected;
-      this.walletAddress = wallet.address;
-      this.loadStateForCurrentWallet();
+      this.walletConnected = false;
+      this.walletAddress = null;
     } catch (e) {
-      console.error('[Bird Game] GameStore.load failed, keeping in-memory state only:', e);
+      console.error('[Bird Game] GameStore.load failed:', e);
     }
   },
 
@@ -214,12 +213,12 @@ export const GameStore = {
     }
   },
 
-  setWalletConnected(connected: boolean, address?: string | null): void {
+  setWalletConnected(connected: boolean, address?: string | null, opts?: { skipLoadState?: boolean }): void {
     const nextAddress = connected && address != null ? address : null;
     const changed = this.walletAddress !== nextAddress;
     this.walletConnected = connected;
     this.walletAddress = nextAddress;
-    if (changed && this.walletAddress) this.loadStateForCurrentWallet();
+    if (changed && this.walletAddress && !opts?.skipLoadState) this.loadStateForCurrentWallet();
     this.persistWallet();
   },
 
