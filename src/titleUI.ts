@@ -8,6 +8,7 @@ import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_M
 import { showGameShell, hideGameShell } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
+import { getGameState } from './gameStateApi';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -85,6 +86,10 @@ function onConnectClick(): void {
       );
     }
     await refreshSeedTokenFromChain();
+    const gs = await getGameState();
+    if (gs.ok) {
+      GameStore.setStateFromServer(gs.state, gs.version);
+    }
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
     showGameShell();
     createPhaserGame();

@@ -11,12 +11,26 @@ import {
   generateBirdId,
   rollGachaRarity,
 } from '../types';
+import { putGameState } from '../gameStateApi';
+
+const SERVER_SAVE_DEBOUNCE_MS = 2000;
+let _serverSaveTimer: ReturnType<typeof setTimeout> | null = null;
+let _onStale: (() => void) | null = null;
+
+function _flushServerSave(): void {
+  if (GameStore.serverStateVersion <= 0) return;
+  putGameState(GameStore.state, GameStore.serverStateVersion).then((r) => {
+    if (r.ok) GameStore.serverStateVersion = r.version;
+    else if (r.stale) _onStale?.();
+  });
+}
 
 export const GACHA_COST = 10;
 
 const GAME_STATE_KEY = 'bird-game-state';
-/** 本番ではウォレット接続時にチェーンから $SEED トークン残高を取得。現状はゲーム内で消費・保存する値。 */
+/** オンチェーンの $SEED 残高。接続時にチェーンから取得し、ガチャ・Loft アップグレードのコストに使用。ローカルにはキャッシュ用に保存することもある。 */
 const SEED_TOKEN_KEY = 'bird-game-seed-token';
+/** 旧キー（bird-game-currency）。$Bird 廃止前の互換用。 */
 const LEGACY_CURRENCY_KEY = 'bird-game-currency';
 const WALLET_KEY = 'bird-game-wallet';
 
@@ -155,11 +169,14 @@ function parseWallet(raw: string | null): { connected: boolean; address: string 
 
 export const GameStore = {
   state: defaultGameState() as GameState,
+  /** オンチェーンの $SEED 残高（ガチャ・Loft 等のコストに使用）。接続時にチェーンから取得。 */
   seedToken: 0 as number,
   walletConnected: false,
   walletAddress: null as string | null,
   /** load() が一度でも成功していれば true。false の間は save() で上書きしない（接続時にデータが消えるのを防ぐ） */
   loadedFromStorage: false,
+  /** サーバーから取得した状態のバージョン。PUT 時に送る。0 は未取得。 */
+  serverStateVersion: 0 as number,
 
   load(): void {
     try {
@@ -222,6 +239,7 @@ export const GameStore = {
     localStorage.setItem(WALLET_KEY, JSON.stringify({ connected: false, address: null }));
     this.walletConnected = false;
     this.walletAddress = null;
+    this.serverStateVersion = 0;
   },
 
   save(): void {
@@ -229,6 +247,27 @@ export const GameStore = {
     const prefix = storagePrefix(this.walletAddress);
     localStorage.setItem(stateKeyFor(prefix), JSON.stringify(this.state));
     localStorage.setItem(seedTokenKeyFor(prefix), String(Math.max(0, Math.floor(this.seedToken))));
+    if (this.serverStateVersion > 0) {
+      if (_serverSaveTimer != null) clearTimeout(_serverSaveTimer);
+      _serverSaveTimer = setTimeout(() => {
+        _serverSaveTimer = null;
+        _flushServerSave();
+      }, SERVER_SAVE_DEBOUNCE_MS);
+    }
+  },
+
+  /** 409（別デバイスで更新済み）時に呼ばれるコールバックを登録。domShell で設定。 */
+  setOnStaleCallback(cb: (() => void) | null): void {
+    _onStale = cb;
+  },
+
+  /** サーバーから取得した状態で上書き（同期の正をサーバーにする）。 */
+  setStateFromServer(serverState: GameState, version: number): void {
+    this.state = parseGameState(JSON.stringify(serverState));
+    this.rebuildInventory();
+    this.normalizeOnboardingStep();
+    this.serverStateVersion = version;
+    this.loadedFromStorage = true;
   },
 
   /** 読み込み後: デッキに鳥がいればオンボーディング完了扱いにして Farming を押せるようにする */

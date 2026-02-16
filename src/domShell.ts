@@ -7,6 +7,7 @@ import { GameStore, GACHA_COST } from './store/GameStore';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim, signInForClaim, postClaimConfirm } from './claimApi';
+import { getGameState } from './gameStateApi';
 import type { ClaimSignature } from './claimApi';
 import { executeClaim } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
@@ -1659,6 +1660,21 @@ export function showGameShell(): void {
   if (!shell) return;
   shell.classList.add('visible');
   shell.setAttribute('aria-hidden', 'false');
+
+  GameStore.setOnStaleCallback(() => {
+    showMessageModal({
+      message: 'データの更新がありました。タイトル画面に戻ります。',
+      success: false,
+    })
+      .then(() => {
+        hideGameShell();
+        showTitleUI();
+        return getGameState();
+      })
+      .then((gs) => {
+        if (gs?.ok) GameStore.setStateFromServer(gs.state, gs.version);
+      });
+  });
 
   const canvasCard = document.getElementById(CANVAS_CARD_ID);
   if (canvasCard) {
