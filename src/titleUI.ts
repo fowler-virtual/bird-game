@@ -9,7 +9,7 @@ import { showGameShell, hideGameShell, setSyncStatusGet } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
 import { getGameState, putGameState } from './gameStateApi';
-import { signInForClaim } from './claimApi';
+import { getAuthNonce, signAndVerifyWithNonce } from './claimApi';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -143,11 +143,12 @@ function onConnectClick(): void {
         return;
       }
       GameStore.setWalletConnected(true, result.address, { skipLoadState: true });
-      // 接続直後に SIWE を実行し、ウォレットが2回目（署名）を開くようにする
-      await new Promise((r) => setTimeout(r, 100));
-      const auth = await signInForClaim(result.address);
-      if (!auth.ok) {
-        console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
+      const nonceRes = await getAuthNonce(result.address);
+      if (nonceRes.ok) {
+        const auth = await signAndVerifyWithNonce(result.address, nonceRes.nonce);
+        if (!auth.ok) console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
+      } else {
+        console.warn('[TitleUI] getAuthNonce failed:', nonceRes.error);
       }
       await postConnectWithTimeout();
       resetButton(btn);

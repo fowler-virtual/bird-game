@@ -53,15 +53,13 @@ export async function getAuthNonce(address: string): Promise<AuthNonceResult> {
 }
 
 /**
- * Sign in with Ethereum for Claim: get nonce, build SIWE message, sign with wallet, verify on server.
- * Call this when /claim returns 401 (e.g. after Connect Wallet, before first claim).
+ * Build SIWE message, sign with wallet, verify on server. Call this immediately after getAuthNonce
+ * so signMessage runs close to the user gesture (connect).
  */
-export async function signInForClaim(address: string): Promise<AuthVerifyResult> {
+export async function signAndVerifyWithNonce(address: string, nonce: string): Promise<AuthVerifyResult> {
   if (typeof window === "undefined" || !window.ethereum) {
     return { ok: false, error: "No wallet." };
   }
-  const nonceRes = await getAuthNonce(address);
-  if (!nonceRes.ok) return nonceRes;
   try {
     const provider = new BrowserProvider(window.ethereum);
     const network = await provider.getNetwork();
@@ -73,7 +71,7 @@ export async function signInForClaim(address: string): Promise<AuthVerifyResult>
       uri: typeof window !== "undefined" ? window.location.origin : "",
       version: "1",
       chainId,
-      nonce: nonceRes.nonce,
+      nonce,
       issuedAt: new Date().toISOString(),
       expirationTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     });
@@ -88,6 +86,19 @@ export async function signInForClaim(address: string): Promise<AuthVerifyResult>
     }
     return { ok: false, error: msg || "Sign-in failed." };
   }
+}
+
+/**
+ * Sign in with Ethereum for Claim: get nonce, build SIWE message, sign with wallet, verify on server.
+ * Call this when /claim returns 401 (e.g. after Connect Wallet, before first claim).
+ */
+export async function signInForClaim(address: string): Promise<AuthVerifyResult> {
+  if (typeof window === "undefined" || !window.ethereum) {
+    return { ok: false, error: "No wallet." };
+  }
+  const nonceRes = await getAuthNonce(address);
+  if (!nonceRes.ok) return nonceRes;
+  return signAndVerifyWithNonce(address, nonceRes.nonce);
 }
 
 /**
