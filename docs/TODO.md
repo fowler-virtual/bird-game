@@ -22,6 +22,12 @@
 - **補足**
   - 「落ちた」は Cursor のクラッシュを指していた。Vercel やサイトの障害ではない。
   - 修正が Git にコミット・push されていれば、Vercel は自動デプロイで `npm run build` が実行される。未コミットの場合は push 後にデプロイされる。
+- **依頼者報告（現状）**
+  - Git（fowler-virtual.github.io/bird-game）でも Vercel（bird-game-udhr.vercel.app）でも、ログイン試行時に**最初の接続（ウォレット接続）しか出ず、2 回目（SIWE 署名）は出ない**。
+- **診断ログ（2回目ウォレットが出ない切り分け用）**
+  - `src/claimApi.ts`: Claim API base、GET /auth/nonce の成否、signAndVerifyWithNonce 呼び出し・signMessage 前・verify 結果・エラーを `[Connect]` プレフィックスで console に出力。
+  - `src/titleUI.ts`: requestAccounts 成功時の nonce 取得結果を `[Connect]` で出力。
+  - **次の確認**: どちらかのサイトで Connect を押したあと、ブラウザの開発者ツール（F12）→ **Console** を開き、`[Connect]` で始まる行だけ見る。最後に出力された `[Connect]` の内容を共有してもらえれば、どこで止まっているか判断できる（例: base が (not set) → ビルドに VITE_CLAIM_API_URL が無い / nonce 失敗 → API や CORS / signMessage 直前まで出ている → ウォレットが 2 回目を出していない、など）。
 
 ---
 

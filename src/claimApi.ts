@@ -58,14 +58,25 @@ export async function getAuthNonce(address: string): Promise<AuthNonceResult> {
  * Server must support GET /auth/nonce without address.
  */
 export async function getAuthNoncePending(): Promise<AuthNonceResult> {
+  const base = getClaimApiBase();
+  console.log("[Connect] Claim API base:", base ?? "(not set)");
   try {
     const res = await apiFetch("/auth/nonce");
     const data = (await res.json().catch(() => ({}))) as { nonce?: string; error?: string };
-    if (!res.ok) return { ok: false, error: data.error || `Failed (${res.status})` };
-    if (!data.nonce) return { ok: false, error: "Invalid nonce response." };
+    if (!res.ok) {
+      console.log("[Connect] GET /auth/nonce failed:", res.status, data.error ?? data);
+      return { ok: false, error: data.error || `Failed (${res.status})` };
+    }
+    if (!data.nonce) {
+      console.log("[Connect] GET /auth/nonce invalid response:", data);
+      return { ok: false, error: "Invalid nonce response." };
+    }
+    console.log("[Connect] GET /auth/nonce ok");
     return { ok: true, nonce: data.nonce };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const err = e instanceof Error ? e.message : String(e);
+    console.log("[Connect] GET /auth/nonce error:", err);
+    return { ok: false, error: err };
   }
 }
 
@@ -76,7 +87,9 @@ export async function getAuthNoncePending(): Promise<AuthNonceResult> {
 const SEPOLIA_CHAIN_ID = 11155111;
 
 export async function signAndVerifyWithNonce(address: string, nonce: string): Promise<AuthVerifyResult> {
+  console.log("[Connect] signAndVerifyWithNonce called, address:", address?.slice(0, 10) + "...");
   if (typeof window === "undefined" || !window.ethereum) {
+    console.log("[Connect] signAndVerifyWithNonce: no wallet");
     return { ok: false, error: "No wallet." };
   }
   try {
@@ -95,10 +108,15 @@ export async function signAndVerifyWithNonce(address: string, nonce: string): Pr
     });
     const message = siweMessage.prepareMessage();
     const signer = await provider.getSigner();
+    console.log("[Connect] calling signer.signMessage (wallet popup should open)");
     const signature = await signer.signMessage(message);
-    return postAuthVerify(message, signature, address);
+    console.log("[Connect] signMessage done, posting verify");
+    const result = await postAuthVerify(message, signature, address);
+    console.log("[Connect] postAuthVerify:", result.ok ? "ok" : result.error);
+    return result;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    console.log("[Connect] signAndVerifyWithNonce error:", msg);
     if (/user rejected|user denied/i.test(msg)) {
       return { ok: false, error: "Signature rejected." };
     }
@@ -129,9 +147,11 @@ export async function postAuthVerify(message: string, signature: string, address
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, signature, address }),
     });
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!res.ok) return { ok: false, error: data.error || `Failed (${res.status})` };
-    return data.ok ? { ok: true } : { ok: false, error: data.error || "Verify failed." };
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string | { message?: string } };
+    const errStr = (v: unknown): string =>
+      typeof v === "string" ? v : v && typeof v === "object" && "message" in v ? String((v as { message: unknown }).message) : JSON.stringify(v);
+    if (!res.ok) return { ok: false, error: errStr(data.error) || `Failed (${res.status})` };
+    return data.ok ? { ok: true } : { ok: false, error: errStr(data.error) || "Verify failed." };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

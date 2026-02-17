@@ -9,7 +9,7 @@ import { showGameShell, hideGameShell, setSyncStatusGet } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
 import { getGameState, putGameState } from './gameStateApi';
-import { getAuthNoncePending, signAndVerifyWithNonce } from './claimApi';
+import { getAuthNonce, getAuthNoncePending, signAndVerifyWithNonce } from './claimApi';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -142,12 +142,25 @@ function onConnectClick(): void {
         alert(`Connection failed: ${connectResult.error}`);
         return;
       }
+      console.log('[Connect] requestAccounts ok, nonce:', nonceRes.ok ? 'ok' : nonceRes.error);
       GameStore.setWalletConnected(true, connectResult.address, { skipLoadState: true });
       if (nonceRes.ok) {
         const auth = await signAndVerifyWithNonce(connectResult.address, nonceRes.nonce);
-        if (!auth.ok) console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
+        if (!auth.ok) {
+          const errMsg = typeof auth.error === 'string' ? auth.error : (auth.error as { message?: string })?.message ?? JSON.stringify(auth.error);
+          console.warn('[TitleUI] SIWE failed (game-state will not sync):', errMsg);
+        }
       } else {
-        console.warn('[TitleUI] getAuthNoncePending failed:', nonceRes.error);
+        const fallback = await getAuthNonce(connectResult.address);
+        if (fallback.ok) {
+          const auth = await signAndVerifyWithNonce(connectResult.address, fallback.nonce);
+          if (!auth.ok) {
+          const errMsg = typeof auth.error === 'string' ? auth.error : (auth.error as { message?: string })?.message ?? JSON.stringify(auth.error);
+          console.warn('[TitleUI] SIWE failed (game-state will not sync):', errMsg);
+        }
+        } else {
+          console.warn('[TitleUI] getAuthNoncePending and getAuthNonce failed:', nonceRes.error, fallback.error);
+        }
       }
       await postConnectWithTimeout();
       resetButton(btn);
