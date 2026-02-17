@@ -1,9 +1,7 @@
 /**
- * In-memory store for SIWE nonces: address -> { nonce, expiresAt }.
- * Pending nonces (no address at issue): nonce value -> expiresAt (for 1-click connect then sign UX).
- * Nonces expire after SIWE_NONCE_TTL_SEC (default 300).
+ * In-memory SIWE nonce store (ESM). Address-bound and pending (no address at issue).
+ * For serverless, in-memory is per-instance; use Redis if multi-instance.
  */
-
 const SIWE_NONCE_TTL_SEC = Number(process.env.SIWE_NONCE_TTL_SEC) || 300;
 const store = new Map();
 const pendingStore = new Map();
@@ -22,7 +20,7 @@ function prune() {
   }
 }
 
-function createNonce(address) {
+export function createNonce(address) {
   prune();
   const lower = address.toLowerCase();
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
@@ -30,15 +28,14 @@ function createNonce(address) {
   return nonce;
 }
 
-/** Create a nonce without address (pending). Consumed at verify time when signature gives address. */
-function createPendingNonce() {
+export function createPendingNonce() {
   prune();
   const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
   pendingStore.set(nonce, nowSec() + SIWE_NONCE_TTL_SEC);
   return nonce;
 }
 
-function consumeNonce(address, nonce) {
+export function consumeNonce(address, nonce) {
   prune();
   const lower = (address || "").toLowerCase();
   const entry = store.get(lower);
@@ -53,5 +50,3 @@ function consumeNonce(address, nonce) {
   }
   return false;
 }
-
-module.exports = { createNonce, createPendingNonce, consumeNonce };

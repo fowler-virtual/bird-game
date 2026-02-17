@@ -53,17 +53,35 @@ export async function getAuthNonce(address: string): Promise<AuthNonceResult> {
 }
 
 /**
+ * Get a pending SIWE nonce (no address). Use with connect: run in parallel with requestAccounts
+ * so when both resolve we can call signAndVerifyWithNonce immediately (one fewer await before signMessage).
+ * Server must support GET /auth/nonce without address.
+ */
+export async function getAuthNoncePending(): Promise<AuthNonceResult> {
+  try {
+    const res = await apiFetch("/auth/nonce");
+    const data = (await res.json().catch(() => ({}))) as { nonce?: string; error?: string };
+    if (!res.ok) return { ok: false, error: data.error || `Failed (${res.status})` };
+    if (!data.nonce) return { ok: false, error: "Invalid nonce response." };
+    return { ok: true, nonce: data.nonce };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/**
  * Build SIWE message, sign with wallet, verify on server. Call this immediately after getAuthNonce
  * so signMessage runs close to the user gesture (connect).
  */
+const SEPOLIA_CHAIN_ID = 11155111;
+
 export async function signAndVerifyWithNonce(address: string, nonce: string): Promise<AuthVerifyResult> {
   if (typeof window === "undefined" || !window.ethereum) {
     return { ok: false, error: "No wallet." };
   }
   try {
     const provider = new BrowserProvider(window.ethereum);
-    const network = await provider.getNetwork();
-    const chainId = Number(network.chainId);
+    const chainId = SEPOLIA_CHAIN_ID;
     const siweMessage = new SiweMessage({
       domain: typeof window !== "undefined" ? window.location.host : "",
       address,
