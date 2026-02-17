@@ -76,13 +76,7 @@ function onConnectClick(): void {
   setJustConnectingFlag();
 
   async function runPostConnectSteps(): Promise<void> {
-    const address = GameStore.walletAddress;
-    if (address) {
-      const auth = await signInForClaim(address);
-      if (!auth.ok) {
-        console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
-      }
-    }
+    // SIWE は接続直後（上記 .then 内）で実行済み
     let gs = await getGameState();
     if (!gs.ok && gs.error === 'Not logged in.') {
       await new Promise((r) => setTimeout(r, 400));
@@ -103,6 +97,10 @@ function onConnectClick(): void {
         GameStore.serverStateVersion = 0;
       }
     }
+    setSyncStatusGet(gs.ok ? 'ok' : 'fail');
+    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+    showGameShell();
+    createPhaserGame();
     const networkPromise = ensureSepolia();
     const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
       setTimeout(() => resolve({ ok: false as const, error: 'Network switch timed out' }), ENSURE_SEPOLIA_TIMEOUT_MS)
@@ -115,10 +113,6 @@ function onConnectClick(): void {
       );
     }
     await refreshSeedTokenFromChain();
-    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-    showGameShell();
-    createPhaserGame();
-    setSyncStatusGet(gs.ok ? 'ok' : 'fail');
   }
 
   const postConnectWithTimeout = (): Promise<void> => {
@@ -149,6 +143,12 @@ function onConnectClick(): void {
         return;
       }
       GameStore.setWalletConnected(true, result.address, { skipLoadState: true });
+      // 接続直後に SIWE を実行し、ウォレットが2回目（署名）を開くようにする
+      await new Promise((r) => setTimeout(r, 100));
+      const auth = await signInForClaim(result.address);
+      if (!auth.ok) {
+        console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
+      }
       await postConnectWithTimeout();
       resetButton(btn);
     })
