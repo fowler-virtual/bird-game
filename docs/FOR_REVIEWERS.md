@@ -53,5 +53,6 @@ npm run dev
 
 ## その他
 
+- **要件の集約**は `docs/REQUIREMENTS.md` にあり（対応環境・目標・DoR・監査合意など）。
 - 残タスク・仕様メモは `docs/TODO.md` にあり。
 - デプロイは GitHub Actions で GitHub Pages に出力している（` .github/workflows/` を参照）。

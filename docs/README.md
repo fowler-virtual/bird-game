@@ -22,13 +22,14 @@
 
 | ファイル | 概要 |
 |----------|------|
+| **`REQUIREMENTS.md`** | **要件の集約**。対応環境・最優先目標・製品仕様要約・DoR・監査合意方針・参照一覧。 |
 | `TODO.md` | 残タスク・将来実装候補。最優先は Git 版＋スマホメタマスクでローカルと同様に動かすこと。 |
 | `DEV_FLOW_AND_MOBILE.md` | 開発フローとスマホ・メタマスク検証の方針。エミュレーターでの確認手順など。 |
 | `DEV_PROCESSES.md` | 開発プロセス・進め方のメモ。 |
 | `ASSET_SPEC.md` | アセット仕様。 |
 | `BIRD_IMAGE_PROMPT.md` | 鳥画像用プロンプト等。 |
 | `SPRITE_LAYOUT_OPTIONS.md` | スプライトレイアウトの選択肢。 |
-| `CLAIM_SAFETY_DESIGN.md` / `CLAIM_SAFE_DESIGN.md` | Claim まわりの安全設計。 |
+| `CLAIM_SAFETY_DESIGN.md` | Claim まわりの安全設計・変更一覧。 |
 | `CLAIM_AND_DEPLOY.md` | Claim とデプロイに関するメモ。 |
 | `TOKEN_LOCAL.md` | トークン（ローカル）まわりの仕様・メモ。 |
 
@@ -36,11 +37,12 @@
 
 | ファイル | 概要 |
 |----------|------|
-| `VERIFICATION_READINESS.md` / `VERIFICATION_READY.md` | 検証開始条件（DoR）とスモークテストの手順。 |
-| `VERIFICATION.md` | 検証内容のメモ。 |
+| `VERIFICATION.md` | 修正後の検証チェックリスト。 |
 | `AUDIT_RESPONSE.md` | 監査への対応。 |
 | `AUDIT_REMEDIATION_PLAN.md` | 監査の是正計画。 |
 | `FOR_REVIEWERS.md` | レビュアー向け説明。 |
+
+（検証開始条件 DoR は `REQUIREMENTS.md` に集約済み。）
 
 ### セッション開始時・ルール
 
