@@ -120,7 +120,9 @@ export async function signAndVerifyWithNonce(address: string, nonce: string): Pr
         ? e.message
         : e && typeof e === "object" && "message" in e
           ? String((e as { message: unknown }).message)
-          : String(e);
+          : e && typeof e === "object"
+            ? JSON.stringify(e)
+            : String(e);
     console.log("[Connect] signAndVerifyWithNonce error:", msg);
     if (/user rejected|user denied/i.test(msg)) {
       return { ok: false, error: "Signature rejected." };
