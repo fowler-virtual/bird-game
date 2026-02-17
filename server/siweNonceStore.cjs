@@ -22,10 +22,15 @@ function prune() {
   }
 }
 
+/** SIWE requires nonce to be alphanumeric and length > 8. No hyphen. */
+function generateNonce() {
+  return `${Date.now()}${Math.random().toString(36).slice(2, 12)}`;
+}
+
 function createNonce(address) {
   prune();
   const lower = address.toLowerCase();
-  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  const nonce = generateNonce();
   store.set(lower, { nonce, expiresAt: nowSec() + SIWE_NONCE_TTL_SEC });
   return nonce;
 }
@@ -33,7 +38,7 @@ function createNonce(address) {
 /** Create a nonce without address (pending). Consumed at verify time when signature gives address. */
 function createPendingNonce() {
   prune();
-  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  const nonce = generateNonce();
   pendingStore.set(nonce, nowSec() + SIWE_NONCE_TTL_SEC);
   return nonce;
 }
