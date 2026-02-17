@@ -2,7 +2,7 @@
  * Claim API client (A-spec): SIWE session, server-decided amount, EIP-712 signature, confirm after tx.
  */
 
-import { BrowserProvider } from "ethers";
+import { BrowserProvider, getAddress } from "ethers";
 import { SiweMessage } from "siwe";
 
 function getClaimApiBase(): string | null {
@@ -93,11 +93,12 @@ export async function signAndVerifyWithNonce(address: string, nonce: string): Pr
     return { ok: false, error: "No wallet." };
   }
   try {
+    const checksummed = getAddress(address);
     const provider = new BrowserProvider(window.ethereum);
     const chainId = SEPOLIA_CHAIN_ID;
     const siweMessage = new SiweMessage({
       domain: typeof window !== "undefined" ? window.location.host : "",
-      address,
+      address: checksummed,
       statement: "Sign in to claim $SEED rewards.",
       uri: typeof window !== "undefined" ? window.location.origin : "",
       version: "1",
@@ -111,7 +112,7 @@ export async function signAndVerifyWithNonce(address: string, nonce: string): Pr
     console.log("[Connect] calling signer.signMessage (wallet popup should open)");
     const signature = await signer.signMessage(message);
     console.log("[Connect] signMessage done, posting verify");
-    const result = await postAuthVerify(message, signature, address);
+    const result = await postAuthVerify(message, signature, checksummed);
     console.log("[Connect] postAuthVerify:", result.ok ? "ok" : result.error);
     return result;
   } catch (e) {
