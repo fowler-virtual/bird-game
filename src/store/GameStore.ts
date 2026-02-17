@@ -30,6 +30,11 @@ function stateKeyFor(prefix: string): string {
   return prefix ? `bird-game-state-${prefix}` : GAME_STATE_KEY;
 }
 
+/** アドレス用のストレージキー（gameStateApi 等で使用） */
+export function getStateKeyForAddress(address: string): string {
+  return stateKeyFor(storagePrefix(address));
+}
+
 function seedTokenKeyFor(prefix: string): string {
   return prefix ? `bird-game-seed-token-${prefix}` : SEED_TOKEN_KEY;
 }
@@ -134,6 +139,11 @@ function parseGameState(raw: string | null): GameState {
   }
 }
 
+/** 保存済み JSON から GameState を復元（gameStateApi で使用） */
+export function parseGameStateFromRaw(raw: string | null): GameState {
+  return parseGameState(raw);
+}
+
 function parseSeedToken(raw: string | null): number {
   if (raw == null) return 0;
   const n = Number(raw);
@@ -160,6 +170,8 @@ export const GameStore = {
   walletAddress: null as string | null,
   /** load() が一度でも成功していれば true。false の間は save() で上書きしない（接続時にデータが消えるのを防ぐ） */
   loadedFromStorage: false,
+  /** サーバから取得した状態のバージョン（未取得時は 0） */
+  serverStateVersion: 0 as number,
 
   load(): void {
     try {
@@ -195,13 +207,22 @@ export const GameStore = {
     }
   },
 
-  setWalletConnected(connected: boolean, address?: string | null): void {
+  setWalletConnected(connected: boolean, address?: string | null, options?: { skipLoadState?: boolean }): void {
     const nextAddress = connected && address != null ? address : null;
     const changed = this.walletAddress !== nextAddress;
     this.walletConnected = connected;
     this.walletAddress = nextAddress;
-    if (changed && this.walletAddress) this.loadStateForCurrentWallet();
+    if (changed && this.walletAddress && !options?.skipLoadState) this.loadStateForCurrentWallet();
     this.persistWallet();
+  },
+
+  /** サーバから取得した状態で上書きする（接続直後の getGameState 成功時に使用） */
+  setStateFromServer(serverState: GameState, version: number): void {
+    this.state = { ...serverState };
+    this.serverStateVersion = version;
+    this.rebuildInventory();
+    this.normalizeOnboardingStep();
+    this.loadedFromStorage = true;
   },
 
   /** localStorage に現在のウォレット状態を書き込む（Disconnect 時も確実に反映） */

@@ -2,7 +2,7 @@ import { Buffer } from 'buffer';
 (globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
 
 import { GameStore } from './store/GameStore';
-import { initTitleUI, showTitleUI, hideTitleUI } from './titleUI';
+import { initTitleUI, showTitleUI } from './titleUI';
 import { setupAccountChangeReload } from './wallet';
 import { createPhaserGame } from './phaserBoot';
 

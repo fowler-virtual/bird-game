@@ -84,6 +84,15 @@ const CANVAS_DECK_VIEW_CLASS = 'canvas-card-deck-view';
 
 /** 切り分け用: 直前のタブ（Adopt から戻ったか判定用） */
 let lastTabId = '';
+
+/** ゲーム状態の取得結果（接続直後の getGameState 成否）。titleUI から設定する。 */
+let _syncStatusGet: 'ok' | 'fail' = 'fail';
+export function setSyncStatusGet(status: 'ok' | 'fail'): void {
+  _syncStatusGet = status;
+}
+export function getSyncStatusGet(): 'ok' | 'fail' {
+  return _syncStatusGet;
+}
 /** モーダル表示中のガチャ結果（×で早期に閉じたときに全件をメインエリアへ反映する用） */
 let lastGachaModalBirds: { rarity: string }[] = [];
 const DEBUG_LAYOUT = true;
@@ -1571,7 +1580,7 @@ function initTabListeners(): void {
                   title: 'Nothing to claim',
                   message: 'There is nothing to claim right now. Earn more SEED or try again later.',
                   success: false,
-                }).then(() => { claimBtn.disabled = false; });
+                }).then(() => { if (claimBtn) claimBtn.disabled = false; });
                 return;
               }
               if (result.error === 'Not logged in. Sign in with your wallet first.') {
@@ -1583,15 +1592,15 @@ function initTabListeners(): void {
                   signInForClaim(address).then((authResult) => {
                     if (!authResult.ok) {
                       showMessageModal({ title: 'Sign-in failed', message: authResult.error ?? 'Unknown error.', success: false }).then(() => {
-                        claimBtn.disabled = false;
+                        if (claimBtn) claimBtn.disabled = false;
                       });
                       return;
                     }
                     doRequestClaim().then((retryResult) => {
                       if (!retryResult.ok) {
-                        showMessageModal({ title: 'Claim failed', message: retryResult.error ?? 'Unknown error.', success: false }).then(() => {
-                          claimBtn.disabled = false;
-                        });
+showMessageModal({ title: 'Claim failed', message: retryResult.error ?? 'Unknown error.', success: false }).then(() => {
+                        if (claimBtn) claimBtn.disabled = false;
+                      });
                         return;
                       }
                       runClaimWithSignature(retryResult.signature);
@@ -1600,9 +1609,9 @@ function initTabListeners(): void {
                 });
                 return;
               }
-              showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown error.', success: false }).then(() => {
-                claimBtn.disabled = false;
-              });
+showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown error.', success: false }).then(() => {
+              if (claimBtn) claimBtn.disabled = false;
+            });
               return;
             }
             runClaimWithSignature(result.signature);
@@ -1613,7 +1622,7 @@ function initTabListeners(): void {
             executeClaim(signature).then((txResult) => {
               if (!txResult.ok) {
                 showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false }).then(() => {
-                  claimBtn.disabled = false;
+                  if (claimBtn) claimBtn.disabled = false;
                 });
                 hideProcessingModal();
                 return;
@@ -1639,7 +1648,7 @@ function initTabListeners(): void {
                   title: 'Claim successful',
                   message: `${claimedAmount} $SEED acquired!`,
                 }).then(() => {
-                  claimBtn.disabled = false;
+                  if (claimBtn) claimBtn.disabled = false;
                 });
               });
               postClaimConfirm(signature.nonce, signature.amountWei).catch(() => {});
