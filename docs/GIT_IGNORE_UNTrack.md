@@ -5,12 +5,10 @@
 ```powershell
 git rm -r --cached node_modules
 git rm -r --cached dist
-git rm -r --cached playwright-report
-git rm -r --cached test-results
 git rm -r --cached .cursor
 git rm -r --cached .vite
 git add -A
 git status
-git commit -m "chore: stop tracking node_modules, dist, playwright-report, test-results, .cursor, .vite"
+git commit -m "chore: stop tracking node_modules, dist, .cursor, .vite"
 git push
 ```

@@ -80,7 +80,7 @@
 | 1 | 公開前ブロッカー: Claim API（amount を受け取らない + CORS 制限 + rate limit） | **その通り。最優先で実施します。** |
 | 2 | 権威データの切り分け（AuthoritativeState など、形だけでも分離） | **同意。** A の「サーバで claimable を計算」と整合する形で、クライアントの「表示用」と「サーバが認める claimable」を分離します。 |
 | 3 | domShell の縮退（タブ・共通以外を views に） | **同意。** 1・2 のあとのリファクタとして進めます。 |
-| 4 | 自動チェック（ESLint, TS strict, npm audit, build, 簡易 E2E） | **同意。** CI に組み込み、可能な範囲から導入します。 |
+| 4 | 自動チェック（ESLint, TS strict, npm audit, build） | **同意。** CI に組み込み、可能な範囲から導入します。 |
 
 ---
 

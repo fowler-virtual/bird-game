@@ -38,16 +38,6 @@ npm run dev
 5. **リロード後も永続化**  
    画面をリロード（F5）すると、宝石・デッキ・待機リスト・$Bird・解放状態が復元される。
 
-## 検証開始条件（DoR）とスモークテスト
-
-監査・UI 検証の前に、TOP 表示・Connect Wallet 反応・タブ遷移ができることを確認するスモークテストを用意しています。
-
-- **実行**: `pnpm test:e2e` または `npm run test:e2e`
-- **初回のみ**: `pnpm exec playwright install chromium` でブラウザをインストール
-- 詳細な検証開始条件と実行手順は [docs/VERIFICATION_READINESS.md](docs/VERIFICATION_READINESS.md) を参照
-
-E2E 時は `VITE_E2E_MODE=1` でウォレットをモックし、MetaMask なしで接続済み状態の UI を検証できます。本番の挙動は変わりません。
-
 ## ビルド
 
 ```bash

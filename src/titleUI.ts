@@ -4,7 +4,7 @@
  */
 
 import { GameStore } from './store/GameStore';
-import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS } from './wallet';
+import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia } from './wallet';
 import { showGameShell, hideGameShell, setSyncStatusGet } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
@@ -44,34 +44,6 @@ function onConnectClick(): void {
     btn.textContent = 'Connecting...';
   }
   isConnecting = true;
-
-  if (import.meta.env.VITE_E2E_MODE === '1') {
-    let shell = document.getElementById('game-shell');
-    if (!shell) {
-      shell = document.createElement('div');
-      shell.id = 'game-shell';
-      document.body.appendChild(shell);
-    }
-    shell.classList.add('visible');
-    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-    setTimeout(() => {
-      try {
-        GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
-        GameStore.setState({ onboardingStep: 'done' }); // E2E: 全タブをクリック可能にしてスモークテストを通す
-        showGameShell();
-        try {
-          createPhaserGame();
-        } catch (_) {
-          /* E2E: Phaser が headless で失敗しても #game-shell.visible は既に付与済み */
-        }
-      } catch (_) {
-        /* E2E: 上記で例外が出ても #game-shell.visible は既に付与済み */
-      }
-      resetButton(btn);
-      isConnecting = false;
-    }, 0);
-    return;
-  }
 
   setJustConnectingFlag();
 

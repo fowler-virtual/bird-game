@@ -17,9 +17,7 @@
     "deploy-reward-claim": "hardhat run scripts/deploy-reward-claim.cjs --network localhost",
     "deploy:network-state": "hardhat run scripts/deploy-network-state.cjs --network localhost",
     "approve-claim": "node scripts/approve-reward-claim.cjs",
-    "check-balance": "node scripts/check-seed-balance.cjs",
-    "test:e2e": "playwright test",
-    "test:e2e:ci": "cross-env VITE_E2E_MODE=1 playwright test"
+    "check-balance": "node scripts/check-seed-balance.cjs"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -31,7 +29,6 @@
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "@playwright/test": "^1.49.0",
     "concurrently": "^9.1.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "@openzeppelin/contracts": "^5.0.2",

@@ -81,7 +81,7 @@
 
 | ファイル | 参照箇所の概要 |
 |----------|----------------|
-| `src/titleUI.ts` | Connect / E2E 分岐、resetButton |
+| `src/titleUI.ts` | Connect、resetButton |
 | `src/store/GameStore.ts` | defaultGameState, resetToInitial, onboardingStep |
 | `src/domShell.ts` | リセットボタン、showGameShell, switchToTab, オンボーディングオーバーレイ、updateSaveWrapVisibility 呼び出し |
 | `src/views/farmingView.ts` | updateSaveWrapVisibility の条件 |
