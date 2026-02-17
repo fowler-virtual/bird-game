@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 5174",
     "build": "tsc && vite build",
     "vercel-build": "echo \"skip frontend build for Vercel claim API\"",
     "preview": "vite preview",
@@ -18,16 +18,19 @@
     "deploy:network-state": "hardhat run scripts/deploy-network-state.cjs --network localhost",
     "approve-claim": "node scripts/approve-reward-claim.cjs",
     "check-balance": "node scripts/check-seed-balance.cjs",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:ci": "cross-env VITE_E2E_MODE=1 playwright test"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
     "ethers": "^6.13.0",
     "express": "^4.21.0",
     "phaser": "^3.80.0",
-    "siwe": "^2.1.7"
+    "siwe": "^2.1.7",
+    "buffer": "^6.0.3"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "@playwright/test": "^1.49.0",
     "concurrently": "^9.1.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

@@ -1,3 +1,6 @@
+import { Buffer } from 'buffer';
+(globalThis as unknown as { Buffer: typeof Buffer }).Buffer = Buffer;
+
 import { GameStore } from './store/GameStore';
 import { initTitleUI, showTitleUI, hideTitleUI } from './titleUI';
 import { setupAccountChangeReload } from './wallet';
@@ -23,6 +26,16 @@ function runApp(): void {
 }
 
 function start(): void {
+  if (import.meta.env.VITE_E2E_MODE === '1') {
+    document.documentElement.setAttribute('data-e2e', '1');
+    let shell = document.getElementById('game-shell');
+    if (!shell) {
+      shell = document.createElement('div');
+      shell.id = 'game-shell';
+      document.body.appendChild(shell);
+    }
+    shell.classList.add('visible');
+  }
   try {
     runApp();
   } catch (e) {

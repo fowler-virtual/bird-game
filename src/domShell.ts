@@ -1467,7 +1467,12 @@ function initDebugPaneListeners(): void {
   const resetDisconnectBtn = document.getElementById('dom-debug-reset-disconnect');
   if (resetDisconnectBtn) {
     resetDisconnectBtn.addEventListener('click', () => {
-      if (!window.confirm('Reset game state and disconnect? (SEED, $SEED, birds, and Loft will be cleared. You will return to the title screen.)\n\nNote: Reset only clears local data; it does not send a transaction.')) return;
+      if (
+        !window.confirm(
+          'Reset game state and return to title? (SEED, $SEED, birds, and Loft will be cleared. Next time you connect, you will see the first-time adoption screen.)\n\nWallet will be disconnected. On-chain data cannot be reset.'
+        )
+      )
+        return;
       if (GameStore.walletAddress) {
         GameStore.clearCurrentWalletData();
       } else {

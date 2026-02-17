@@ -8,8 +8,6 @@ on:
 
 jobs:
   e2e:
-    env:
-      VITE_E2E_MODE: '1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,21 +15,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
-      - name: corepack enable
-        run: corepack enable
+      - name: npm ci
+        run: npm ci
 
-      - name: corepack prepare pnpm
-        run: corepack prepare pnpm@latest --activate
+      - name: playwright install --with-deps
+        run: npx playwright install --with-deps
 
-      - name: pnpm install
-        run: pnpm install
-
-      - name: playwright install chromium
-        run: pnpm exec playwright install chromium
-
-      - name: pnpm test:e2e
-        run: pnpm test:e2e
+      - name: npm run test:e2e
+        run: npm run test:e2e
+        env:
+          VITE_E2E_MODE: '1'
 
       - uses: actions/upload-artifact@v4
         if: always()
