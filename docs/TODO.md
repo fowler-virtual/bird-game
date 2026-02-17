@@ -4,6 +4,21 @@
 
 ---
 
+## 反映されていない現在の事象・進捗（製造責任者が参照）
+
+**データ同期・Vercel 本番（bird-game-udhr）まわり**
+
+- **実施済み（コード側）**
+  - **vercel.json**: `buildCommand` をダミー HTML 出力から **`npm run build`** に変更済み。`outputDirectory`: `dist`。ルートでゲームがビルド・表示される想定。
+  - **docs/VERCEL_VITE_CLAIM_API_URL.md**: A 案の手順を記載。本番例は `https://bird-game-udhr.vercel.app/api`。
+- **実施済み（依頼者側・報告ベース）**
+  - Vercel の bird-game-udhr に `VITE_CLAIM_API_URL=https://bird-game-udhr.vercel.app/api` を設定し、リデプロイ済み。
+- **補足**
+  - 「落ちた」は Cursor のクラッシュを指していた。Vercel やサイトの障害ではない。
+  - 修正が Git にコミット・push されていれば、Vercel は自動デプロイで `npm run build` が実行される。未コミットの場合は push 後にデプロイされる。
+
+---
+
 ## 最優先: Git版＋スマホでローカルと同様に動作させる
 
 **現状**: ローカル（PC・Chrome）では問題なく動くが、Git デプロイ版をスマホのメタマスクブラウザで開くと、ローカルと違う動きになることがある（Connect で止まる、承認をキャンセルしても処理が進む など）。
