@@ -6,6 +6,12 @@
 
 ## 反映されていない現在の事象・進捗（製造責任者が参照）
 
+**ゲームデータ同期の事象**
+
+- Connect 後、2 回目のウォレット（SIWE 署名）が開かない（Rabby / MetaMask 等）。その結果 Cookie が発行されず、GET/PUT が 401、「保存: 失敗」、毎回チュートリアルからになる。
+- 要件: 1 クリックで「接続 → 署名」の 2 回ウォレットが開く。同じボタン 2 回押し・別ボタン・新規モーダルは NG。
+- 実施済み: 処理順序変更（getGameState → ゲーム表示 → ensureSepolia / refreshSeedToken）、pending nonce（GET /auth/nonce アドレスなし）、nonce 失敗時の getAuthNonce フォールバック、api/auth/nonce.js・verify.js・siweNonceStore・sessionCookie の pending 対応。加えて本番でクライアントが API を叩けるよう **VITE_CLAIM_API_URL** を Vercel に設定する手順を実施（A 案）。
+
 **データ同期・Vercel 本番（bird-game-udhr）まわり**
 
 - **実施済み（コード側）**
