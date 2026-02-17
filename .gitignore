@@ -9,6 +9,8 @@ cache
 playwright-report/
 test-results/
 
-# IDE / tooling
-.cursor/
+# IDE / tooling（.cursor/rules/ はリポジトリに含め、端末移行時に clone で同じルールを使えるようにする）
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/*
 .vite/
