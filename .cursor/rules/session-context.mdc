@@ -19,7 +19,7 @@ alwaysApply: true
 2. **その中で指定された「読み込み順（必須）」のファイルを順に Read する**:
    - `docs/README.md`
    - `docs/TODO.md`
-   - 製造責任と運用ルール（パスは SESSION_START.md に記載。存在すれば読み、無ければスキップ）
+   - `docs/RESPONSIBILITY_AND_RULES.md`
 3. **読み終えたあと、短く要約して返答する**（例: 格納先・ToDoの最優先・ルールの要点）。以降の会話はこのコンテキストを前提にする。
 
 ## 補足

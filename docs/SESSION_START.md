@@ -10,7 +10,7 @@
 |----|------|------|
 | 1 | **docs/README.md** | ドキュメント格納先の方針と一覧。 |
 | 2 | **docs/TODO.md** | 残タスク・将来実装候補。最優先は Git 版＋スマホメタマスクの parity。 |
-| 3 | **製造責任と運用ルール** | 本リポジトリ外。可能なら読み込む: `C:\Users\yuta_\.cursor\worktrees\bird-game\rme\docs\RESPONSIBILITY_AND_RULES.md`。 |
+| 3 | **docs/RESPONSIBILITY_AND_RULES.md** | 製造責任と運用ルール。返答前に必ず参照する。 |
 
 ---
 
@@ -22,10 +22,10 @@
 
 ---
 
-## 端末移行時
+## 端末移行時・新セッション時
 
-- リポジトリには `.cursor/rules/*.mdc` が含まれており、`git clone` すれば同じ Cursor ルールが使える。
-- 製造責任と運用ルール（RESPONSIBILITY_AND_RULES）は worktree 側にあるため、必要ならその worktree をクローンするか、パスを新環境に合わせて用意する。
+- **すべて docs/ と .cursor/rules/ に集約**してある。`git clone` すればルール・製造責任と運用ルール・ToDo・格納先の説明が揃い、端末を替えても同じ状態で開発できる。
+- 新セッションでは「コンテキストを読み込んで」等と伝えると、上記の必須ドキュメントを順に読み込み、同じ前提で続きから進められる。
 
 ## ユーザーが使う言い方の例
 
