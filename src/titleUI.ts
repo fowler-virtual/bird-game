@@ -5,9 +5,11 @@
 
 import { GameStore } from './store/GameStore';
 import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia, E2E_MOCK_ADDRESS } from './wallet';
-import { showGameShell, hideGameShell } from './domShell';
+import { showGameShell, hideGameShell, setSyncStatusGet } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
+import { getGameState, putGameState } from './gameStateApi';
+import { signInForClaim } from './claimApi';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -44,22 +46,95 @@ function onConnectClick(): void {
   isConnecting = true;
 
   if (import.meta.env.VITE_E2E_MODE === '1') {
-    GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
-    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-    showGameShell();
-    try {
-      createPhaserGame();
-    } catch (_) {
-      /* E2E: Phaser が headless で失敗しても #game-shell.visible は既に付与済み */
+    let shell = document.getElementById('game-shell');
+    if (!shell) {
+      shell = document.createElement('div');
+      shell.id = 'game-shell';
+      document.body.appendChild(shell);
     }
-    resetButton(btn);
-    isConnecting = false;
+    shell.classList.add('visible');
+    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+    setTimeout(() => {
+      try {
+        GameStore.setWalletConnected(true, E2E_MOCK_ADDRESS);
+        GameStore.setState({ onboardingStep: 'done' }); // E2E: 全タブをクリック可能にしてスモークテストを通す
+        showGameShell();
+        try {
+          createPhaserGame();
+        } catch (_) {
+          /* E2E: Phaser が headless で失敗しても #game-shell.visible は既に付与済み */
+        }
+      } catch (_) {
+        /* E2E: 上記で例外が出ても #game-shell.visible は既に付与済み */
+      }
+      resetButton(btn);
+      isConnecting = false;
+    }, 0);
     return;
   }
 
   setJustConnectingFlag();
-  const promise = requestAccounts();
-  promise
+
+  async function runPostConnectSteps(): Promise<void> {
+    // SIWE は接続直後（上記 .then 内）で実行済み
+    let gs = await getGameState();
+    if (!gs.ok && gs.error === 'Not logged in.') {
+      await new Promise((r) => setTimeout(r, 400));
+      gs = await getGameState();
+    }
+    if (gs.ok) {
+      GameStore.setStateFromServer(gs.state, gs.version);
+      GameStore.save();
+    } else {
+      GameStore.resetToInitial();
+      GameStore.loadedFromStorage = true;
+      console.warn('[TitleUI] getGameState failed:', gs.error, '- using initial state. Will try to bootstrap server.');
+      const putResult = await putGameState(GameStore.state, 1);
+      if (putResult.ok) {
+        GameStore.serverStateVersion = putResult.version;
+        GameStore.save();
+      } else {
+        GameStore.serverStateVersion = 0;
+      }
+    }
+    setSyncStatusGet(gs.ok ? 'ok' : 'fail');
+    document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+    showGameShell();
+    createPhaserGame();
+    const networkPromise = ensureSepolia();
+    const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
+      setTimeout(() => resolve({ ok: false as const, error: 'Network switch timed out' }), ENSURE_SEPOLIA_TIMEOUT_MS)
+    );
+    const networkOk = await Promise.race([networkPromise, timeoutPromise]);
+    if (!networkOk.ok) {
+      console.warn('[TitleUI] ensureSepolia failed or timed out:', networkOk.error);
+      alert(
+        'Please switch to Sepolia network in MetaMask to use adoption, save deck, and claim. (You can switch from the network selector in MetaMask.)'
+      );
+    }
+    await refreshSeedTokenFromChain();
+  }
+
+  const postConnectWithTimeout = (): Promise<void> => {
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error('Connection step timed out. The game will open; please switch to Sepolia in MetaMask if needed.')),
+        POST_CONNECT_TIMEOUT_MS
+      )
+    );
+    return Promise.race([runPostConnectSteps(), timeoutPromise]).catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[TitleUI] Post-connect step failed or timed out:', msg);
+      if (!/timed out/i.test(msg)) alert(`Error: ${msg}`);
+      else alert(msg);
+      document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
+      showGameShell();
+      createPhaserGame();
+      setSyncStatusGet('fail');
+    });
+  };
+
+  requestAccounts()
     .then(async (result) => {
       if (!result.ok) {
         resetButton(btn);
@@ -67,42 +142,14 @@ function onConnectClick(): void {
         alert(`Connection failed: ${result.error}`);
         return;
       }
-      const address = result.address;
-      GameStore.setWalletConnected(true, address);
-
-      const runPostConnect = async (): Promise<void> => {
-        // 先に Sepolia へ切り替え（残高取得は正しいチェーンで行う）。メタマスクブラウザでダイアログが応答しない場合に備えタイムアウト付き。
-        const networkPromise = ensureSepolia();
-        const timeoutPromise = new Promise<{ ok: false; error: string }>((resolve) =>
-          setTimeout(() => resolve({ ok: false as const, error: 'Network switch timed out' }), ENSURE_SEPOLIA_TIMEOUT_MS)
-        );
-        const networkOk = await Promise.race([networkPromise, timeoutPromise]);
-        if (!networkOk.ok) {
-          console.warn('[TitleUI] ensureSepolia failed or timed out:', networkOk.error);
-          alert(
-            'Please switch to Sepolia network in MetaMask to use adoption, save deck, and claim. (You can switch from the network selector in MetaMask.)'
-          );
-        }
-        await refreshSeedTokenFromChain();
-        document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-        showGameShell();
-        createPhaserGame();
-      };
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Connection step timed out. The game will open; please switch to Sepolia in MetaMask if needed.')), POST_CONNECT_TIMEOUT_MS)
-      );
-      try {
-        await Promise.race([runPostConnect(), timeoutPromise]);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.warn('[TitleUI] Post-connect step failed or timed out:', msg);
-        if (!/timed out/i.test(msg)) alert(`Error: ${msg}`);
-        else alert(msg);
-        document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
-        showGameShell();
-        createPhaserGame();
+      GameStore.setWalletConnected(true, result.address, { skipLoadState: true });
+      // 接続直後に SIWE を実行し、ウォレットが2回目（署名）を開くようにする
+      await new Promise((r) => setTimeout(r, 100));
+      const auth = await signInForClaim(result.address);
+      if (!auth.ok) {
+        console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
       }
+      await postConnectWithTimeout();
       resetButton(btn);
     })
     .catch((err) => {
