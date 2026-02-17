@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     }
     const nonce = msg.nonce;
     if (!nonce) return res.status(400).json({ ok: false, error: "No nonce in message." });
-    if (!consumeNonce(address, nonce)) {
+    if (!(await consumeNonce(address, nonce))) {
       return res.status(400).json({ ok: false, error: "Invalid or expired nonce." });
     }
     if (!setSessionCookie(res, address)) {

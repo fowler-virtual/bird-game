@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
   const address = req.query?.address;
   const nonce = typeof address === "string" && address.trim()
-    ? createNonce(address.trim())
-    : createPendingNonce();
+    ? await createNonce(address.trim())
+    : await createPendingNonce();
   return res.status(200).json({ nonce });
 }
