@@ -115,7 +115,12 @@ export async function signAndVerifyWithNonce(address: string, nonce: string): Pr
     console.log("[Connect] postAuthVerify:", result.ok ? "ok" : result.error);
     return result;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg =
+      e instanceof Error
+        ? e.message
+        : e && typeof e === "object" && "message" in e
+          ? String((e as { message: unknown }).message)
+          : String(e);
     console.log("[Connect] signAndVerifyWithNonce error:", msg);
     if (/user rejected|user denied/i.test(msg)) {
       return { ok: false, error: "Signature rejected." };
