@@ -23,7 +23,6 @@ const PAD = 24;
 
 export class DebugScene extends Phaser.Scene {
   private seedText!: Phaser.GameObjects.Text;
-  private birdText!: Phaser.GameObjects.Text;
   private loftText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -83,7 +82,7 @@ export class DebugScene extends Phaser.Scene {
     y += ROW_H;
 
     this.add.text(left, y, '$SEED（オンチェーン・表示のみ）', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0, 0.5).setDepth(d);
-    this.birdText = this.add.text(valueX, y, String(GameStore.seedToken), { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0, 0.5).setDepth(d);
+    this.add.text(valueX, y, String(GameStore.seedToken), { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0, 0.5).setDepth(d);
     y += ROW_H;
 
     this.add.text(left, y, 'Loft Level', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0, 0.5).setDepth(d);
