@@ -1371,7 +1371,6 @@ function refreshDebugPane(): void {
 
 function initDebugPaneListeners(): void {
   const seedSetBtn = document.getElementById('dom-debug-seed-set');
-  const birdSetBtn = document.getElementById('dom-debug-bird-set');
   if (seedSetBtn) {
     seedSetBtn.addEventListener('click', () => {
       const v = window.prompt('SEED', String(GameStore.state.seed));
@@ -1384,18 +1383,7 @@ function initDebugPaneListeners(): void {
       emitGameRefresh();
     });
   }
-  if (birdSetBtn) {
-    birdSetBtn.addEventListener('click', () => {
-      const v = window.prompt('$SEED', String(GameStore.seedToken));
-      if (v == null) return;
-      const n = Math.floor(Number(v));
-      if (!Number.isFinite(n) || n < 0) return;
-      GameStore.seedToken = n;
-      GameStore.save();
-      refreshDebugPane();
-      emitGameRefresh();
-    });
-  }
+  // $SEED はオンチェーンに移行しているため Set ボタンは廃止（書き換え不可）
   document.querySelectorAll('.debug-loft-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const level = Number((btn as HTMLElement).getAttribute('data-level'));

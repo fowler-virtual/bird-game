@@ -82,15 +82,8 @@ export class DebugScene extends Phaser.Scene {
     this.add.text(btnX, y, 'Set', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(d);
     y += ROW_H;
 
-    this.add.text(left, y, '$SEED', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0, 0.5).setDepth(d);
+    this.add.text(left, y, '$SEED（オンチェーン・表示のみ）', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0, 0.5).setDepth(d);
     this.birdText = this.add.text(valueX, y, String(GameStore.seedToken), { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0, 0.5).setDepth(d);
-    this.add
-      .rectangle(btnX, y, 56, BTN_H, BG_ELEVATED)
-      .setStrokeStyle(1, BORDER)
-      .setDepth(d)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.setBird());
-    this.add.text(btnX, y, 'Set', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_PRIMARY }).setOrigin(0.5).setDepth(d);
     y += ROW_H;
 
     this.add.text(left, y, 'Loft Level', { resolution: TEXT_RESOLUTION, fontSize: FONT_LABEL, color: TEXT_MUTED }).setOrigin(0, 0.5).setDepth(d);
@@ -137,14 +130,6 @@ export class DebugScene extends Phaser.Scene {
       GameStore.setState({ seed: n });
       GameStore.save();
       this.seedText.setText(String(n));
-    });
-  }
-
-  private setBird(): void {
-    this.openNumberInput('$SEED', String(GameStore.seedToken), (n) => {
-      GameStore.seedToken = n;
-      GameStore.save();
-      this.birdText.setText(String(n));
     });
   }
 
