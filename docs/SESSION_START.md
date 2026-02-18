@@ -18,7 +18,6 @@
 ## 必要に応じて参照
 
 - **直近の確認・修正**: `docs/CONFIRMATION_*.md`, `docs/FIX_*.md`（日付の新しいもの）
-- **進捗ログ**: `docs/CURSOR_PROGRESS.md`
 - **開発フロー・スマホ検証**: `docs/DEV_FLOW_AND_MOBILE.md`
 
 ---
