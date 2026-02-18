@@ -2,7 +2,7 @@
  * Claim API client (A-spec): SIWE session, server-decided amount, EIP-712 signature, confirm after tx.
  */
 
-import { BrowserProvider } from "ethers";
+import { BrowserProvider, getAddress } from "ethers";
 import { SiweMessage } from "siwe";
 
 function getClaimApiBase(): string | null {
@@ -53,6 +53,86 @@ export async function getAuthNonce(address: string): Promise<AuthNonceResult> {
 }
 
 /**
+ * Get a pending SIWE nonce (no address). Use with connect: run in parallel with requestAccounts
+ * so when both resolve we can call signAndVerifyWithNonce immediately (one fewer await before signMessage).
+ * Server must support GET /auth/nonce without address.
+ */
+export async function getAuthNoncePending(): Promise<AuthNonceResult> {
+  const base = getClaimApiBase();
+  console.log("[Connect] Claim API base:", base ?? "(not set)");
+  try {
+    const res = await apiFetch("/auth/nonce");
+    const data = (await res.json().catch(() => ({}))) as { nonce?: string; error?: string };
+    if (!res.ok) {
+      console.log("[Connect] GET /auth/nonce failed:", res.status, data.error ?? data);
+      return { ok: false, error: data.error || `Failed (${res.status})` };
+    }
+    if (!data.nonce) {
+      console.log("[Connect] GET /auth/nonce invalid response:", data);
+      return { ok: false, error: "Invalid nonce response." };
+    }
+    console.log("[Connect] GET /auth/nonce ok");
+    return { ok: true, nonce: data.nonce };
+  } catch (e) {
+    const err = e instanceof Error ? e.message : String(e);
+    console.log("[Connect] GET /auth/nonce error:", err);
+    return { ok: false, error: err };
+  }
+}
+
+/**
+ * Build SIWE message, sign with wallet, verify on server. Call this immediately after getAuthNonce
+ * so signMessage runs close to the user gesture (connect).
+ */
+const SEPOLIA_CHAIN_ID = 11155111;
+
+export async function signAndVerifyWithNonce(address: string, nonce: string): Promise<AuthVerifyResult> {
+  console.log("[Connect] signAndVerifyWithNonce called, address:", address?.slice(0, 10) + "...");
+  if (typeof window === "undefined" || !window.ethereum) {
+    console.log("[Connect] signAndVerifyWithNonce: no wallet");
+    return { ok: false, error: "No wallet." };
+  }
+  try {
+    const checksummed = getAddress(address);
+    const provider = new BrowserProvider(window.ethereum);
+    const chainId = SEPOLIA_CHAIN_ID;
+    const siweMessage = new SiweMessage({
+      domain: typeof window !== "undefined" ? window.location.host : "",
+      address: checksummed,
+      statement: "Sign in to claim $SEED rewards.",
+      uri: typeof window !== "undefined" ? window.location.origin : "",
+      version: "1",
+      chainId,
+      nonce,
+      issuedAt: new Date().toISOString(),
+      expirationTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    });
+    const message = siweMessage.prepareMessage();
+    const signer = await provider.getSigner();
+    console.log("[Connect] calling signer.signMessage (wallet popup should open)");
+    const signature = await signer.signMessage(message);
+    console.log("[Connect] signMessage done, posting verify");
+    const result = await postAuthVerify(message, signature, checksummed);
+    console.log("[Connect] postAuthVerify:", result.ok ? "ok" : result.error);
+    return result;
+  } catch (e) {
+    const msg =
+      e instanceof Error
+        ? e.message
+        : e && typeof e === "object" && "message" in e
+          ? String((e as { message: unknown }).message)
+          : e && typeof e === "object"
+            ? JSON.stringify(e)
+            : String(e);
+    console.log("[Connect] signAndVerifyWithNonce error:", msg);
+    if (/user rejected|user denied/i.test(msg)) {
+      return { ok: false, error: "Signature rejected." };
+    }
+    return { ok: false, error: msg || "Sign-in failed." };
+  }
+}
+
+/**
  * Sign in with Ethereum for Claim: get nonce, build SIWE message, sign with wallet, verify on server.
  * Call this when /claim returns 401 (e.g. after Connect Wallet, before first claim).
  */
@@ -62,32 +142,7 @@ export async function signInForClaim(address: string): Promise<AuthVerifyResult>
   }
   const nonceRes = await getAuthNonce(address);
   if (!nonceRes.ok) return nonceRes;
-  try {
-    const provider = new BrowserProvider(window.ethereum);
-    const network = await provider.getNetwork();
-    const chainId = Number(network.chainId);
-    const siweMessage = new SiweMessage({
-      domain: typeof window !== "undefined" ? window.location.host : "",
-      address,
-      statement: "Sign in to claim $SEED rewards.",
-      uri: typeof window !== "undefined" ? window.location.origin : "",
-      version: "1",
-      chainId,
-      nonce: nonceRes.nonce,
-      issuedAt: new Date().toISOString(),
-      expirationTime: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    });
-    const message = siweMessage.prepareMessage();
-    const signer = await provider.getSigner();
-    const signature = await signer.signMessage(message);
-    return postAuthVerify(message, signature, address);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (/user rejected|user denied/i.test(msg)) {
-      return { ok: false, error: "Signature rejected." };
-    }
-    return { ok: false, error: msg || "Sign-in failed." };
-  }
+  return signAndVerifyWithNonce(address, nonceRes.nonce);
 }
 
 /**
@@ -100,9 +155,11 @@ export async function postAuthVerify(message: string, signature: string, address
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, signature, address }),
     });
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!res.ok) return { ok: false, error: data.error || `Failed (${res.status})` };
-    return data.ok ? { ok: true } : { ok: false, error: data.error || "Verify failed." };
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string | { message?: string } };
+    const errStr = (v: unknown): string =>
+      typeof v === "string" ? v : v && typeof v === "object" && "message" in v ? String((v as { message: unknown }).message) : JSON.stringify(v);
+    if (!res.ok) return { ok: false, error: errStr(data.error) || `Failed (${res.status})` };
+    return data.ok ? { ok: true } : { ok: false, error: errStr(data.error) || "Verify failed." };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

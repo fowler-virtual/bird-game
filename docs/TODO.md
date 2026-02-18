@@ -4,6 +4,33 @@
 
 ---
 
+## 反映されていない現在の事象・進捗（製造責任者が参照）
+
+**ゲームデータ同期の事象**
+
+- Connect 後、2 回目のウォレット（SIWE 署名）が開かない（Rabby / MetaMask 等）。その結果 Cookie が発行されず、GET/PUT が 401、「保存: 失敗」、毎回チュートリアルからになる。
+- 要件: 1 クリックで「接続 → 署名」の 2 回ウォレットが開く。同じボタン 2 回押し・別ボタン・新規モーダルは NG。
+- 実施済み: 処理順序変更（getGameState → ゲーム表示 → ensureSepolia / refreshSeedToken）、pending nonce（GET /auth/nonce アドレスなし）、nonce 失敗時の getAuthNonce フォールバック、api/auth/nonce.js・verify.js・siweNonceStore・sessionCookie の pending 対応。加えて本番でクライアントが API を叩けるよう **VITE_CLAIM_API_URL** を Vercel に設定する手順を実施（A 案）。
+
+**データ同期・Vercel 本番（bird-game-udhr）まわり**
+
+- **実施済み（コード側）**
+  - **vercel.json**: `buildCommand` をダミー HTML 出力から **`npm run build`** に変更済み。`outputDirectory`: `dist`。ルートでゲームがビルド・表示される想定。
+  - **docs/VERCEL_VITE_CLAIM_API_URL.md**: A 案の手順を記載。本番例は `https://bird-game-udhr.vercel.app/api`。
+- **実施済み（依頼者側・報告ベース）**
+  - Vercel の bird-game-udhr に `VITE_CLAIM_API_URL=https://bird-game-udhr.vercel.app/api` を設定し、リデプロイ済み。
+- **補足**
+  - 「落ちた」は Cursor のクラッシュを指していた。Vercel やサイトの障害ではない。
+  - 修正が Git にコミット・push されていれば、Vercel は自動デプロイで `npm run build` が実行される。未コミットの場合は push 後にデプロイされる。
+- **依頼者報告（現状）**
+  - Git（fowler-virtual.github.io/bird-game）でも Vercel（bird-game-udhr.vercel.app）でも、ログイン試行時に**最初の接続（ウォレット接続）しか出ず、2 回目（SIWE 署名）は出ない**。
+- **診断ログ（2回目ウォレットが出ない切り分け用）**
+  - `src/claimApi.ts`: Claim API base、GET /auth/nonce の成否、signAndVerifyWithNonce 呼び出し・signMessage 前・verify 結果・エラーを `[Connect]` プレフィックスで console に出力。
+  - `src/titleUI.ts`: requestAccounts 成功時の nonce 取得結果を `[Connect]` で出力。
+  - **次の確認**: どちらかのサイトで Connect を押したあと、ブラウザの開発者ツール（F12）→ **Console** を開き、`[Connect]` で始まる行だけ見る。最後に出力された `[Connect]` の内容を共有してもらえれば、どこで止まっているか判断できる（例: base が (not set) → ビルドに VITE_CLAIM_API_URL が無い / nonce 失敗 → API や CORS / signMessage 直前まで出ている → ウォレットが 2 回目を出していない、など）。
+
+---
+
 ## 最優先: Git版＋スマホでローカルと同様に動作させる
 
 **現状**: ローカル（PC・Chrome）では問題なく動くが、Git デプロイ版をスマホのメタマスクブラウザで開くと、ローカルと違う動きになることがある（Connect で止まる、承認をキャンセルしても処理が進む など）。

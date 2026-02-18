@@ -20,9 +20,15 @@ npm install
 npm run dev
 ```
 
-ブラウザで `http://localhost:5174` を開く。MetaMask は Sepolia に切り替えて使用。
+ブラウザで `http://localhost:5175` を開く。MetaMask は Sepolia に切り替えて使用。
 
-- **ガチャ・デッキ SAVE・Claim などオンチェーン処理を試す場合**: `.env` を用意する（` .env.example` をコピーして必要な値を設定）。Sepolia 用のコントラクトアドレスや RPC が未設定だと、一部機能はエラーになるが、接続〜ゲーム画面表示までは確認できる。
+- **ガチャ・デッキ SAVE・Claim などオンチェーン処理を試す場合**: `.env` を用意する（`.env.example` をコピーして必要な値を設定）。Sepolia 用のコントラクトアドレスや RPC が未設定だと、一部機能はエラーになるが、接続〜ゲーム画面表示までは確認できる。
+
+- **ローカルで Claim を試すとき**（監査対応後のサーバ主導仕様）:
+  1. `.env` に次を設定: `VITE_CLAIM_API_URL=http://localhost:3001`, `VITE_REWARD_CLAIM_ADDRESS`（デプロイ済み RewardClaim アドレス）, `ALLOWED_CLAIM_ORIGIN=http://localhost:5175`, `SESSION_SECRET`（16 文字以上）, `REWARD_CLAIM_CHAIN_ID=31337`, `REWARD_CLAIM_CONTRACT_ADDRESS`（上と同じアドレス）, `CLAIM_SIGNER_PRIVATE_KEY`（署名用鍵）。
+  2. チェーン・サーバ起動: `npm run chain` のあと別ターミナルで `npm run server`。
+  3. **サーバを止めて** `node scripts/set-claimable.cjs <接続するウォレットのアドレス> <量 wei>` で claimable を付与（例: `1000000000000000000` = 1 SEED）。その後 `npm run server` を再開。
+  4. フロントで Connect → Sign-in（Claim 初回時）→ Claim 実行。
 
 ---
 

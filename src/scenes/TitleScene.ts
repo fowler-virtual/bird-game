@@ -8,9 +8,8 @@ export class TitleScene extends Phaser.Scene {
   }
 
   create(): void {
-    const persisted = GameStore.getPersistedWallet();
-    GameStore.walletConnected = persisted.connected;
-    GameStore.walletAddress = persisted.address;
+    GameStore.walletConnected = false;
+    GameStore.walletAddress = null;
     resetTitleUIState();
     initTitleUI(); // 初回のみリスナー登録。Disconnect 後も外さないので再接続で確実に反応する
     showTitleUI();
