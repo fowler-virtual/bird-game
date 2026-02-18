@@ -9,8 +9,9 @@
 | 順 | パス | 内容 |
 |----|------|------|
 | 1 | **docs/README.md** | ドキュメント格納先の方針と一覧。 |
-| 2 | **docs/TODO.md** | 残タスク・将来実装候補。最優先は Git 版＋スマホメタマスクの parity。 |
-| 3 | **docs/RESPONSIBILITY_AND_RULES.md** | 製造責任と運用ルール。返答前に必ず参照する。 |
+| 2 | **docs/REQUIREMENTS.md** | 要件集約。対応環境・最優先目標・画面構成・$SEED 等の制約。 |
+| 3 | **docs/TODO.md** | 残タスク・将来実装候補。最優先は Git 版＋スマホメタマスクの parity。 |
+| 4 | **docs/RESPONSIBILITY_AND_RULES.md** | 製造責任と運用ルール。返答前に必ず参照する。 |
 
 ---
 
