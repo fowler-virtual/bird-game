@@ -102,7 +102,6 @@ export const SEPOLIA_CHAIN_ID = '0xaa36a7'; // 11155111
  * 現在のチェーン ID を取得（プロンプトなし）。Connect 押下時に「既に Sepolia か」を判定するために使う。
  */
 export async function getCurrentChainId(): Promise<string | null> {
-  if (isE2EMode()) return null;
   const provider = getProvider();
   if (!provider) return null;
   try {
