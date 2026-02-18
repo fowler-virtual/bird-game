@@ -4,8 +4,26 @@
  * VITE_REWARD_CLAIM_ADDRESS が .env に設定されているときのみ有効。
  */
 
-import { BrowserProvider, Contract } from 'ethers';
+import { AbiCoder, BrowserProvider, Contract } from 'ethers';
 import type { ClaimSignature } from './claimApi';
+
+/** Revert data: Error(string) selector (Solidity require) */
+const ERROR_STRING_SELECTOR = '0x08c379a0';
+
+function decodeRevertReason(data: unknown): string | null {
+  if (typeof data !== 'string' || !data.startsWith('0x')) return null;
+  if (data.slice(0, 10).toLowerCase() !== ERROR_STRING_SELECTOR.toLowerCase()) return null;
+  try {
+    const tail = data.slice(10);
+    if (tail.length < 128) return null;
+    const abiCoder = AbiCoder.defaultAbiCoder();
+    const decoded = abiCoder.decode(['string'], '0x' + tail);
+    const msg = decoded?.[0];
+    return typeof msg === 'string' ? msg : null;
+  } catch {
+    return null;
+  }
+}
 
 const REWARD_CLAIM_ABI = [
   'function claimEIP712(address recipient, uint256 amount, uint256 nonce, uint256 deadline, bytes32 campaignId, uint8 v, bytes32 r, bytes32 s) external',
@@ -58,11 +76,49 @@ export async function executeClaim(signature: ClaimSignature): Promise<
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     if (/user rejected|user denied/i.test(msg)) return { ok: false, error: 'Transaction rejected.' };
-    if (/execution reverted|CALL_EXCEPTION|revert|RewardClaim/i.test(msg)) {
+
+    const err = e as { data?: string; error?: { data?: string }; info?: { error?: { data?: string } } };
+    const revertData = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
+    const reason = revertData ? decodeRevertReason(revertData) : null;
+
+    if (/execution reverted|CALL_EXCEPTION|revert|RewardClaim/i.test(msg) || reason) {
+      if (reason) {
+        if (/signature expired|expired/i.test(reason)) {
+          return { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
+        }
+        if (/nonce already used/i.test(reason)) {
+          return { ok: false, error: 'This claim was already used. Request a new claim and try again.' };
+        }
+        if (/invalid signature/i.test(reason)) {
+          return {
+            ok: false,
+            error:
+              'Invalid signature: the contract signer does not match the server key. Check VERCEL_ENV_VARS.md — CLAIM_SIGNER_PRIVATE_KEY must correspond to the RewardClaim contract’s signer address.',
+          };
+        }
+        if (/transfer failed/i.test(reason)) {
+          return { ok: false, error: 'Claim reverted: reward pool transfer failed (e.g. insufficient balance or allowance).' };
+        }
+        if (/recipient must be caller/i.test(reason)) {
+          return { ok: false, error: 'Claim failed: you must call claim from the same wallet that received the signature.' };
+        }
+        return { ok: false, error: `Claim failed: ${reason}` };
+      }
       if (/expired|signature expired/i.test(msg)) {
         return { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
       }
-      return { ok: false, error: 'Claim failed. The signature may have already been used or is invalid.' };
+      return {
+        ok: false,
+        error:
+          'Claim failed (revert). If it keeps happening, ensure the contract’s signer matches the server’s CLAIM_SIGNER_PRIVATE_KEY — see docs/VERCEL_ENV_VARS.md.',
+      };
+    }
+    if (/429|Too Many Requests/i.test(msg)) {
+      return {
+        ok: false,
+        error:
+          'RPC rate limit (429). In your wallet (MetaMask / Rabby): Settings → Networks → Sepolia → set RPC URL to https://rpc.sepolia.org (or another provider), then try again.',
+      };
     }
     if (/Internal JSON-RPC error| -32603 /i.test(msg)) {
       const err = e as { data?: { message?: string }; info?: { error?: { message?: string } }; reason?: string };

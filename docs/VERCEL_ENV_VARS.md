@@ -63,3 +63,17 @@ Vercel の **Settings → Environment Variables** で設定する項目の一覧
 
 - **SAVE ボタンは LOFT タブにのみある。FARMING タブには SAVE ボタンはない。** デッキのオンチェーン保存は LOFT タブで行う。
 - Claim 可能量はサーバー側の game-state（seed）から計算する。デバッグで SEED を増やした場合は、**LOFT タブで SAVE** してから Claim すること。
+
+## Claim で 429 (Too Many Requests) が出る場合
+
+- ウォレット（MetaMask / Rabby など）が Sepolia に接続するとき使う **RPC**（例: Infura）のレート制限に当たっている。
+- **対処**: ウォレットの設定 → ネットワーク → Sepolia → **RPC URL** を `https://rpc.sepolia.org` など別のプロバイダーに変更してから再度 Claim を試す。
+
+## Claim がオンチェーンで revert する場合（invalid signature など）
+
+- 画面に **「Invalid signature」** や **「the contract signer does not match」** と出る場合、RewardClaim コントラクトに登録されている **signer** と、Vercel の **CLAIM_SIGNER_PRIVATE_KEY** から導出したアドレスが一致していません。
+- **確認手順**
+  1. 秘密鍵からアドレスを出す（例: `node -e "const {Wallet}=require('ethers'); console.log(new Wallet(process.env.CLAIM_SIGNER_PRIVATE_KEY).address)"` でローカル確認、または Vercel のログに signer アドレスを一時出力して確認）。
+  2. Sepolia の RewardClaim コントラクトの **signer()** をブロックエクスプローラーや cast で確認（例: `cast call <REWARD_CLAIM_ADDRESS> "signer()" --rpc-url <SEPOLIA_RPC>`）。
+  3. 両者が同じアドレスになるように、**デプロイ時に RewardClaim の constructor に渡した signer** と **CLAIM_SIGNER_PRIVATE_KEY** のペアを揃える（どちらかを変更して再デプロイ or 環境変数を合わせる）。
+- その他の revert（`signature expired` / `nonce already used` / `transfer failed`）は、画面のエラーメッセージに従って対処してください。
