@@ -92,7 +92,11 @@ export async function putGameState(state: GameState, version: number): Promise<P
       if (res.status === 409 || data.code === 'STALE_DATA') {
         return { ok: false, error: 'Stale data.' };
       }
-      return { ok: false, error: (data as { message?: string }).message ?? `Failed (${res.status})` };
+      const errMsg = (data as { message?: string; error?: string }).message ?? (data as { error?: string }).error ?? `Failed (${res.status})`;
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[gameStateApi] PUT /game-state failed:', res.status, errMsg);
+      }
+      return { ok: false, error: errMsg };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return { ok: false, error: msg };
