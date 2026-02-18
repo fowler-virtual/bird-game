@@ -135,16 +135,19 @@ export function scheduleServerSync(): void {
 /**
  * 未送信の状態をただちにサーバーへ送る（デバウンスタイマーをキャンセルして即実行）。
  * Claim 前に呼ぶと、デバッグで増やした SEED がサーバーに反映されてから claimable が計算される。
+ * @returns サーバーへの保存が成功したか（API 未設定の場合は true）
  */
-export async function flushServerSync(): Promise<void> {
+export async function flushServerSync(): Promise<boolean> {
   if (serverSyncTimer != null) {
     clearTimeout(serverSyncTimer);
     serverSyncTimer = null;
   }
-  if (!getClaimApiBase()) return;
+  if (!getClaimApiBase()) return true;
   const v = GameStore.serverStateVersion || 1;
   const result = await putGameState(GameStore.state, v);
-  if (!result.ok && result.error !== 'Stale data.') {
+  if (result.ok) return true;
+  if (result.error !== 'Stale data.') {
     console.warn('[gameStateApi] flush server sync failed:', result.error);
   }
+  return false;
 }

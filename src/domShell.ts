@@ -1565,16 +1565,31 @@ function initTabListeners(): void {
           }
 
           flushServerSync()
-            .then(() => doRequestClaim())
+            .then((syncOk) => {
+              if (!syncOk) console.warn('[Claim] Game state sync to server failed. Claim may show "Nothing to claim".');
+              return doRequestClaim();
+            })
             .then((result) => {
             if (!result.ok) {
               if (result.error === 'No claimable amount.') {
-                showMessageModal({
-                  title: 'Nothing to claim',
-                  message: 'There is nothing to claim right now. Earn more SEED or try again later.',
-                  success: false,
-                }).then(() => { if (claimBtn) claimBtn.disabled = false; });
-                return;
+                return flushServerSync().then((retrySyncOk) => {
+                  if (!retrySyncOk) console.warn('[Claim] Retry sync failed.');
+                  return doRequestClaim();
+                }).then((retryResult) => {
+                  if (!retryResult.ok && retryResult.error === 'No claimable amount.') {
+                    showMessageModal({
+                      title: 'Nothing to claim',
+                      message: 'There is nothing to claim right now. If you increased SEED in Debug, open the LOFT tab, press Save, wait a few seconds, then try Claim again.',
+                      success: false,
+                    }).then(() => { if (claimBtn) claimBtn.disabled = false; });
+                    return;
+                  }
+                  if (!retryResult.ok) {
+                    showMessageModal({ title: 'Claim failed', message: retryResult.error ?? 'Unknown error.', success: false }).then(() => { if (claimBtn) claimBtn.disabled = false; });
+                    return;
+                  }
+                  runClaimWithSignature(retryResult.signature);
+                });
               }
               if (result.error === 'Not logged in. Sign in with your wallet first.') {
                 showMessageModal({

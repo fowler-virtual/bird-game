@@ -5,7 +5,7 @@ import { Wallet, getAddress, Signature } from "ethers";
 import { getSessionAddress } from "./_lib/sessionCookie.js";
 import { checkRateLimit, getClientKey } from "./_lib/rateLimit.js";
 import { setCorsHeaders } from "./_lib/cors.js";
-import { reserve } from "./_lib/claimStoreKV.js";
+import { reserve, getClaimableAsync } from "./_lib/claimStoreKV.js";
 
 const DEFAULT_CAMPAIGN_ID = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -53,6 +53,8 @@ export default async function handler(req, res) {
 
   const reserved = await reserve(sessionAddress);
   if (!reserved) {
+    const claimable = await getClaimableAsync(sessionAddress).catch(() => 0n);
+    console.warn("[claim] No claimable amount.", { address: sessionAddress?.slice(0, 10) + "…", claimable: String(claimable) });
     return res.status(400).json({ error: "No claimable amount." });
   }
 
