@@ -4,9 +4,12 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
+import { scheduleServerSync, flushServerSync } from './gameStateApi';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim, signInForClaim, postClaimConfirm } from './claimApi';
+
+GameStore.setOnSaveCallback(scheduleServerSync);
 import type { ClaimSignature } from './claimApi';
 import { executeClaim } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
@@ -1561,7 +1564,9 @@ function initTabListeners(): void {
             return requestClaim(address);
           }
 
-          doRequestClaim().then((result) => {
+          flushServerSync()
+            .then(() => doRequestClaim())
+            .then((result) => {
             if (!result.ok) {
               if (result.error === 'No claimable amount.') {
                 showMessageModal({

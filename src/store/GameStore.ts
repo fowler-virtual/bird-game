@@ -172,6 +172,12 @@ export const GameStore = {
   loadedFromStorage: false,
   /** サーバから取得した状態のバージョン（未取得時は 0） */
   serverStateVersion: 0 as number,
+  /** save() の後に呼ぶコールバック（例: サーバー同期のデバウンス）。domShell で gameStateApi.scheduleServerSync を登録する。 */
+  onSaveCallback: null as (() => void) | null,
+
+  setOnSaveCallback(cb: (() => void) | null): void {
+    this.onSaveCallback = cb;
+  },
 
   load(): void {
     try {
@@ -250,6 +256,7 @@ export const GameStore = {
     const prefix = storagePrefix(this.walletAddress);
     localStorage.setItem(stateKeyFor(prefix), JSON.stringify(this.state));
     localStorage.setItem(seedTokenKeyFor(prefix), String(Math.max(0, Math.floor(this.seedToken))));
+    if (this.onSaveCallback) this.onSaveCallback();
   },
 
   /** 読み込み後: デッキに鳥がいればオンボーディング完了扱いにして Farming を押せるようにする */
