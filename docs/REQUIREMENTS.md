@@ -72,7 +72,7 @@
 
 | 順 | 内容 | 方針 |
 |----|------|------|
-| 1 | Claim API | amount をクライアントから受け取らない。サーバで「このアドレスが引き出せる上限」を計算し、その値だけ署名。CORS 自ドメイン固定 ＋ rate limit。公開環境では実装完了まで claim を無効化（API 側で止める）。 |
+| 1 | Claim API | amount をクライアントから受け取らない。サーバで「このアドレスが引き出せる上限」を計算し、その値だけ署名。CORS 自ドメイン固定 ＋ rate limit。**Vercel 本番**: claimable を game-state の seed から算出し、KV で claimed/reserve を管理して署名を返す実装済み（`api/claim.js`・`api/claimable.js`・`api/claim/confirm.js`）。 |
 | 2 | 権威データ | claimable はサーバ（またはオンチェーン）で計算。クライアントの「表示用」と「サーバが認める claimable」を分離。 |
 | 3 | domShell | タブ・共通以外を views に縮退。1・2 のあとのリファクタで実施。 |
 | 4 | 自動チェック | ESLint, TS strict, npm audit, build を CI に組み込み。 |
@@ -82,11 +82,21 @@
 
 ---
 
-## 7. 開発・検証の考え方
+## 7. 開発・検証の流れ（方針）
+
+- **開発は基本ローカル**で行う。
+- **検証はほぼローカルで終わらせる**。オンチェーン周りの処理はローカル環境でも本番（Vercel）と同一の条件で検証し、問題なければ **Git に push** して **Vercel では最終チェック**のみ行う。
+
+### 7.1 ローカル検証でできること
+
+- **ウォレット接続（MetaMask / Rabby）**: ローカルで `pnpm run dev` してブラウザで開いても、拡張機能は同じように「接続」に反応する。**Vercel と同様に接続できる。**
+- **$SEED 残高・ガチャ（$SEED 支払い）・Loft 支払い・Save**: いずれも**オンチェーン（Sepolia）の同じコントラクト**を叩く。ローカルの `.env` に `VITE_SEED_TOKEN_ADDRESS` / `VITE_SEED_TREASURY_ADDRESS` など本番と同じ値を入れれば、**Vercel と同様に**トークン表示・ガチャ・Claim 以外の処理ができる。
+- **Claim（報酬を受け取る）**: Claim は **Claim API**（SIWE 署名 → サーバ発行の署名 → トランザクション送信）に依存する。ローカルで Claim まで検証するには、(1) ローカルで API も動かす（例: `vercel dev` と `VITE_CLAIM_API_URL=http://localhost:3000/api`）、または (2) ローカルフロントから Vercel の API を叩く（`VITE_CLAIM_API_URL=https://xxx.vercel.app/api`。Vercel 側で localhost を許可している場合のみ）。**設定次第で Vercel と同様に可能。**
+
+### 7.2 その他の考え方
 
 - **差異を出さない設計**: 非同期・ウォレット処理にはタイムアウトを設け、エラー時も可能な限りゲーム画面は表示する。PC/スマホで同じコードパスを通す（UA で分岐を増やさない）。
-- **検証フロー**: ① ローカル開発 → ② PC Chrome で検証 → ②´ エミュレーター＋メタマスク（任意）→ ③ Git 反映 → ④ 本番 PC で検証 → ⑤ 実機メタマスクで最終確認。
-- 詳細（エミュレーター手順・つまずきポイント）: `docs/DEV_FLOW_AND_MOBILE.md`。
+- 検証の細かい手順（エミュレーター・実機）: `docs/DEV_FLOW_AND_MOBILE.md`。
 
 ---
 

@@ -1,28 +1,24 @@
-// Vercel serverless: Claim API（A寄せ最小仕様）
-// 認証必須・amount は受け取らない・CORS 自ドメイン推奨・rate limit 補助。
-// 署名返却は Express サーバ（永続層あり）で行い、Vercel では claimable 未実装のため 503 を返す。
+// Vercel serverless: Claim API (A-spec). Session required; amount from server (claimable from game state seed).
+// Reserve via claimStoreKV, sign EIP-712, return signature for RewardClaim.claimEIP712.
 
+import { Wallet, getAddress, Signature } from "ethers";
 import { getSessionAddress } from "./_lib/sessionCookie.js";
 import { checkRateLimit, getClientKey } from "./_lib/rateLimit.js";
 import { setCorsHeaders } from "./_lib/cors.js";
+import { reserve } from "./_lib/claimStoreKV.js";
+
+const DEFAULT_CAMPAIGN_ID = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    return res.status(204).end();
-  }
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  // 認証必須: セッションがなければ 401
   const sessionAddress = getSessionAddress(req);
   if (!sessionAddress) {
     return res.status(401).json({ error: "Not logged in. Sign in with your wallet first." });
   }
 
-  // rate limit（IP 単位・同一インスタンス内）
   const clientKey = getClientKey(req);
   if (!checkRateLimit(clientKey)) {
     return res.status(429).json({ error: "Too many requests. Try again later." });
@@ -39,7 +35,6 @@ export default async function handler(req, res) {
     });
   }
 
-  // body.address があればセッションと一致することを要求（本人のみ）
   if (body.address !== undefined && body.address !== null) {
     const lower = (body.address || "").toLowerCase();
     if (sessionAddress.toLowerCase() !== lower) {
@@ -47,13 +42,63 @@ export default async function handler(req, res) {
     }
   }
 
-  // Vercel では永続層がないため署名を返さず 503（本番 claim は Express サーバを利用）
   const signerKey = (process.env.CLAIM_SIGNER_PRIVATE_KEY || "").trim();
-  if (!signerKey) {
-    return res.status(503).json({ error: "Server not configured (CLAIM_SIGNER_PRIVATE_KEY)." });
+  const chainId = process.env.REWARD_CLAIM_CHAIN_ID;
+  const verifyingContract = process.env.REWARD_CLAIM_CONTRACT_ADDRESS;
+  if (!signerKey || !chainId || !verifyingContract) {
+    return res.status(503).json({
+      error: "Server not configured (CLAIM_SIGNER_PRIVATE_KEY, REWARD_CLAIM_CHAIN_ID, REWARD_CLAIM_CONTRACT_ADDRESS).",
+    });
   }
 
-  return res.status(503).json({
-    error: "Claim is being updated. Server-side claimable is not yet available. Use the Express server for full claim flow.",
-  });
+  const reserved = await reserve(sessionAddress);
+  if (!reserved) {
+    return res.status(400).json({ error: "No claimable amount." });
+  }
+
+  const { amountWei, nonce, expiresAt } = reserved;
+  const userAddress = getAddress(sessionAddress);
+
+  try {
+    const wallet = new Wallet(signerKey);
+    const domain = {
+      name: "BirdGame Claim",
+      version: "1",
+      chainId: Number(chainId),
+      verifyingContract: getAddress(verifyingContract),
+    };
+    const types = {
+      ClaimRequest: [
+        { name: "recipient", type: "address" },
+        { name: "amount", type: "uint256" },
+        { name: "nonce", type: "uint256" },
+        { name: "deadline", type: "uint256" },
+        { name: "campaignId", type: "bytes32" },
+      ],
+    };
+    const value = {
+      recipient: userAddress,
+      amount: BigInt(amountWei),
+      nonce: BigInt(nonce),
+      deadline: BigInt(expiresAt),
+      campaignId: DEFAULT_CAMPAIGN_ID,
+    };
+    const sigHex = await wallet.signTypedData(domain, types, value);
+    const { v, r, s } = Signature.from(sigHex);
+
+    const payload = {
+      ok: true,
+      amountWei,
+      nonce: String(nonce),
+      deadline: String(expiresAt),
+      campaignId: DEFAULT_CAMPAIGN_ID,
+      v: Number(v),
+      r: String(r),
+      s: String(s),
+    };
+    return res.status(200).json(payload);
+  } catch (err) {
+    console.error("[claim]", err?.message || err);
+    return res.status(500).json({ error: err?.message || String(err) });
+  }
 }
