@@ -20,10 +20,12 @@
     "check-balance": "node scripts/check-seed-balance.cjs"
   },
   "dependencies": {
+    "@vercel/kv": "^1.0.1",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.0",
     "express": "^4.21.0",
     "phaser": "^3.80.0",
+    "redis": "^4.6.0",
     "siwe": "^2.1.7",
     "buffer": "^6.0.3"
   },
