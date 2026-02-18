@@ -1567,7 +1567,7 @@ function initTabListeners(): void {
           flushServerSync()
             .then((syncOk) => {
               if (!syncOk) console.warn('[Claim] Game state sync to server failed. Claim may show "Nothing to claim".');
-              return new Promise<void>((r) => setTimeout(r, 600));
+              return new Promise<void>((r) => setTimeout(r, 1800));
             })
             .then(() => doRequestClaim())
             .then((result) => {
@@ -1575,7 +1575,7 @@ function initTabListeners(): void {
               if (result.error === 'No claimable amount.') {
                 return flushServerSync().then((retrySyncOk) => {
                   if (!retrySyncOk) console.warn('[Claim] Retry sync failed.');
-                  return new Promise<void>((r) => setTimeout(r, 800)).then(() => doRequestClaim());
+                  return new Promise<void>((r) => setTimeout(r, 1500)).then(() => doRequestClaim());
                 }).then((retryResult) => {
                   if (!retryResult.ok && retryResult.error === 'No claimable amount.') {
                     showMessageModal({
