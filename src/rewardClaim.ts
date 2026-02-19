@@ -77,13 +77,15 @@ export async function getPoolBalanceAndAllowance(): Promise<{
     const bal = BigInt(balanceWei?.toString?.() ?? balanceWei ?? 0);
     const all = BigInt(allowanceWei?.toString?.() ?? allowanceWei ?? 0);
     const fmt = (n: bigint) => (Number(n) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 4 });
+    const allowanceFormatted =
+      all >= BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff') ? '無制限' : fmt(all);
     return {
       pool,
       seedToken,
       balanceWei: String(bal),
       allowanceWei: String(all),
       balanceFormatted: fmt(bal),
-      allowanceFormatted: fmt(all),
+      allowanceFormatted,
     };
   } catch {
     return null;
@@ -138,47 +140,18 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       signature.s,
     ] as const;
 
-    // 送信前にシミュレートして revert 理由を取得（ガス節約・原因表示）
+    // シミュレートで理由が取れる場合のみログ。失敗しても送信は行う（ウォレットを必ず開く）
     try {
       await contract.claimEIP712.staticCall(...args);
     } catch (simErr: unknown) {
       const simMsg = simErr instanceof Error ? simErr.message : String(simErr);
       const simData = (simErr as { data?: string; error?: { data?: string } })?.data ?? (simErr as { error?: { data?: string } })?.error?.data;
       const simReason = simData ? decodeRevertReason(simData) : null;
-      if (simReason) {
-        if (/signature expired|expired/i.test(simReason)) {
-          return { ok: false, error: '署名の有効期限が切れています。もう一度 Claim を取得してやり直してください。' };
-        }
-        if (/nonce already used/i.test(simReason)) {
-          return { ok: false, error: 'この署名はすでに使用済みです。新しい Claim を取得してやり直してください。' };
-        }
-        if (/invalid signature/i.test(simReason)) {
-          return { ok: false, error: '署名が無効です。コントラクトの signer とサーバー鍵が一致しているか確認してください。' };
-        }
-        if (/transfer failed/i.test(simReason)) {
-          return {
-            ok: false,
-            error:
-              '報酬プールからの transfer に失敗しました。プールの $SEED 残高と、RewardClaim への allowance（承認）を確認してください。',
-          };
-        }
-        if (/recipient must be caller/i.test(simReason)) {
-          return { ok: false, error: '署名を受け取ったウォレットから claim を実行してください。' };
-        }
-        return { ok: false, error: `Claim は実行できません: ${simReason}` };
+      if (simReason && typeof console !== 'undefined' && console.warn) {
+        console.warn('[Claim] シミュレーションで revert が検出されました。送信は続行します:', simReason);
+      } else if (/revert|CALL_EXCEPTION/i.test(simMsg) && typeof console !== 'undefined' && console.warn) {
+        console.warn('[Claim] シミュレーション失敗。送信は続行します:', simMsg.slice(0, 80));
       }
-      if (/revert|CALL_EXCEPTION/i.test(simMsg)) {
-        const noData = /no data present|require\(false\)|data="0x"/i.test(simMsg);
-        if (noData) {
-          return {
-            ok: false,
-            error:
-              'Claim がコントラクトで revert しました（理由は RPC から取得できませんでした）。\n\n考えられる原因:\n・報酬プールの $SEED 残高不足、または RewardClaim への allowance 未設定（よくある原因）\n・署名の有効期限切れ（5分以内に実行してください）\n・この署名はすでに使用済み\n\nプールのウォレットで seedToken.approve(RewardClaim のアドレス, 残高) を実行しているか確認してください。',
-          };
-        }
-        return { ok: false, error: `Claim シミュレーション失敗: ${simMsg.slice(0, 120)}` };
-      }
-      throw simErr;
     }
 
     const tx = await contract.claimEIP712(...args);
