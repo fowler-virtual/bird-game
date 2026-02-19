@@ -154,7 +154,8 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       }
     }
 
-    const tx = await contract.claimEIP712(...args);
+    // gasLimit を指定して estimateGas での revert を避け、ウォレットが必ず開くようにする
+    const tx = await contract.claimEIP712(...args, { gasLimit: 300_000 });
     const receipt = await tx.wait();
     const txHash = receipt?.hash ?? tx.hash;
     return { ok: true, txHash: typeof txHash === 'string' ? txHash : String(txHash) };
