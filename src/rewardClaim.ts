@@ -4,7 +4,7 @@
  * VITE_REWARD_CLAIM_ADDRESS が .env に設定されているときのみ有効。
  */
 
-import { AbiCoder, BrowserProvider, Contract } from 'ethers';
+import { AbiCoder, BrowserProvider, Contract, Interface } from 'ethers';
 import type { ClaimSignature } from './claimApi';
 
 /** Revert data: Error(string) selector (Solidity require) */
@@ -124,7 +124,6 @@ export async function executeClaim(signature: ClaimSignature): Promise<
     const provider = new BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const recipient = await signer.getAddress();
-    const contract = new Contract(contractAddress, REWARD_CLAIM_ABI, signer);
     const amountWei = BigInt(signature.amountWei);
     const nonce = BigInt(signature.nonce);
     const deadline = BigInt(signature.deadline);
@@ -140,30 +139,46 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       signature.s,
     ] as const;
 
-    // シミュレートで理由が取れる場合のみログ。失敗しても送信は行う（ウォレットを必ず開く）
-    try {
-      await contract.claimEIP712.staticCall(...args);
-    } catch (simErr: unknown) {
-      const simMsg = simErr instanceof Error ? simErr.message : String(simErr);
-      const simData = (simErr as { data?: string; error?: { data?: string } })?.data ?? (simErr as { error?: { data?: string } })?.error?.data;
-      const simReason = simData ? decodeRevertReason(simData) : null;
-      if (simReason && typeof console !== 'undefined' && console.warn) {
-        console.warn('[Claim] シミュレーションで revert が検出されました。送信は続行します:', simReason);
-      } else if (/revert|CALL_EXCEPTION/i.test(simMsg) && typeof console !== 'undefined' && console.warn) {
-        console.warn('[Claim] シミュレーション失敗。送信は続行します:', simMsg.slice(0, 80));
-      }
+    // estimateGas を一切使わず送信する（ethers の Contract メソッドは gasLimit 指定でも内部で estimateGas を呼ぶことがあり、
+    // シミュレーションが revert するとウォレットに届く前に例外になる。直接 sendTransaction でウォレットを必ず開く。）
+    const iface = new Interface(REWARD_CLAIM_ABI as unknown as string[]);
+    const data = iface.encodeFunctionData('claimEIP712', args);
+    const GAS_LIMIT = 300_000;
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[Claim] eth_sendTransaction 送信直前', { to: contractAddress, dataLength: data?.length, gasLimit: GAS_LIMIT });
     }
-
-    // gasLimit を指定して estimateGas での revert を避け、ウォレットが必ず開くようにする
-    const tx = await contract.claimEIP712(...args, { gasLimit: 300_000 });
+    const tx = await signer.sendTransaction({
+      to: contractAddress,
+      data,
+      gasLimit: GAS_LIMIT,
+    });
+    if (typeof console !== 'undefined' && console.log) {
+      console.log('[Claim] トランザクション送信済み', tx.hash ?? '(hash pending)');
+    }
     const receipt = await tx.wait();
     const txHash = receipt?.hash ?? tx.hash;
     return { ok: true, txHash: typeof txHash === 'string' ? txHash : String(txHash) };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
+    const err = e as {
+      data?: string;
+      error?: { data?: string; message?: string };
+      info?: { error?: { data?: string } };
+      code?: string;
+      reason?: string;
+      receipt?: { status?: number };
+    };
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[Claim] executeClaim エラー', {
+        message: msg?.slice(0, 120),
+        code: err?.code,
+        reason: err?.reason,
+        dataLength: typeof err?.data === 'string' ? err.data.length : 0,
+        hasReceipt: !!err?.receipt,
+      });
+    }
     if (/user rejected|user denied/i.test(msg)) return { ok: false, error: 'Transaction rejected.' };
 
-    const err = e as { data?: string; error?: { data?: string }; info?: { error?: { data?: string } } };
     const revertData = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
     const reason = revertData ? decodeRevertReason(revertData) : null;
 

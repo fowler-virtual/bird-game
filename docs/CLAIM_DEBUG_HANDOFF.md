@@ -48,17 +48,16 @@
 - **DEBUG「Signer 確認」「プール残高・allowance を確認」**: 画面上で signer・残高・allowance を確認可能に。
 - **staticCall でシミュレート**: 送信前に revert 理由を取得しようとしたが、RPC が「no data present」で理由を返さないことが多い。
 - **staticCall 失敗時も送信続行**: シミュレートで失敗しても本番送信は行うように変更（ウォレットを開かせる意図）。
-- **gasLimit: 300_000 を指定**: ethers の内部 **estimateGas** が revert し、その時点で例外になってウォレットにトランザクションが渡っていない可能性を避けるため、gasLimit を固定して送信するように変更。
-
-**最後の変更（gasLimit 指定）のデプロイ後、ユーザーが「ウォレットが開くか」を再確認したかは未確認。**  
-新セッションでは、**まず最新デプロイで「Claim → ウォレットが開くか」を確認**することが第一の一手。
+- **gasLimit: 300_000 を指定**: ethers の内部 estimateGas が revert する問題を避けようとしたが、**ethers v6 は gasLimit を渡しても estimateGas を呼ぶ場合があり、ウォレットが開かない根本原因だった**。
+- **根本対応（2025-02）**: Contract メソッド呼び出しを廃止し、**Interface.encodeFunctionData + signer.sendTransaction** で送信。estimateGas を一切経由しない経路に変更。あわせて [Claim] 診断ログを追加。
 
 ---
 
-## 5. 根本原因の候補（未確定）
+## 5. 根本原因（特定済み・2025-02 対応）
 
-1. **ethers の estimateGas で revert が返り、ウォレットに tx が渡る前に throw している**  
-   → **対策として gasLimit 指定を追加済み。** デプロイ後にウォレットが開くか要確認。
+1. **ethers v6 の Contract 書き込みメソッドは、overrides で gasLimit を渡しても内部で estimateGas を呼ぶ場合がある**  
+   → シミュレーション（estimateGas）が revert すると、ウォレットにトランザクションが渡る前に例外になり、ウォレットが開かない。  
+   → **対応**: `contract.claimEIP712(...)` をやめ、**Interface.encodeFunctionData + signer.sendTransaction** で送信する経路に変更。estimateGas を一切経由しないため、ウォレットに必ず eth_sendTransaction が届く。
 
 2. **実際の revert 理由が RPC から取れていない**  
    - staticCall も本番送信の catch も「no data present」「require(false)」のみ。  
@@ -76,15 +75,15 @@
 ## 6. 次のセッションで行うこと（推奨順）
 
 1. **最新コードのデプロイ確認と「ウォレットが開くか」の確認**
-   - 現在の main には `gasLimit: 300_000` 指定が入っている。  
+   - 現在の main には **sendTransaction 直接送信**（estimateGas 回避）が入っている。  
    - デプロイ後、Claim → ウォレットが開くか確認する。  
-   - 開く場合: オンチェーンで revert するか確認。revert するなら、その時のエラー（ウォレット表示・コンソール）を記録する。  
+   - 開く場合: オンチェーンで revert するか確認。revert するなら、その時のエラー（ウォレット表示・コンソールの [Claim] ログ）を記録する。  
    - 開かない場合: 下記 2 に進む。
 
 2. **ウォレットが開かない場合の切り分け**
-   - `contract.claimEIP712(...args, { gasLimit: 300_000 })` の直前・直後に console ログを仕込み、**どの行まで実行されているか**を確認する。  
-   - 例外が発生している場合、**スタックとエラーオブジェクトの構造**（data, code, reason など）をログに出し、ethers またはウォレットがどこで失敗しているか特定する。  
-   - 必要なら、`provider.send('eth_sendTransaction', [...])` を直接呼ぶなど、**estimateGas を経由しない送信経路**でウォレットが開くか試す。
+   - 現在はすでに **sendTransaction 直接送信**（estimateGas 経由なし）になっている。  
+   - コンソールの `[Claim] eth_sendTransaction 送信直前` / `トランザクション送信済み` および `[Claim] executeClaim エラー` の有無で、どこで止まっているか確認する。  
+   - 必要なら、`provider.send('eth_sendTransaction', [...])` を直接呼ぶなど、さらに低レベルな送信経路でウォレットが開くか試す。
 
 3. **オンチェーンで revert する場合の根本原因特定**
    - どの `require` で落ちているかを特定する。  
