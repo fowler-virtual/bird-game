@@ -110,7 +110,7 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       return {
         ok: false,
         error:
-          'Claim failed (revert). If it keeps happening, ensure the contract’s signer matches the server’s CLAIM_SIGNER_PRIVATE_KEY — see docs/VERCEL_ENV_VARS.md.',
+          'Claim failed (revert). If it keeps happening, ensure the contract’s signer matches the server’s CLAIM_SIGNER_PRIVATE_KEY — see docs/VERCEL_ENV_VARS.md. Check /api/claim/signer on your site and compare with RewardClaim signer().',
       };
     }
     if (/429|Too Many Requests/i.test(msg)) {

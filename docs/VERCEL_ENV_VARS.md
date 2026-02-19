@@ -72,8 +72,8 @@ Vercel の **Settings → Environment Variables** で設定する項目の一覧
 ## Claim がオンチェーンで revert する場合（invalid signature など）
 
 - 画面に **「Invalid signature」** や **「the contract signer does not match」** と出る場合、RewardClaim コントラクトに登録されている **signer** と、Vercel の **CLAIM_SIGNER_PRIVATE_KEY** から導出したアドレスが一致していません。
-- **確認手順**
-  1. 秘密鍵からアドレスを出す（例: `node -e "const {Wallet}=require('ethers'); console.log(new Wallet(process.env.CLAIM_SIGNER_PRIVATE_KEY).address)"` でローカル確認、または Vercel のログに signer アドレスを一時出力して確認）。
-  2. Sepolia の RewardClaim コントラクトの **signer()** をブロックエクスプローラーや cast で確認（例: `cast call <REWARD_CLAIM_ADDRESS> "signer()" --rpc-url <SEPOLIA_RPC>`）。
-  3. 両者が同じアドレスになるように、**デプロイ時に RewardClaim の constructor に渡した signer** と **CLAIM_SIGNER_PRIVATE_KEY** のペアを揃える（どちらかを変更して再デプロイ or 環境変数を合わせる）。
+- **確認手順（推奨）**
+  1. **サーバーの signer アドレス**: ブラウザで `https://あなたのサイト.vercel.app/api/claim/signer` を開く。返る **signerAddress** をメモする。
+  2. **コントラクトの signer**: Sepolia の RewardClaim で `signer()` を確認（ブロックエクスプローラーの「Read Contract」や `cast call <REWARD_CLAIM_ADDRESS> "signer()" --rpc-url <SEPOLIA_RPC>`）。
+  3. 両者が**同じアドレス**になるようにする: コントラクトをデプロイしたときの signer と、Vercel の **CLAIM_SIGNER_PRIVATE_KEY** から導出したアドレスを一致させる（環境変数をその signer の秘密鍵に変更するか、逆にコントラクトを正しい signer で再デプロイする）。
 - その他の revert（`signature expired` / `nonce already used` / `transfer failed`）は、画面のエラーメッセージに従って対処してください。
