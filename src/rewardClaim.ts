@@ -120,10 +120,15 @@ export async function executeClaim(signature: ClaimSignature): Promise<
   if (!contractAddress) return { ok: false, error: 'RewardClaim contract not configured (VITE_REWARD_CLAIM_ADDRESS).' };
   if (typeof window === 'undefined' || !window.ethereum) return { ok: false, error: 'No wallet.' };
 
+  let savedData: string | undefined;
+  let savedRecipient: string | undefined;
+  let savedTxHash: string | undefined;
+
   try {
     const provider = new BrowserProvider(window.ethereum);
     const signer = await provider.getSigner();
     const recipient = await signer.getAddress();
+    savedRecipient = recipient;
     const amountWei = BigInt(signature.amountWei);
     const nonce = BigInt(signature.nonce);
     const deadline = BigInt(signature.deadline);
@@ -143,6 +148,7 @@ export async function executeClaim(signature: ClaimSignature): Promise<
     // シミュレーションが revert するとウォレットに届く前に例外になる。直接 sendTransaction でウォレットを必ず開く。）
     const iface = new Interface(REWARD_CLAIM_ABI as unknown as string[]);
     const data = iface.encodeFunctionData('claimEIP712', args);
+    savedData = data;
     const GAS_LIMIT = 300_000;
     if (typeof console !== 'undefined' && console.log) {
       console.log('[Claim] eth_sendTransaction 送信直前', { to: contractAddress, dataLength: data?.length, gasLimit: GAS_LIMIT });
@@ -152,6 +158,7 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       data,
       gasLimit: GAS_LIMIT,
     });
+    savedTxHash = tx.hash ?? undefined;
     if (typeof console !== 'undefined' && console.log) {
       console.log('[Claim] トランザクション送信済み', tx.hash ?? '(hash pending)');
     }
@@ -166,7 +173,9 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       info?: { error?: { data?: string } };
       code?: string;
       reason?: string;
-      receipt?: { status?: number };
+      receipt?: { status?: number; blockNumber?: number; hash?: string; transactionHash?: string };
+      transaction?: { data?: string; from?: string };
+      hash?: string;
     };
     if (typeof console !== 'undefined' && console.warn) {
       console.warn('[Claim] executeClaim エラー', {
@@ -179,8 +188,39 @@ export async function executeClaim(signature: ClaimSignature): Promise<
     }
     if (/user rejected|user denied/i.test(msg)) return { ok: false, error: 'Transaction rejected.' };
 
-    const revertData = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
-    const reason = revertData ? decodeRevertReason(revertData) : null;
+    // revert 理由: エラーオブジェクトの複数候補を確認
+    let revertData = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
+    let reason = revertData ? decodeRevertReason(revertData) : null;
+
+    // オンチェーンで revert したが RPC が理由を返さない場合、直前ブロックで eth_call して理由を取得
+    const blockBefore =
+      err?.receipt?.blockNumber != null ? (err.receipt as { blockNumber: number }).blockNumber - 1 : 0;
+    if (
+      !reason &&
+      err?.code === 'CALL_EXCEPTION' &&
+      blockBefore > 0 &&
+      savedData &&
+      savedRecipient &&
+      typeof window !== 'undefined' &&
+      window.ethereum
+    ) {
+      try {
+        const provider2 = new BrowserProvider(window.ethereum);
+        await provider2.call({
+          to: contractAddress,
+          data: savedData,
+          from: savedRecipient,
+          blockTag: blockBefore,
+        });
+      } catch (callErr: unknown) {
+        const ce = callErr as { data?: string; error?: { data?: string } };
+        revertData = ce?.data ?? ce?.error?.data;
+        reason = revertData ? decodeRevertReason(revertData) : null;
+        if (reason && typeof console !== 'undefined' && console.log) {
+          console.log('[Claim] eth_call で取得した revert 理由:', reason);
+        }
+      }
+    }
 
     if (/execution reverted|CALL_EXCEPTION|revert|RewardClaim/i.test(msg) || reason) {
       if (reason) {
@@ -208,10 +248,20 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       if (/expired|signature expired/i.test(msg)) {
         return { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
       }
+      const txHash =
+        savedTxHash ??
+        err?.hash ??
+        err?.receipt?.hash ??
+        (err?.receipt as { transactionHash?: string } | undefined)?.transactionHash ??
+        (e as { transactionHash?: string }).transactionHash;
+      const etherscanHint = txHash
+        ? ` Transaction: https://sepolia.etherscan.io/tx/${txHash}`
+        : ' Check the failed transaction on Sepolia Etherscan for the revert reason.';
       return {
         ok: false,
         error:
-          'Claim failed (revert). If it keeps happening, ensure the contract’s signer matches the server’s CLAIM_SIGNER_PRIVATE_KEY — see docs/VERCEL_ENV_VARS.md. Check /api/claim/signer on your site and compare with RewardClaim signer().',
+          'Claim failed (revert). If it keeps happening, ensure the contract’s signer matches the server’s CLAIM_SIGNER_PRIVATE_KEY — see docs/VERCEL_ENV_VARS.md. Check /api/claim/signer on your site and compare with RewardClaim signer().' +
+          etherscanHint,
       };
     }
     if (/429|Too Many Requests/i.test(msg)) {
