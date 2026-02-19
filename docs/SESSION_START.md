@@ -17,8 +17,10 @@
 |----|------|------|
 | 1 | **docs/README.md** | ドキュメント格納先の方針と一覧。 |
 | 2 | **docs/REQUIREMENTS.md** | 要件集約。対応環境・最優先目標・画面構成・$SEED 等の制約。 |
-| 3 | **docs/TODO.md** | 残タスク・将来実装候補。最優先は Git 版＋スマホメタマスクの parity。 |
+| 3 | **docs/TODO.md** | 残タスク・将来実装候補。最優先は Git 版＋スマホメタマスクの parity。**Claim 根本原因の項目あり。** |
 | 4 | **docs/RESPONSIBILITY_AND_RULES.md** | 製造責任と運用ルール。返答前に必ず参照する。 |
+
+**Claim 不具合に着手する場合**: 上記に加え **`docs/CLAIM_DEBUG_HANDOFF.md`** を読み、「6. 次のセッションで行うこと」から進める。
 
 ---
 
@@ -26,6 +28,7 @@
 
 - **直近の確認・修正**: `docs/CONFIRMATION_*.md`, `docs/FIX_*.md`（日付の新しいもの）
 - **開発フロー・スマホ検証**: `docs/DEV_FLOW_AND_MOBILE.md`
+- **Claim 不具合の続きから**: **`docs/CLAIM_DEBUG_HANDOFF.md`**（現状・試したこと・根本原因候補・次の一手。Claim に着手するセッションでは必ず読む）
 
 ---
 

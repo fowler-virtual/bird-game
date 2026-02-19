@@ -31,6 +31,7 @@
 | `SPRITE_LAYOUT_OPTIONS.md` | スプライトレイアウトの選択肢。 |
 | `CLAIM_SAFETY_DESIGN.md` | Claim まわりの安全設計・変更一覧。 |
 | `CLAIM_AND_DEPLOY.md` | Claim とデプロイに関するメモ。 |
+| **`CLAIM_DEBUG_HANDOFF.md`** | **Claim 不具合の引き継ぎ**。現状・試したこと・根本原因候補・次のセッションで行うこと。Claim 調査時に必ず参照。 |
 | `TOKEN_LOCAL.md` | トークン（ローカル）まわりの仕様・メモ。 |
 
 ### 検証・監査

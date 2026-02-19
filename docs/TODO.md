@@ -12,6 +12,14 @@
 - 要件: 1 クリックで「接続 → 署名」の 2 回ウォレットが開く。同じボタン 2 回押し・別ボタン・新規モーダルは NG。
 - 実施済み: 処理順序変更（getGameState → ゲーム表示 → ensureSepolia / refreshSeedToken）、pending nonce（GET /auth/nonce アドレスなし）、nonce 失敗時の getAuthNonce フォールバック、api/auth/nonce.js・verify.js・siweNonceStore・sessionCookie の pending 対応。加えて本番でクライアントが API を叩けるよう **VITE_CLAIM_API_URL** を Vercel に設定する手順を実施（A 案）。
 
+**Claim の根本原因（未解決・引き継ぎ用）**
+
+- **事象**: Claim を押してもウォレットが開かず「Claim failed」になる。シミュレーションでは revert（no data present）が出ている。signer 一致・プール残高・allowance は確認済みで問題なし。
+- **実施済み**: revert 理由表示・Signer/プール確認 UI・staticCall 失敗時も送信続行・**gasLimit 指定**（estimateGas 回避）。根本原因は未特定。
+- **次の一手**: **`docs/CLAIM_DEBUG_HANDOFF.md`** を開き、「6. 次のセッションで行うこと」から着手。最新デプロイでウォレットが開くか確認し、開かない場合は送信経路の切り分け、開く場合はオンチェーン revert の理由特定を行う。**表面上の回避ではなく根本原因を突き止めて解決する**（`.cursor/rules/root-cause-first.mdc`）。
+
+---
+
 **データ同期・Vercel 本番（bird-game-udhr）まわり**
 
 - **実施済み（コード側）**
