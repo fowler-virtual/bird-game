@@ -77,7 +77,7 @@ export async function executeClaim(signature: ClaimSignature): Promise<
     const nonce = BigInt(signature.nonce);
     const deadline = BigInt(signature.deadline);
     const campaignId = signature.campaignId.startsWith('0x') ? signature.campaignId : `0x${signature.campaignId}`;
-    const tx = await contract.claimEIP712(
+    const args = [
       recipient,
       amountWei,
       nonce,
@@ -85,8 +85,45 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       campaignId as `0x${string}`,
       signature.v,
       signature.r,
-      signature.s
-    );
+      signature.s,
+    ] as const;
+
+    // 送信前にシミュレートして revert 理由を取得（ガス節約・原因表示）
+    try {
+      await contract.claimEIP712.staticCall(...args);
+    } catch (simErr: unknown) {
+      const simMsg = simErr instanceof Error ? simErr.message : String(simErr);
+      const simData = (simErr as { data?: string; error?: { data?: string } })?.data ?? (simErr as { error?: { data?: string } })?.error?.data;
+      const simReason = simData ? decodeRevertReason(simData) : null;
+      if (simReason) {
+        if (/signature expired|expired/i.test(simReason)) {
+          return { ok: false, error: '署名の有効期限が切れています。もう一度 Claim を取得してやり直してください。' };
+        }
+        if (/nonce already used/i.test(simReason)) {
+          return { ok: false, error: 'この署名はすでに使用済みです。新しい Claim を取得してやり直してください。' };
+        }
+        if (/invalid signature/i.test(simReason)) {
+          return { ok: false, error: '署名が無効です。コントラクトの signer とサーバー鍵が一致しているか確認してください。' };
+        }
+        if (/transfer failed/i.test(simReason)) {
+          return {
+            ok: false,
+            error:
+              '報酬プールからの transfer に失敗しました。プールの $SEED 残高と、RewardClaim への allowance（承認）を確認してください。',
+          };
+        }
+        if (/recipient must be caller/i.test(simReason)) {
+          return { ok: false, error: '署名を受け取ったウォレットから claim を実行してください。' };
+        }
+        return { ok: false, error: `Claim は実行できません: ${simReason}` };
+      }
+      if (/revert|CALL_EXCEPTION/i.test(simMsg)) {
+        return { ok: false, error: `Claim シミュレーション失敗: ${simMsg.slice(0, 120)}` };
+      }
+      throw simErr;
+    }
+
+    const tx = await contract.claimEIP712(...args);
     const receipt = await tx.wait();
     const txHash = receipt?.hash ?? tx.hash;
     return { ok: true, txHash: typeof txHash === 'string' ? txHash : String(txHash) };
