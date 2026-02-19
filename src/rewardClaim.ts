@@ -118,6 +118,14 @@ export async function executeClaim(signature: ClaimSignature): Promise<
         return { ok: false, error: `Claim は実行できません: ${simReason}` };
       }
       if (/revert|CALL_EXCEPTION/i.test(simMsg)) {
+        const noData = /no data present|require\(false\)|data="0x"/i.test(simMsg);
+        if (noData) {
+          return {
+            ok: false,
+            error:
+              'Claim がコントラクトで revert しました（理由は RPC から取得できませんでした）。\n\n考えられる原因:\n・報酬プールの $SEED 残高不足、または RewardClaim への allowance 未設定（よくある原因）\n・署名の有効期限切れ（5分以内に実行してください）\n・この署名はすでに使用済み\n\nプールのウォレットで seedToken.approve(RewardClaim のアドレス, 残高) を実行しているか確認してください。',
+          };
+        }
         return { ok: false, error: `Claim シミュレーション失敗: ${simMsg.slice(0, 120)}` };
       }
       throw simErr;
