@@ -7,11 +7,11 @@ import { GameStore, GACHA_COST } from './store/GameStore';
 import { scheduleServerSync, flushServerSync } from './gameStateApi';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
-import { requestClaim, signInForClaim, postClaimConfirm } from './claimApi';
+import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase } from './claimApi';
 
 GameStore.setOnSaveCallback(scheduleServerSync);
 import type { ClaimSignature } from './claimApi';
-import { executeClaim } from './rewardClaim';
+import { executeClaim, getContractSignerAddress, hasClaimContract } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
 import { showTitleUI } from './titleUI';
 import { destroyPhaserGame } from './phaserBoot';
@@ -1460,6 +1460,44 @@ function initDebugPaneListeners(): void {
           errorEl.textContent = 'なし';
           errorEl.title = '';
         }
+      }
+    });
+  }
+
+  const checkSignerBtn = document.getElementById('dom-debug-check-signer') as HTMLButtonElement | null;
+  if (checkSignerBtn) {
+    checkSignerBtn.addEventListener('click', async () => {
+      if (!hasClaimContract()) {
+        showMessageModal({
+          title: 'Signer 確認',
+          message: 'VITE_REWARD_CLAIM_ADDRESS が未設定です。',
+          success: false,
+        });
+        return;
+      }
+      const base = getClaimApiBase();
+      const signerUrl = base ? `${base}/claim/signer` : '/api/claim/signer';
+      checkSignerBtn.disabled = true;
+      try {
+        const [serverRes, contractAddr] = await Promise.all([
+          fetch(signerUrl, { credentials: 'include' }).then((r) => r.json().catch(() => ({}))),
+          getContractSignerAddress(),
+        ]);
+        const serverAddr = (serverRes && typeof serverRes.signerAddress === 'string') ? serverRes.signerAddress : null;
+        const match = serverAddr && contractAddr && serverAddr.toLowerCase() === contractAddr.toLowerCase();
+        const msg = [
+          'サーバー（API）: ' + (serverAddr ?? '取得失敗'),
+          'コントラクト: ' + (contractAddr ?? '取得失敗（ウォレットを接続し Sepolia に切り替えてください）'),
+          '',
+          match ? '一致しています。Claim が revert する場合は別の原因を確認してください。' : '不一致です。Vercel の CLAIM_SIGNER_PRIVATE_KEY を、コントラクトの signer の秘密鍵に合わせるか、RewardClaim を再デプロイしてください。',
+        ].join('\n');
+        showMessageModal({
+          title: 'Signer 確認',
+          message: msg,
+          success: match,
+        });
+      } finally {
+        checkSignerBtn.disabled = false;
       }
     });
   }

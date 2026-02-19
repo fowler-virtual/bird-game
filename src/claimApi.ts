@@ -5,7 +5,7 @@
 import { BrowserProvider, getAddress } from "ethers";
 import { SiweMessage } from "siwe";
 
-function getClaimApiBase(): string | null {
+export function getClaimApiBase(): string | null {
   const url = import.meta.env.VITE_CLAIM_API_URL;
   if (typeof url === "string" && url.length > 0) return url.replace(/\/$/, "");
   return null;

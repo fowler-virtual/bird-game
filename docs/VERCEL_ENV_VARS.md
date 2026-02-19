@@ -73,7 +73,7 @@ Vercel の **Settings → Environment Variables** で設定する項目の一覧
 
 - 画面に **「Invalid signature」** や **「the contract signer does not match」** と出る場合、RewardClaim コントラクトに登録されている **signer** と、Vercel の **CLAIM_SIGNER_PRIVATE_KEY** から導出したアドレスが一致していません。
 - **確認手順（推奨）**
-  1. **サーバーの signer アドレス**: ブラウザで `https://あなたのサイト.vercel.app/api/claim/signer` を開く。返る **signerAddress** をメモする。
-  2. **コントラクトの signer**: Sepolia の RewardClaim で `signer()` を確認（ブロックエクスプローラーの「Read Contract」や `cast call <REWARD_CLAIM_ADDRESS> "signer()" --rpc-url <SEPOLIA_RPC>`）。
+  1. **アプリで確認**: ゲームの **DEBUG** タブを開き、**「Signer 確認」** ボタンを押す。サーバー（API）の signer とコントラクトの signer が表示され、一致・不一致が分かります（ウォレット接続・Sepolia 選択が必要）。
+  2. **手動で確認する場合**: サーバー → ブラウザで `https://あなたのサイト.vercel.app/api/claim/signer` を開き **signerAddress** をメモ。コントラクト → Sepolia のブロックエクスプローラーで RewardClaim のページを開き「Read Contract」→ `signer` を実行するか、`cast call <REWARD_CLAIM_ADDRESS> "signer()(address)" --rpc-url https://ethereum-sepolia-rpc.publicnode.com` で確認。
   3. 両者が**同じアドレス**になるようにする: コントラクトをデプロイしたときの signer と、Vercel の **CLAIM_SIGNER_PRIVATE_KEY** から導出したアドレスを一致させる（環境変数をその signer の秘密鍵に変更するか、逆にコントラクトを正しい signer で再デプロイする）。
 - その他の revert（`signature expired` / `nonce already used` / `transfer failed`）は、画面のエラーメッセージに従って対処してください。

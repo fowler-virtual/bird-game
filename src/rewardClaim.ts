@@ -27,6 +27,7 @@ function decodeRevertReason(data: unknown): string | null {
 
 const REWARD_CLAIM_ABI = [
   'function claimEIP712(address recipient, uint256 amount, uint256 nonce, uint256 deadline, bytes32 campaignId, uint8 v, bytes32 r, bytes32 s) external',
+  'function signer() view returns (address)',
 ] as const;
 
 function getClaimContractAddress(): string | null {
@@ -37,6 +38,22 @@ function getClaimContractAddress(): string | null {
 
 export function hasClaimContract(): boolean {
   return getClaimContractAddress() != null;
+}
+
+/**
+ * コントラクトの signer() を取得（Claim revert 時の一致確認用）。
+ */
+export async function getContractSignerAddress(): Promise<string | null> {
+  const contractAddress = getClaimContractAddress();
+  if (!contractAddress || typeof window === 'undefined' || !window.ethereum) return null;
+  try {
+    const provider = new BrowserProvider(window.ethereum);
+    const contract = new Contract(contractAddress, REWARD_CLAIM_ABI, provider);
+    const signerAddr = await contract.signer();
+    return typeof signerAddr === 'string' ? signerAddr : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
