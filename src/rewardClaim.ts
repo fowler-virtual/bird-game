@@ -25,6 +25,19 @@ function decodeRevertReason(data: unknown): string | null {
   }
 }
 
+/** RPC や ethers が返すエラーから revert データ（hex string）を取り出す。 */
+function getRevertDataFromError(e: unknown): string | null {
+  if (e == null) return null;
+  const o = e as Record<string, unknown>;
+  const errData = o.data;
+  const nestedData = (o.error as Record<string, unknown> | undefined)?.data;
+  const infoErr = (o.info as Record<string, unknown> | undefined)?.error as Record<string, unknown> | undefined;
+  const infoData = infoErr?.data;
+  const data = errData ?? nestedData ?? infoData;
+  if (typeof data === 'string' && data.startsWith('0x')) return data;
+  return null;
+}
+
 const REWARD_CLAIM_ABI = [
   'function claimEIP712(address recipient, uint256 amount, uint256 nonce, uint256 deadline, bytes32 campaignId, uint8 v, bytes32 r, bytes32 s) external',
   'function signer() view returns (address)',
@@ -150,6 +163,51 @@ export async function executeClaim(signature: ClaimSignature): Promise<
     const data = iface.encodeFunctionData('claimEIP712', args);
     savedData = data;
     const GAS_LIMIT = 300_000;
+
+    // 送信前に必ず eth_call でシミュレート。revert する場合は理由を表示して送信しない（ガス節約＋理由を確実に表示）
+    try {
+      await provider.call({ to: contractAddress, data, from: recipient });
+    } catch (preflightErr: unknown) {
+      const revertData = getRevertDataFromError(preflightErr);
+      const reason = revertData ? decodeRevertReason(revertData) : null;
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[Claim] 送信前シミュレーションで revert', { reason, hasRevertData: !!revertData });
+      }
+      if (reason) {
+        if (/signature expired|expired/i.test(reason)) {
+          return { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
+        }
+        if (/nonce already used/i.test(reason)) {
+          return { ok: false, error: 'This claim was already used. Request a new claim and try again.' };
+        }
+        if (/invalid signature/i.test(reason)) {
+          return {
+            ok: false,
+            error:
+              'Invalid signature: the contract signer does not match the server key. Check VERCEL_ENV_VARS.md — CLAIM_SIGNER_PRIVATE_KEY must correspond to the RewardClaim contract\'s signer address.',
+          };
+        }
+        if (/transfer failed|transfer amount exceeds|insufficient allowance|insufficient balance/i.test(reason)) {
+          return {
+            ok: false,
+            error:
+              'Claim would fail: ' +
+              reason +
+              '. Check that the reward pool has enough $SEED and has approved the RewardClaim contract (allowance). Use DEBUG tab "プール残高・allowance を確認".',
+          };
+        }
+        if (/recipient must be caller/i.test(reason)) {
+          return { ok: false, error: 'Claim failed: you must call claim from the same wallet that received the signature.' };
+        }
+        return { ok: false, error: `Claim would fail: ${reason}` };
+      }
+      return {
+        ok: false,
+        error:
+          'Claim simulation failed (transaction would revert). Try again, or check DEBUG tab: Signer, pool balance and allowance.',
+      };
+    }
+
     if (typeof console !== 'undefined' && console.log) {
       console.log('[Claim] eth_sendTransaction 送信直前', { to: contractAddress, dataLength: data?.length, gasLimit: GAS_LIMIT });
     }
@@ -188,8 +246,8 @@ export async function executeClaim(signature: ClaimSignature): Promise<
     }
     if (/user rejected|user denied/i.test(msg)) return { ok: false, error: 'Transaction rejected.' };
 
-    // revert 理由: エラーオブジェクトの複数候補を確認
-    let revertData = err?.data ?? err?.error?.data ?? err?.info?.error?.data;
+    // revert 理由: エラーオブジェクトから一括取得
+    let revertData = getRevertDataFromError(e);
     let reason = revertData ? decodeRevertReason(revertData) : null;
 
     // オンチェーンで revert したが RPC が理由を返さない場合、直前ブロックで eth_call して理由を取得
@@ -213,8 +271,7 @@ export async function executeClaim(signature: ClaimSignature): Promise<
           blockTag: blockBefore,
         });
       } catch (callErr: unknown) {
-        const ce = callErr as { data?: string; error?: { data?: string } };
-        revertData = ce?.data ?? ce?.error?.data;
+        revertData = getRevertDataFromError(callErr);
         reason = revertData ? decodeRevertReason(revertData) : null;
         if (reason && typeof console !== 'undefined' && console.log) {
           console.log('[Claim] eth_call で取得した revert 理由:', reason);

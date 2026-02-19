@@ -50,6 +50,7 @@
 - **staticCall 失敗時も送信続行**: シミュレートで失敗しても本番送信は行うように変更（ウォレットを開かせる意図）。
 - **gasLimit: 300_000 を指定**: ethers の内部 estimateGas が revert する問題を避けようとしたが、**ethers v6 は gasLimit を渡しても estimateGas を呼ぶ場合があり、ウォレットが開かない根本原因だった**。
 - **根本対応（2025-02）**: Contract メソッド呼び出しを廃止し、**Interface.encodeFunctionData + signer.sendTransaction** で送信。estimateGas を一切経由しない経路に変更。あわせて [Claim] 診断ログを追加。
+- **送信前シミュレーション**: 送信前に **eth_call** で必ずシミュレート。revert する場合は理由をデコードして表示し、**送信しない**（ガス節約＋理由を確実に表示）。RPC 別のエラー形状に対応するため `getRevertDataFromError` で revert データを一括取得。
 
 ---
 
