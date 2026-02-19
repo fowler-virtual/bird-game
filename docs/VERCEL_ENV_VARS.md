@@ -77,4 +77,5 @@ Vercel の **Settings → Environment Variables** で設定する項目の一覧
   2. **手動で確認する場合**: サーバー → ブラウザで `https://あなたのサイト.vercel.app/api/claim/signer` を開き **signerAddress** をメモ。コントラクト → Sepolia のブロックエクスプローラーで RewardClaim のページを開き「Read Contract」→ `signer` を実行するか、`cast call <REWARD_CLAIM_ADDRESS> "signer()(address)" --rpc-url https://ethereum-sepolia-rpc.publicnode.com` で確認。
   3. 両者が**同じアドレス**になるようにする: コントラクトをデプロイしたときの signer と、Vercel の **CLAIM_SIGNER_PRIVATE_KEY** から導出したアドレスを一致させる（環境変数をその signer の秘密鍵に変更するか、逆にコントラクトを正しい signer で再デプロイする）。
 - **transfer failed** と出る場合: 報酬プール（RewardClaim の `pool`）が $SEED を十分持っておらず、かつ **RewardClaim コントラクトに対する allowance（承認）** が付与されている必要があります。プールのウォレットで `seedToken.approve(RewardClaim のアドレス, amount)` を実行するか、デプロイスクリプトで事前に approve してください。
+- **$SEED 残高の確認**: ゲームの **DEBUG** タブで **「プール残高・allowance を確認」** ボタンを押すと、報酬プールの $SEED 残高と RewardClaim への allowance が表示されます（ウォレット接続・Sepolia 選択が必要）。
 - その他の revert（`signature expired` / `nonce already used`）は、画面のエラーメッセージに従って対処してください。

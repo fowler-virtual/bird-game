@@ -28,6 +28,13 @@ function decodeRevertReason(data: unknown): string | null {
 const REWARD_CLAIM_ABI = [
   'function claimEIP712(address recipient, uint256 amount, uint256 nonce, uint256 deadline, bytes32 campaignId, uint8 v, bytes32 r, bytes32 s) external',
   'function signer() view returns (address)',
+  'function pool() view returns (address)',
+  'function seedToken() view returns (address)',
+] as const;
+
+const ERC20_ABI = [
+  'function balanceOf(address account) view returns (uint256)',
+  'function allowance(address owner, address spender) view returns (uint256)',
 ] as const;
 
 function getClaimContractAddress(): string | null {
@@ -38,6 +45,49 @@ function getClaimContractAddress(): string | null {
 
 export function hasClaimContract(): boolean {
   return getClaimContractAddress() != null;
+}
+
+/**
+ * 報酬プールの $SEED 残高と RewardClaim への allowance を取得（Claim 失敗時の確認用）。
+ */
+export async function getPoolBalanceAndAllowance(): Promise<{
+  pool: string;
+  seedToken: string;
+  balanceWei: string;
+  allowanceWei: string;
+  balanceFormatted: string;
+  allowanceFormatted: string;
+} | null> {
+  const contractAddress = getClaimContractAddress();
+  if (!contractAddress || typeof window === 'undefined' || !window.ethereum) return null;
+  try {
+    const provider = new BrowserProvider(window.ethereum);
+    const claimContract = new Contract(contractAddress, REWARD_CLAIM_ABI, provider);
+    const [poolAddr, tokenAddr] = await Promise.all([
+      claimContract.pool(),
+      claimContract.seedToken(),
+    ]);
+    const pool = typeof poolAddr === 'string' ? poolAddr : String(poolAddr);
+    const seedToken = typeof tokenAddr === 'string' ? tokenAddr : String(tokenAddr);
+    const tokenContract = new Contract(seedToken, ERC20_ABI, provider);
+    const [balanceWei, allowanceWei] = await Promise.all([
+      tokenContract.balanceOf(pool),
+      tokenContract.allowance(pool, contractAddress),
+    ]);
+    const bal = BigInt(balanceWei?.toString?.() ?? balanceWei ?? 0);
+    const all = BigInt(allowanceWei?.toString?.() ?? allowanceWei ?? 0);
+    const fmt = (n: bigint) => (Number(n) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 4 });
+    return {
+      pool,
+      seedToken,
+      balanceWei: String(bal),
+      allowanceWei: String(all),
+      balanceFormatted: fmt(bal),
+      allowanceFormatted: fmt(all),
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

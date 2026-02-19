@@ -11,7 +11,7 @@ import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase } from 
 
 GameStore.setOnSaveCallback(scheduleServerSync);
 import type { ClaimSignature } from './claimApi';
-import { executeClaim, getContractSignerAddress, hasClaimContract } from './rewardClaim';
+import { executeClaim, getContractSignerAddress, getPoolBalanceAndAllowance, hasClaimContract } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
 import { showTitleUI } from './titleUI';
 import { destroyPhaserGame } from './phaserBoot';
@@ -1498,6 +1498,38 @@ function initDebugPaneListeners(): void {
         });
       } finally {
         checkSignerBtn.disabled = false;
+      }
+    });
+  }
+
+  const checkPoolBtn = document.getElementById('dom-debug-check-pool') as HTMLButtonElement | null;
+  if (checkPoolBtn) {
+    checkPoolBtn.addEventListener('click', async () => {
+      if (!hasClaimContract()) {
+        showMessageModal({ title: 'プール残高', message: 'VITE_REWARD_CLAIM_ADDRESS が未設定です。', success: false });
+        return;
+      }
+      checkPoolBtn.disabled = true;
+      try {
+        const data = await getPoolBalanceAndAllowance();
+        if (!data) {
+          showMessageModal({
+            title: 'プール残高',
+            message: '取得に失敗しました。ウォレットを接続し、Sepolia に切り替えてから再度お試しください。',
+            success: false,
+          });
+          return;
+        }
+        const msg = [
+          `報酬プール（pool）: ${data.pool.slice(0, 10)}…${data.pool.slice(-8)}`,
+          `$SEED 残高: ${data.balanceFormatted} $SEED`,
+          `RewardClaim への allowance: ${data.allowanceFormatted} $SEED`,
+          '',
+          'Claim できるのは「残高」と「allowance」のうち小さい方までです。allowance が 0 の場合は、プールのウォレットで seedToken.approve(RewardClaim のアドレス, 量) を実行してください。',
+        ].join('\n');
+        showMessageModal({ title: '報酬プールの $SEED', message: msg, success: true });
+      } finally {
+        checkPoolBtn.disabled = false;
       }
     });
   }
