@@ -7,7 +7,7 @@ import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
 import { COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, updateTabsForOnboarding, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
-import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getCachedPower, getLoftLevelRaw } from '../networkState';
+import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getLoftLevelRaw } from '../networkState';
 import * as deckView from './deckView';
 
 const LOFT_GRID_ID = 'loft-grid';
@@ -22,7 +22,6 @@ const LOFT_MODAL_CANCEL_ID = 'loft-modal-cancel';
 const LOFT_MODAL_CONFIRM_ID = 'loft-modal-confirm';
 let accrualIntervalId = 0;
 let accrualHintTimer = 0;
-let hasShownSaveReminderThisSession = false;
 let spriteTick = 0;
 let spriteIntervalId = 0;
 const SPRITE_FRAME_COUNT = COMMON_FRAME_SRCS.length;
@@ -225,22 +224,6 @@ export function refresh(): void {
   renderLoft();
   updateUpgradeButton();
   updateSaveWrapVisibility();
-  const localPower = Math.floor(getProductionRatePerHour(GameStore.state));
-  const chainPower = getCachedPower();
-  if (
-    hasNetworkStateContract() &&
-    GameStore.walletAddress &&
-    localPower > 0 &&
-    (chainPower === null || chainPower === 0) &&
-    !hasShownSaveReminderThisSession
-  ) {
-    hasShownSaveReminderThisSession = true;
-    showMessageModal({
-      title: 'Save your deck on-chain',
-      message: 'Your Loft has power but it has not been saved on-chain yet. Click the "Save" button below to update SEED/DAY and Network Share.',
-      success: true,
-    });
-  }
   refreshShellStatus();
 
   if (accrualIntervalId) {
