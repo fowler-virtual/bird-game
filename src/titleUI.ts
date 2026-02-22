@@ -55,8 +55,24 @@ function onConnectClick(): void {
       gs = await getGameState();
     }
     if (gs.ok) {
-      GameStore.setStateFromServer(gs.state, gs.version);
-      GameStore.save();
+      const address = GameStore.walletAddress?.toLowerCase() ?? '';
+      const resetPending =
+        typeof sessionStorage !== 'undefined' && sessionStorage.getItem('bird-game-reset-pending') === address;
+      if (resetPending) {
+        GameStore.resetToInitial();
+        GameStore.save();
+        const putResult = await putGameState(GameStore.state, gs.version);
+        if (putResult.ok) {
+          GameStore.serverStateVersion = putResult.version;
+          GameStore.save();
+        }
+        try {
+          sessionStorage.removeItem('bird-game-reset-pending');
+        } catch (_) {}
+      } else {
+        GameStore.setStateFromServer(gs.state, gs.version);
+        GameStore.save();
+      }
     } else {
       GameStore.resetToInitial();
       GameStore.loadedFromStorage = true;

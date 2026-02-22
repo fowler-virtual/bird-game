@@ -1544,6 +1544,9 @@ function initDebugPaneListeners(): void {
       )
         return;
       if (GameStore.walletAddress) {
+        try {
+          sessionStorage.setItem('bird-game-reset-pending', GameStore.walletAddress.toLowerCase());
+        } catch (_) {}
         GameStore.clearCurrentWalletData();
       } else {
         GameStore.resetToInitial();
