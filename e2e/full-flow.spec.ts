@@ -14,7 +14,8 @@ const ERC20_ABI = [
 ] as const;
 
 /**
- * Claim 環境（Signer 一致・プール allowance）を検証し、不備があればテストを失敗させる。
+ * Claim 環境（Signer 一致・プール allowance・プール残高）を検証し、不備があればテストを失敗させる。
+ * プール残高 0 は transferFrom 失敗 → require(false) の主因になるため、E2E で検知する。
  * E2E_REWARD_CLAIM_ADDRESS が未設定の場合はスキップ（従来どおり）。
  */
 async function assertClaimEnvReady(page: import('@playwright/test').Page): Promise<void> {
@@ -53,11 +54,21 @@ async function assertClaimEnvReady(page: import('@playwright/test').Page): Promi
   }
 
   const tokenContract = new Contract(token, ERC20_ABI, provider);
-  const allowance = await tokenContract.allowance(pool, claimAddress);
+  const [allowance, balance] = await Promise.all([
+    tokenContract.allowance(pool, claimAddress),
+    tokenContract.balanceOf(pool),
+  ]);
   const allowanceBn = typeof allowance === 'bigint' ? allowance : BigInt(allowance?.toString?.() ?? 0);
+  const balanceBn = typeof balance === 'bigint' ? balance : BigInt(balance?.toString?.() ?? 0);
+
   if (allowanceBn <= 0n) {
     throw new Error(
       `Claim env check: RewardClaim allowance is 0. Pool must approve the RewardClaim contract. See DEBUG tab "プール残高・allowance を確認".`
+    );
+  }
+  if (balanceBn <= 0n) {
+    throw new Error(
+      `Claim env check: Pool $SEED balance is 0. Top up the pool so that Claim simulation (transferFrom) can succeed. See DEBUG tab "プール残高・allowance を確認".`
     );
   }
 }
