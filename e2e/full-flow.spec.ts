@@ -23,16 +23,20 @@ async function assertClaimEnvReady(page: import('@playwright/test').Page): Promi
   if (!claimAddress || !claimAddress.startsWith('0x') || claimAddress.length !== 42) return;
 
   const apiSigner = await page.evaluate(async (): Promise<string | null> => {
-    try {
-      const r = await fetch('/claim/signer', { credentials: 'include' });
-      const d = (await r.json()) as { signerAddress?: string };
-      return typeof d.signerAddress === 'string' ? d.signerAddress : null;
-    } catch {
-      return null;
+    const urls = ['/api/claim/signer', '/claim/signer'];
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { credentials: 'include' });
+        const d = (await r.json()) as { signerAddress?: string };
+        if (typeof d.signerAddress === 'string') return d.signerAddress;
+      } catch {
+        // continue
+      }
     }
+    return null;
   });
   if (apiSigner == null) {
-    throw new Error('Claim env check: GET /claim/signer failed or returned no signerAddress. Is the API up and session valid?');
+    throw new Error('Claim env check: GET /api/claim/signer (or /claim/signer) failed or returned no signerAddress. Is the API up?');
   }
 
   const rpcUrl = process.env.E2E_SEPOLIA_RPC || 'https://ethereum-sepolia-rpc.publicnode.com';
@@ -271,16 +275,19 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
   // Claim 環境検証（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）。不備ならここで失敗し「Claim simulation failed」を未然に防ぐ
   await assertClaimEnvReady(page);
 
-  // 9: Claim → one of: Claim successful / Nothing to claim / Claim failed + reason (only when button enabled)
+  // 9: Claim → Claim successful or Nothing to claim を要求（E2E_REWARD_CLAIM_ADDRESS 設定時は「Claim failed」ならテスト失敗）
   const claimBtn = page.locator('#status-claim-btn');
   await claimBtn.waitFor({ state: 'visible', timeout: 5000 });
   const claimEnabled = await claimBtn.isEnabled().catch(() => false);
   if (claimEnabled) {
     await claimBtn.click();
     await page.getByRole('button', { name: /Confirm/i }).click();
-    await expect(
-      page.getByText(/Claim successful|Nothing to claim|Claim failed/i)
-    ).toBeVisible({ timeout: 25000 });
+    const resultLocator = page.getByText(/Claim successful|Nothing to claim|Claim failed/i);
+    await expect(resultLocator).toBeVisible({ timeout: 25000 });
+    const msg = await resultLocator.textContent();
+    if (process.env.E2E_REWARD_CLAIM_ADDRESS && msg && /Claim failed/i.test(msg)) {
+      throw new Error(`E2E Claim failed (real RPC). Result: "${msg.slice(0, 200)}". Fix Claim so simulation/tx succeeds.`);
+    }
     await page.getByRole('button', { name: /OK/i }).click().catch(() => {});
   }
 });
@@ -297,10 +304,13 @@ test('debug Reset & Disconnect: reconnect shows first-time state and can start g
 
   await page.locator('.shell-tab[data-tab="debug"]').click();
   await expect(page.locator('#pane-debug.active')).toBeVisible({ timeout: 5000 });
-  await expect(page.locator('#dom-debug-reset-disconnect')).toBeVisible();
+  const resetBtn = page.locator('#dom-debug-reset-disconnect');
+  await resetBtn.waitFor({ state: 'attached', timeout: 5000 });
+  await resetBtn.scrollIntoViewIfNeeded();
+  await expect(resetBtn).toBeVisible({ timeout: 5000 });
 
   page.once('dialog', (dialog) => dialog.accept());
-  await page.locator('#dom-debug-reset-disconnect').click();
+  await resetBtn.click();
 
   await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible({ timeout: 15000 });
   await expect(page.locator('#game-shell.visible')).not.toBeVisible();
@@ -387,9 +397,12 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
   if (claimEnabled) {
     await claimBtn.click();
     await page.getByRole('button', { name: /Confirm/i }).click();
-    await expect(
-      page.getByText(/Claim successful|Nothing to claim|Claim failed/i)
-    ).toBeVisible({ timeout: 25000 });
+    const resultLocator = page.getByText(/Claim successful|Nothing to claim|Claim failed/i);
+    await expect(resultLocator).toBeVisible({ timeout: 25000 });
+    const msg = await resultLocator.textContent();
+    if (process.env.E2E_REWARD_CLAIM_ADDRESS && msg && /Claim failed/i.test(msg)) {
+      throw new Error(`E2E Claim failed (real RPC). Result: "${msg.slice(0, 200)}". Fix Claim so simulation/tx succeeds.`);
+    }
     await page.getByRole('button', { name: /OK/i }).click().catch(() => {});
   }
 });
