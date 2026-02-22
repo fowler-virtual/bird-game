@@ -71,6 +71,11 @@
 4. **$SEED トークンの実装**  
    - transferFrom が revert するパターン（例: 手数料、Pause、ホワイトリスト）がないか、コントラクト・デプロイ先を確認する必要がある。
 
+5. **コンソールに `reason: 'require(false)'`, `revertDataHex: '0x'` が出る場合**  
+   - RewardClaim の各 require にはメッセージがあるため、**revert データが空**なのは、**トークンの transferFrom 内で revert している**可能性が高い。  
+   - トークンが revert 理由を返さない（またはカスタムエラーでデコードされない）と、RPC が `require(false)` と空データで返す。  
+   - **確認**: DEBUG「プール残高・allowance」で、**請求量（amount）がプール残高・allowance を超えていないか**。また $SEED コントラクトの transferFrom 実装（手数料・Pause・制限）を確認する。
+
 ---
 
 ## 6. 次のセッションで行うこと（推奨順）
@@ -111,7 +116,26 @@
 
 ---
 
-## 8. このドキュメントの読み方
+## 8. なぜ「以前は動いていた」のに動かなくなるか（開発側の整理）
+
+**結論**: フロントの「送信するトランザクションの内容」は、一連の Claim 修正で**一切変えていない**。
+
+- **変更したもの**: 送り方（estimateGas 回避 → sendTransaction 直接）、送信前シミュレーション、revert 理由の取り方・表示。  
+- **変えていないもの**: `recipient`（signer.getAddress()）、`amountWei` / `nonce` / `deadline` / `campaignId` / `v` / `r` / `s`（すべて API の署名レスポンスのまま）。エンコードも `claimEIP712(recipient, amount, nonce, deadline, campaignId, v, r, s)` の並びで不変。
+
+そのため「以前は成功していたのに今は revert する」場合、**コードの書き換えでトランザクションの中身が変わったのではなく**、次のどちらかの可能性が高い。
+
+1. **環境の変化**  
+   - Vercel の `CLAIM_SIGNER_PRIVATE_KEY` や `REWARD_CLAIM_CONTRACT_ADDRESS` の変更、RewardClaim の再デプロイ（signer の不一致）、プールの allowance 取り消し・残高不足など。
+2. **もともと本番では成功していなかった**  
+   - 動いていたのがローカルや別ネット・別設定だけで、Vercel + Sepolia の組み合わせでは一度も成功していなかった可能性。
+
+**次の一手**: 送信前シミュレーションで表示される**具体的な revert 理由**（例: `RewardClaim: transfer failed`）を確認し、その理由に沿って signer 一致・プール残高・allowance・トークン仕様を確認する。コードを当てずっぽうでいじるより、表示された理由に基づいて環境・コントラクト側を直す。
+
+---
+
+## 9. このドキュメントの読み方
 
 - **Claim の不具合を続きから調査・修正するとき**: セッション開始時に `docs/SESSION_START.md` の必須ドキュメントを読んだうえで、**このファイル（CLAIM_DEBUG_HANDOFF.md）を開き、「6. 次のセッションで行うこと」から着手**する。  
+- **「なぜ前は動いていたのに」という疑問**: **8. なぜ「以前は動いていた」のに動かなくなるか**を参照。  
 - 進捗や新たに分かった原因は、このファイルの該当セクションを更新して残す。

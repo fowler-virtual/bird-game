@@ -212,6 +212,15 @@ export async function executeClaim(signature: ClaimSignature): Promise<
           }
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
+        // reason が require(false) かつ revert データが空 → トークンの transferFrom が revert している可能性が高い（プール残高・allowance）
+        if (/require\s*\(\s*false\s*\)/i.test(reason) && !revertData) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn(
+              '[Claim] Simulation revert: require(false) with no revert data. Likely transferFrom failed (pool balance or allowance, or token reverts without message). Check DEBUG tab: pool balance and allowance.'
+            );
+          }
+          return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+        }
         if (typeof console !== 'undefined' && console.warn) {
           console.warn('[Claim] Simulation revert:', reason);
         }
