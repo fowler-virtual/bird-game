@@ -6,7 +6,7 @@
 import { GameStore } from '../store/GameStore';
 import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
 import { COMMON_FRAME_SRCS } from '../assets';
-import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
+import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, updateTabsForOnboarding, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
 import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getCachedPower, getLoftLevelRaw } from '../networkState';
 import * as deckView from './deckView';
 
@@ -353,6 +353,7 @@ export function init(): void {
         if (wasNeedSave) {
           GameStore.setState({ onboardingStep: 'need_farming' });
           GameStore.save();
+          updateTabsForOnboarding();
           deckView.refresh();
           updateDeckOnboardingPlaceOverlay();
           hideProcessingModal();
