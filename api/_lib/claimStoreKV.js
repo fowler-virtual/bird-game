@@ -167,6 +167,24 @@ export async function reserve(address) {
 }
 
 /**
+ * Cap the reserved amount for a given nonce (e.g. to pool balance). Returns the new amount or null if not found.
+ */
+export async function capReservationAmount(address, nonce, maxAmountWei) {
+  const state = await getClaimState(address);
+  const pending = (state.pendings || []).find((p) => String(p.nonce) === String(nonce));
+  if (!pending) return null;
+  const current = BigInt(pending.amount);
+  const cap = BigInt(maxAmountWei);
+  if (current <= cap) return current.toString();
+  const reduce = current - cap;
+  pending.amount = cap.toString();
+  state.reserved = (BigInt(state.reserved || "0") - reduce).toString();
+  if (BigInt(state.reserved) < 0n) state.reserved = "0";
+  await setClaimState(address, state);
+  return cap.toString();
+}
+
+/**
  * After on-chain claim success: move reserved to claimed_total.
  */
 export async function confirmReservation(address, nonce, amountWei) {

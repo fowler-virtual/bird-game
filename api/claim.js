@@ -5,7 +5,8 @@ import { Wallet, getAddress, Signature } from "ethers";
 import { getSessionAddress } from "./_lib/sessionCookie.js";
 import { checkRateLimit, getClientKey } from "./_lib/rateLimit.js";
 import { setCorsHeaders } from "./_lib/cors.js";
-import { reserve, getClaimableAsync } from "./_lib/claimStoreKV.js";
+import { reserve, getClaimableAsync, capReservationAmount } from "./_lib/claimStoreKV.js";
+import { getPoolBalanceWei } from "./_lib/poolBalance.js";
 
 const DEFAULT_CAMPAIGN_ID = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -58,7 +59,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "No claimable amount." });
   }
 
-  const { amountWei, nonce, expiresAt } = reserved;
+  let { amountWei, nonce, expiresAt } = reserved;
+  const poolBalanceWei = await getPoolBalanceWei();
+  if (poolBalanceWei !== null && BigInt(amountWei) > BigInt(poolBalanceWei)) {
+    const capped = await capReservationAmount(sessionAddress, nonce, poolBalanceWei);
+    if (capped) {
+      amountWei = capped;
+      console.warn("[claim] Capped amount to pool balance.", { requested: reserved.amountWei, poolBalance: poolBalanceWei, signed: amountWei });
+    }
+  }
+  if (BigInt(amountWei) <= 0n) {
+    return res.status(400).json({ error: "Pool has no balance available for claim. Please try again later." });
+  }
   const userAddress = getAddress(sessionAddress);
 
   try {

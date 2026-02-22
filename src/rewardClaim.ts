@@ -212,12 +212,47 @@ export async function executeClaim(signature: ClaimSignature): Promise<
           }
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
-        // reason が require(false) かつ revert データが空 → トークンの transferFrom が revert している可能性が高い（プール残高・allowance）
+        // reason が require(false) かつ revert データが空 → トークンの transferFrom が revert。請求量 vs プール残高・allowance を比較して原因を特定
         if (/require\s*\(\s*false\s*\)/i.test(reason) && !revertData) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn(
-              '[Claim] Simulation revert: require(false) with no revert data. Likely transferFrom failed (pool balance or allowance, or token reverts without message). Check DEBUG tab: pool balance and allowance.'
-            );
+          const poolInfo = await getPoolBalanceAndAllowance();
+          if (poolInfo) {
+            const bal = BigInt(poolInfo.balanceWei);
+            const all = BigInt(poolInfo.allowanceWei);
+            if (amountWei > bal) {
+              if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[Claim] Simulation revert: claim amount exceeds pool balance', {
+                  amountWei: signature.amountWei,
+                  poolBalanceWei: poolInfo.balanceWei,
+                });
+              }
+              return {
+                ok: false,
+                error:
+                  "The claim amount is higher than the pool's available balance. Please try again later or contact support.",
+              };
+            }
+            if (amountWei > all) {
+              if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[Claim] Simulation revert: claim amount exceeds allowance', {
+                  amountWei: signature.amountWei,
+                  allowanceWei: poolInfo.allowanceWei,
+                });
+              }
+              return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+            }
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn('[Claim] Simulation revert: require(false) but amount <= balance and allowance', {
+                amountWei: signature.amountWei,
+                poolBalanceWei: poolInfo.balanceWei,
+                allowanceWei: poolInfo.allowanceWei,
+              });
+            }
+          } else {
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn(
+                '[Claim] Simulation revert: require(false) with no revert data. Could not fetch pool info. Check DEBUG tab.'
+              );
+            }
           }
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }

@@ -48,6 +48,7 @@ Vercel の **Settings → Environment Variables** で設定する項目の一覧
 | **CLAIM_RATE_LIMIT_MAX** | rate limit: 1 キーあたりの最大リクエスト数。 | `10` |
 | **CLAIM_RATE_LIMIT_WINDOW_MS** | rate limit の窓（ミリ秒）。 | `60000` |
 | **SIWE_NONCE_TTL_SEC** | SIWE の nonce 有効秒数。 | `300` |
+| **RPC_URL** | Claim API がプール残高を参照するための RPC（Sepolia など）。**設定時**、署名する金額が「プール残高」を超えないよう自動でキャップし、`transferFrom` revert を防ぐ。未設定時はキャップしない。 | 未設定（キャップなし） |
 
 ---
 
