@@ -10,6 +10,10 @@ import type { ClaimSignature } from './claimApi';
 /** Revert data: Error(string) selector (Solidity require) */
 const ERROR_STRING_SELECTOR = '0x08c379a0';
 
+/** 本番で一般ユーザーに表示するメッセージ（DEBUG・Signer・pool 等の技術用語は出さない） */
+const CLAIM_UNAVAILABLE_USER_MESSAGE =
+  "We couldn't complete your claim right now. Please try again in a few minutes. If the problem continues, please contact support.";
+
 function decodeRevertReason(data: unknown): string | null {
   if (typeof data !== 'string' || !data.startsWith('0x')) return null;
   if (data.slice(0, 10).toLowerCase() !== ERROR_STRING_SELECTOR.toLowerCase()) return null;
@@ -36,6 +40,14 @@ function getRevertDataFromError(e: unknown): string | null {
   const data = errData ?? nestedData ?? infoData;
   if (typeof data === 'string' && data.startsWith('0x')) return data;
   return null;
+}
+
+/** ethers が error.reason にデコード済みで入れている場合に取得 */
+function getReasonFromError(e: unknown): string | null {
+  if (e == null) return null;
+  const o = e as Record<string, unknown>;
+  const reason = o.reason ?? (o.error as Record<string, unknown> | undefined)?.reason;
+  return typeof reason === 'string' ? reason : null;
 }
 
 const REWARD_CLAIM_ABI = [
@@ -169,9 +181,16 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       await provider.call({ to: contractAddress, data, from: recipient });
     } catch (preflightErr: unknown) {
       const revertData = getRevertDataFromError(preflightErr);
-      const reason = revertData ? decodeRevertReason(revertData) : null;
+      const reasonDecoded = revertData ? decodeRevertReason(revertData) : null;
+      const reasonFromErr = getReasonFromError(preflightErr);
+      const reason = reasonDecoded ?? reasonFromErr;
       if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[Claim] 送信前シミュレーションで revert', { reason, hasRevertData: !!revertData });
+        console.warn('[Claim] 送信前シミュレーションで revert', {
+          reason: reason ?? '(could not decode)',
+          hasRevertData: !!revertData,
+          revertDataSelector: typeof revertData === 'string' && revertData.length >= 10 ? revertData.slice(0, 10) : undefined,
+          revertDataHex: typeof revertData === 'string' ? revertData : undefined,
+        });
       }
       if (reason) {
         if (/signature expired|expired/i.test(reason)) {
@@ -180,32 +199,30 @@ export async function executeClaim(signature: ClaimSignature): Promise<
         if (/nonce already used/i.test(reason)) {
           return { ok: false, error: 'This claim was already used. Request a new claim and try again.' };
         }
-        if (/invalid signature/i.test(reason)) {
-          return {
-            ok: false,
-            error:
-              'Invalid signature: the contract signer does not match the server key. Check VERCEL_ENV_VARS.md — CLAIM_SIGNER_PRIVATE_KEY must correspond to the RewardClaim contract\'s signer address.',
-          };
-        }
-        if (/transfer failed|transfer amount exceeds|insufficient allowance|insufficient balance/i.test(reason)) {
-          return {
-            ok: false,
-            error:
-              'Claim would fail: ' +
-              reason +
-              '. Check that the reward pool has enough $SEED and has approved the RewardClaim contract (allowance). Use DEBUG tab "プール残高・allowance を確認".',
-          };
-        }
         if (/recipient must be caller/i.test(reason)) {
-          return { ok: false, error: 'Claim failed: you must call claim from the same wallet that received the signature.' };
+          return { ok: false, error: 'Please claim from the same wallet you used to connect.' };
         }
-        return { ok: false, error: `Claim would fail: ${reason}` };
+        if (
+          /invalid signature|transfer failed|transfer amount exceeds|insufficient allowance|insufficient balance/i.test(
+            reason
+          )
+        ) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[Claim] Simulation revert (operator/setup):', reason);
+          }
+          return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+        }
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[Claim] Simulation revert:', reason);
+        }
+        return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
       }
-      return {
-        ok: false,
-        error:
-          'Claim simulation failed (transaction would revert). Try again, or check DEBUG tab: Signer, pool balance and allowance.',
-      };
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn(
+          '[Claim] Simulation failed (reason not decoded). Check DEBUG tab: Signer 一致確認 and プール残高・allowance.'
+        );
+      }
+      return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
     }
 
     if (typeof console !== 'undefined' && console.log) {
@@ -287,39 +304,35 @@ export async function executeClaim(signature: ClaimSignature): Promise<
         if (/nonce already used/i.test(reason)) {
           return { ok: false, error: 'This claim was already used. Request a new claim and try again.' };
         }
-        if (/invalid signature/i.test(reason)) {
-          return {
-            ok: false,
-            error:
-              'Invalid signature: the contract signer does not match the server key. Check VERCEL_ENV_VARS.md — CLAIM_SIGNER_PRIVATE_KEY must correspond to the RewardClaim contract’s signer address.',
-          };
-        }
-        if (/transfer failed/i.test(reason)) {
-          return { ok: false, error: 'Claim reverted: reward pool transfer failed (e.g. insufficient balance or allowance).' };
-        }
         if (/recipient must be caller/i.test(reason)) {
-          return { ok: false, error: 'Claim failed: you must call claim from the same wallet that received the signature.' };
+          return { ok: false, error: 'Please claim from the same wallet you used to connect.' };
         }
-        return { ok: false, error: `Claim failed: ${reason}` };
+        if (/invalid signature|transfer failed|insufficient/i.test(reason)) {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[Claim] Tx revert (operator/setup):', reason);
+          }
+          return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+        }
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[Claim] Tx revert:', reason);
+        }
+        return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
       }
       if (/expired|signature expired/i.test(msg)) {
         return { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
       }
-      const txHash =
-        savedTxHash ??
-        err?.hash ??
-        err?.receipt?.hash ??
-        (err?.receipt as { transactionHash?: string } | undefined)?.transactionHash ??
-        (e as { transactionHash?: string }).transactionHash;
-      const etherscanHint = txHash
-        ? ` Transaction: https://sepolia.etherscan.io/tx/${txHash}`
-        : ' Check the failed transaction on Sepolia Etherscan for the revert reason.';
-      return {
-        ok: false,
-        error:
-          'Claim failed (revert). If it keeps happening, ensure the contract’s signer matches the server’s CLAIM_SIGNER_PRIVATE_KEY — see docs/VERCEL_ENV_VARS.md. Check /api/claim/signer on your site and compare with RewardClaim signer().' +
-          etherscanHint,
-      };
+      if (typeof console !== 'undefined' && console.warn) {
+        const txHash =
+          savedTxHash ??
+          err?.hash ??
+          err?.receipt?.hash ??
+          (err?.receipt as { transactionHash?: string } | undefined)?.transactionHash;
+        console.warn(
+          '[Claim] Tx reverted (reason not decoded).',
+          txHash ? `Transaction: https://sepolia.etherscan.io/tx/${txHash}` : ''
+        );
+      }
+      return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
     }
     if (/429|Too Many Requests/i.test(msg)) {
       return {

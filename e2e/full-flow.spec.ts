@@ -1,6 +1,66 @@
 import { test, expect } from '@playwright/test';
+import { Contract, JsonRpcProvider } from 'ethers';
 
 const TEST_PK = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+
+const REWARD_CLAIM_ABI = [
+  'function signer() view returns (address)',
+  'function pool() view returns (address)',
+  'function seedToken() view returns (address)',
+] as const;
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function allowance(address owner, address spender) view returns (uint256)',
+] as const;
+
+/**
+ * Claim 環境（Signer 一致・プール allowance）を検証し、不備があればテストを失敗させる。
+ * E2E_REWARD_CLAIM_ADDRESS が未設定の場合はスキップ（従来どおり）。
+ */
+async function assertClaimEnvReady(page: import('@playwright/test').Page): Promise<void> {
+  const claimAddress = process.env.E2E_REWARD_CLAIM_ADDRESS;
+  if (!claimAddress || !claimAddress.startsWith('0x') || claimAddress.length !== 42) return;
+
+  const apiSigner = await page.evaluate(async (): Promise<string | null> => {
+    try {
+      const r = await fetch('/claim/signer', { credentials: 'include' });
+      const d = (await r.json()) as { signerAddress?: string };
+      return typeof d.signerAddress === 'string' ? d.signerAddress : null;
+    } catch {
+      return null;
+    }
+  });
+  if (apiSigner == null) {
+    throw new Error('Claim env check: GET /claim/signer failed or returned no signerAddress. Is the API up and session valid?');
+  }
+
+  const rpcUrl = process.env.E2E_SEPOLIA_RPC || 'https://ethereum-sepolia-rpc.publicnode.com';
+  const provider = new JsonRpcProvider(rpcUrl);
+  const claimContract = new Contract(claimAddress, REWARD_CLAIM_ABI, provider);
+  const [contractSigner, poolAddr, tokenAddr] = await Promise.all([
+    claimContract.signer(),
+    claimContract.pool(),
+    claimContract.seedToken(),
+  ]);
+  const contractSignerStr = typeof contractSigner === 'string' ? contractSigner : String(contractSigner);
+  const pool = typeof poolAddr === 'string' ? poolAddr : String(poolAddr);
+  const token = typeof tokenAddr === 'string' ? tokenAddr : String(tokenAddr);
+
+  if (apiSigner.toLowerCase() !== contractSignerStr.toLowerCase()) {
+    throw new Error(
+      `Claim env check: Signer mismatch. API=${apiSigner} Contract=${contractSignerStr}. Fix CLAIM_SIGNER_PRIVATE_KEY or redeploy RewardClaim.`
+    );
+  }
+
+  const tokenContract = new Contract(token, ERC20_ABI, provider);
+  const allowance = await tokenContract.allowance(pool, claimAddress);
+  const allowanceBn = typeof allowance === 'bigint' ? allowance : BigInt(allowance?.toString?.() ?? 0);
+  if (allowanceBn <= 0n) {
+    throw new Error(
+      `Claim env check: RewardClaim allowance is 0. Pool must approve the RewardClaim contract. See DEBUG tab "プール残高・allowance を確認".`
+    );
+  }
+}
 
 test.beforeEach(async ({ page }) => {
   const pk = TEST_PK;
@@ -125,6 +185,9 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
     // continue; status bar and Claim are visible regardless of tab lock
   }
 
+  // Claim 環境検証（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）。不備ならここで失敗し「Claim simulation failed」を未然に防ぐ
+  await assertClaimEnvReady(page);
+
   // 9: Claim → one of: Claim successful / Nothing to claim / Claim failed + reason (only when button enabled)
   const claimBtn = page.locator('#status-claim-btn');
   await claimBtn.waitFor({ state: 'visible', timeout: 5000 });
@@ -232,6 +295,8 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
   } catch {
     // continue
   }
+
+  await assertClaimEnvReady(page);
 
   const claimBtn = page.locator('#status-claim-btn');
   await claimBtn.waitFor({ state: 'visible', timeout: 5000 });

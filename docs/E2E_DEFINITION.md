@@ -90,6 +90,19 @@
 
 - **決定**: **含める**（3.1 で 1〜9 すべて必須とした）。「Claim ボタン押下 → モックが署名取得（/claim 呼び出し）と送信を受け取る → 成功 or 失敗のメッセージが出る」まで assert する。
 
+### 3.3.1 Claim の E2E スコープと本番環境の保証
+
+- **E2E で検証するもの**
+  - Claim の**フロー**：ボタン表示 → クリック → Confirm → 何らかの結果モーダル（「Claim successful」「Nothing to claim」「Claim failed」のいずれか）が表示されること。クラッシュや無限ローディングで止まらないこと。
+  - **Claim 環境（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）**：シナリオ 9 の直前で、API の signer とコントラクトの `signer()` の一致、および報酬プールの RewardClaim への **allowance > 0** を検証する。不備があれば E2E が失敗し、「Claim simulation failed (transaction would revert)」を**検証時点で解消**する（環境を直してから E2E を通す）。
+  - オンチェーン送信は**モック**（`eth_call` / `eth_sendTransaction` は偽の応答）のため、実際の Claim トランザクションは送らない。
+- **E2E で検証しないもの**
+  - プールの **残高**（allowance が 0 でないことだけを確認。残高不足は別要因）。
+- **本番環境で Claim を保証するには**
+  - **E2E 実行時に `E2E_REWARD_CLAIM_ADDRESS` を設定する**（テスト用デプロイの RewardClaim アドレス）。E2E が Signer 一致・allowance をチェックし、不備なら失敗する。
+  - 必要に応じて、本番（またはステージング）で実ウォレットから 1 回 Claim を試すスモークチェックをチェックリストに含める。
+  - 環境変数・手順は `docs/VERCEL_ENV_VARS.md` および `docs/CLAIM_DEBUG_HANDOFF.md` を参照する。
+
 ### 3.4 実行タイミング
 
 - **決定**: **依頼時**。依頼者が何か修正を依頼したとき、AI は次の流れで動く。
@@ -112,11 +125,38 @@
 ## 5. 次のステップ・実行方法
 
 - 定義は決定済み。E2E は実装済み。
-  1. **テスト用デプロイ URL**  
-     **決定: (a) 固定 URL**。E2E 専用の Vercel プロジェクトを 1 つ用意し、その URL を環境変数 **`E2E_BASE_URL`** で指定する。未設定の場合は `http://localhost:5174` にフォールバック（ローカルで `npm run dev` と API の用意が必要）。
-  2. **実行**
-     - `npm run test:e2e` … デスクトップ・モバイルの 2 viewport でシナリオ 1〜9 とチュートリアル assert を実行。未設定時はローカルで `npm run dev` を自動起動。
-     - **フルフロー（ガチャ〜Claim）を通すには** テスト用デプロイの URL を指定する: `E2E_BASE_URL=https://your-preview.vercel.app npm run test:e2e`
-  3. **初回セットアップ**
+  1. **テスト用デプロイ URL をどこで用意するか**  
+     **Vercel** でこのリポジトリをデプロイすると URL が発行されます。
+     - **本番と同じプロジェクトを使う場合**: Vercel にプロジェクトを 1 つ作り、Git の main ブランチと連携してデプロイする。デプロイ後に表示される **本番 URL**（例: `https://your-app.vercel.app`）を `E2E_BASE_URL` に指定すればよい。構成はシンプルだが、E2E が本番 URL にアクセスすることになる。
+     - **E2E 専用プロジェクトにする場合（推奨）**: Vercel で同じリポジトリを指す **別プロジェクト**を 1 つ作り（例: `bird-game-e2e`）、そちらのデプロイ URL を `E2E_BASE_URL` に使う。本番に影響を与えず、E2E 用の環境変数やブランチも分けられる。
+     - **どちらがよいか**: 通常は **E2E 専用プロジェクト（2）** を推奨する。理由は、E2E を何度も回しても本番に負荷や影響が出ないこと、テスト用の API キーや設定を本番と分けられること。本番 1 プロジェクトだけ運用したい・E2E が本番を叩いてもよい方針なら 1 でもよい。
+     - **方針: E2E 専用プロジェクト（2）で行く** 場合の手順:
+       1. [Vercel](https://vercel.com) にログインし、**Add New… → Project** で新規プロジェクトを作成する。
+       2. **Import** でこのリポジトリ（例: `bird-game`）を選択する。本番用プロジェクトが既にある場合は、同じリポジトリを「別プロジェクト」としてもう 1 つインポートする。
+       3. プロジェクト名を本番と区別する（例: `bird-game-e2e`）。**Framework Preset** は Vite のまま、**Root Directory** 等はそのままでよい。
+       4. **Environment Variables** で、本番と同様に `VITE_CLAIM_API_URL` 等（game-state / auth / claim が動くために必要な変数）を設定する。テスト用の値にしたい場合はここで本番と違う値を入れる。
+       5. **Deploy** 後、表示される URL（例: `https://bird-game-e2e.vercel.app`）をコピーする。この URL を `E2E_BASE_URL` に設定する（後述の「E2E_BASE_URL の設定方法」参照）。
+     - いずれも、E2E で使う API（game-state / auth / claim）がそのデプロイ先で動くように、Vercel の環境変数（`VITE_CLAIM_API_URL` 等）を設定しておく必要があります。
+     - **決定: (a) 固定 URL**。上記のどちらかで得た URL を環境変数 **`E2E_BASE_URL`** で指定する。未設定の場合は `http://localhost:5174` にフォールバック（ローカルで `npm run dev` と API の用意が必要）。
+  2. **E2E_BASE_URL を設定した方がよい理由**  
+     設定すると、接続・SIWE・ガチャ・SAVE・Claim まで本物の API に対して一通り流れるため、**より良いテスト**ができます。未設定でもシナリオ 1（タイトル表示）など一部は動きますが、フルフローを通すにはテスト用デプロイの URL を指定してください。
+  3. **E2E_BASE_URL の設定方法**
+     - **方法 A（コマンドで渡す）**
+       - Mac / Linux: `E2E_BASE_URL=https://あなたのテスト用デプロイURL npm run test:e2e`
+       - Windows（PowerShell）: `$env:E2E_BASE_URL="https://あなたのテスト用デプロイURL"; npm run test:e2e`
+       - Windows（cmd）: `set E2E_BASE_URL=https://あなたのテスト用デプロイURL && npm run test:e2e`
+     - **方法 B（.env に書く）**  
+       プロジェクト直下の `.env` に次の 1 行を追加すると、`npm run test:e2e` だけでその URL を使います（Playwright 設定で `dotenv/config` を読み込んでいます）。
+       ```
+       E2E_BASE_URL=https://あなたのテスト用デプロイURL
+       ```
+       ※ `.env` は通常 git に含めないので、チームで「テスト用 URL は〇〇」と共有するか、各自の `.env` に書いてください。
+  - **Claim 環境チェック（「Claim simulation failed」を E2E で解消する）**
+    - テスト用デプロイで Claim まで通す場合、**`E2E_REWARD_CLAIM_ADDRESS`** にそのデプロイの RewardClaim コントラクトアドレスを設定する。E2E がシナリオ 9 の直前に「API signer とコントラクト signer の一致」「プールの RewardClaim への allowance > 0」を検証し、不備があればテスト失敗で知らせる。
+    - 省略可：**`E2E_SEPOLIA_RPC`** で Sepolia の RPC URL を指定（未設定時は `https://ethereum-sepolia-rpc.publicnode.com` を使用）。
+    - 例（.env）: `E2E_REWARD_CLAIM_ADDRESS=0x...`（42 文字の 0x 付きアドレス）。
+  4. **実行**
+     - `npm run test:e2e` … デスクトップ・モバイルの 2 viewport でシナリオ 1〜9 とチュートリアル assert を実行。E2E_BASE_URL 未設定時はローカルで `npm run dev` を自動起動。E2E_REWARD_CLAIM_ADDRESS を設定している場合、Claim 環境（Signer 一致・allowance）も検証する。
+  5. **初回セットアップ**
      - `npx playwright install` でブラウザをインストール（未インストール時）。
 - 依頼時に AI は「修正 → E2E 実行 → 通るまで繰り返し → 通ったらコミット・プッシュ」で動く。
