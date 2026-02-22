@@ -73,42 +73,114 @@ async function assertClaimEnvReady(page: import('@playwright/test').Page): Promi
   }
 }
 
+const MOCK_GACHA_TX_HASH = '0x' + 'a'.repeat(64);
+const SEPOLIA_CHAIN_ID = 11155111;
+
 test.beforeEach(async ({ page }) => {
-  const pk = TEST_PK;
-  await page.addInitScript((key: string) => {
-    (async () => {
-      const { Wallet } = await import('https://cdn.jsdelivr.net/npm/ethers@6.13.0/+esm');
-      const w = new Wallet(key);
-      const request = async (args: { method: string; params?: unknown[] }) => {
-        const { method, params = [] } = args;
-        if (method === 'eth_requestAccounts') return [w.address];
-        if (method === 'personal_sign') {
-          const [messageHex] = params as [string, string];
-          let msg = String(messageHex);
-          if (typeof messageHex === 'string' && messageHex.startsWith('0x')) {
-            const hex = messageHex.slice(2);
-            const bytes = new Uint8Array(hex.length / 2);
-            for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-            msg = new TextDecoder().decode(bytes);
+  const claimAddress = process.env.E2E_REWARD_CLAIM_ADDRESS;
+  const rpcUrl =
+    claimAddress && (claimAddress.startsWith('0x') && claimAddress.length === 42)
+      ? process.env.E2E_SEPOLIA_RPC || 'https://ethereum-sepolia-rpc.publicnode.com'
+      : undefined;
+  const initArg = {
+    pk: TEST_PK,
+    rpcUrl: rpcUrl ?? undefined,
+    claimContractAddress: claimAddress ?? undefined,
+  };
+  await page.addInitScript(
+    (arg: { pk: string; rpcUrl?: string; claimContractAddress?: string }) => {
+      (async () => {
+        const { Wallet } = await import('https://cdn.jsdelivr.net/npm/ethers@6.13.0/+esm');
+        const w = new Wallet(arg.pk);
+        let lastRealTxHash: string | null = null;
+        const isClaimTarget = (to: unknown) =>
+          arg.claimContractAddress &&
+          typeof to === 'string' &&
+          to.toLowerCase() === arg.claimContractAddress!.toLowerCase();
+
+        const request = async (args: { method: string; params?: unknown[] }) => {
+          const { method, params = [] } = args;
+          if (method === 'eth_requestAccounts') return [w.address];
+          if (method === 'personal_sign') {
+            const [messageHex] = params as [string, string];
+            let msg = String(messageHex);
+            if (typeof messageHex === 'string' && messageHex.startsWith('0x')) {
+              const hex = messageHex.slice(2);
+              const bytes = new Uint8Array(hex.length / 2);
+              for (let i = 0; i < bytes.length; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+              msg = new TextDecoder().decode(bytes);
+            }
+            return await w.signMessage(msg);
           }
-          return await w.signMessage(msg);
-        }
-        if (method === 'eth_sendTransaction') return '0x' + 'a'.repeat(64);
-        if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain') return null;
-        if (method === 'eth_chainId') return '0xaa36a7';
-        if (method === 'eth_estimateGas') return '0x' + (21000).toString(16);
-        if (method === 'eth_getTransactionReceipt') {
-          const [txHash] = params as [string];
-          if (txHash) return { status: '0x1', blockNumber: '0x1', blockHash: '0x' + 'b'.repeat(64), transactionHash: txHash };
-          return null;
-        }
-        if (method === 'eth_blockNumber') return '0x1';
-        if (method === 'eth_call') return '0x';
-        throw new Error('E2E mock: ' + method);
-      };
-      (window as unknown as { ethereum: { request: typeof request } }).ethereum = { request };
-    })();
-  }, pk);
+          if (method === 'eth_call' && arg.rpcUrl && isClaimTarget((params[0] as { to?: string })?.to)) {
+            const res = await fetch(arg.rpcUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params }),
+            }).then((r) => r.json());
+            if (res.error) {
+              const err = res.error as { code?: number; message?: string; data?: string };
+              throw Object.assign(new Error(err.message || 'eth_call failed'), {
+                code: err.code ?? 'CALL_EXCEPTION',
+                data: err.data,
+                error: res.error,
+              });
+            }
+            return res.result;
+          }
+          if (method === 'eth_sendTransaction') {
+            const tx = params[0] as { from?: string; to?: string; data?: string; gasLimit?: string; value?: string };
+            if (arg.rpcUrl && isClaimTarget(tx?.to)) {
+              const txReq = {
+                ...tx,
+                chainId: SEPOLIA_CHAIN_ID,
+                type: 2,
+              };
+              const signed = await w.signTransaction(txReq);
+              const res = await fetch(arg.rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_sendRawTransaction', params: [signed] }),
+              }).then((r) => r.json());
+              if (res.error) {
+                const err = res.error as { code?: number; message?: string; data?: string };
+                throw Object.assign(new Error(err.message || 'eth_sendRawTransaction failed'), {
+                  code: err.code,
+                  data: err.data,
+                  error: res.error,
+                });
+              }
+              lastRealTxHash = res.result;
+              return res.result;
+            }
+            return MOCK_GACHA_TX_HASH;
+          }
+          if (method === 'eth_getTransactionReceipt') {
+            const [txHash] = params as [string];
+            if (arg.rpcUrl && txHash && lastRealTxHash && txHash.toLowerCase() === lastRealTxHash.toLowerCase()) {
+              const res = await fetch(arg.rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionReceipt', params: [txHash] }),
+              }).then((r) => r.json());
+              if (res.error) throw new Error((res.error as { message?: string }).message);
+              return res.result;
+            }
+            if (txHash) return { status: '0x1', blockNumber: '0x1', blockHash: '0x' + 'b'.repeat(64), transactionHash: txHash };
+            return null;
+          }
+          if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain') return null;
+          if (method === 'eth_chainId') return '0xaa36a7';
+          if (method === 'eth_estimateGas') return '0x' + (21000).toString(16);
+          if (method === 'eth_blockNumber') return '0x1';
+          if (method === 'eth_call') return '0x';
+          throw new Error('E2E mock: ' + method);
+        };
+        (window as unknown as { ethereum: { request: typeof request } }).ethereum = { request };
+      })();
+    },
+    initArg
+  );
 });
 
 test('scenario 1: title shows Connect Wallet, no white screen', async ({ page }) => {
