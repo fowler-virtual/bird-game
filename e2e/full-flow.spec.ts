@@ -139,6 +139,46 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
   }
 });
 
+test('debug Reset & Disconnect: reconnect shows first-time state and can start gacha', async ({ page }) => {
+  await page.goto('/');
+
+  await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible();
+  await page.getByRole('button', { name: /Connect Wallet/i }).click();
+  await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 35000 });
+
+  await expect(page.locator('.shell-tab[data-tab="adopt"]')).toBeVisible();
+  await expect(page.locator('.shell-tab[data-tab="debug"]')).toBeVisible();
+
+  await page.locator('.shell-tab[data-tab="debug"]').click();
+  await expect(page.locator('#pane-debug.active')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#dom-debug-reset-disconnect')).toBeVisible();
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('#dom-debug-reset-disconnect').click();
+
+  await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('#game-shell.visible')).not.toBeVisible();
+
+  await page.getByRole('button', { name: /Connect Wallet/i }).click();
+  await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 35000 });
+
+  const adoptOverlay = page.locator('#adopt-onboarding-overlay.visible');
+  const adoptDim = page.locator('#adopt-onboarding-dim-spotlight');
+  const hasAdoptGuide = (await adoptOverlay.isVisible()) || (await adoptDim.isVisible());
+  expect(hasAdoptGuide).toBeTruthy();
+
+  await expect(page.locator('#pane-adopt.active')).toBeVisible({ timeout: 5000 });
+  await page.locator('#shell-gacha-1').click();
+  await expect(page.locator('#gacha-modal-backdrop.visible')).toBeVisible({ timeout: 5000 });
+  await page.locator('#gacha-modal-confirm').click();
+  await Promise.race([
+    page.locator('.gacha-results-item').first().waitFor({ state: 'visible', timeout: 25000 }),
+    page.locator('#message-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 25000 }),
+  ]).catch(() => {});
+  if (await page.locator('#message-modal-backdrop.visible').isVisible()) await page.locator('#message-modal-ok').click();
+  await expect(page.locator('.gacha-results-item').first()).toBeVisible({ timeout: 15000 });
+});
+
 test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
   await page.goto('/');
 
