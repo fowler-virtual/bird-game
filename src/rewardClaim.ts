@@ -56,6 +56,13 @@ function getReasonFromError(e: unknown): string | null {
   return typeof reason === 'string' ? reason : null;
 }
 
+/** revert データが実質空（理由をデコードできない）か */
+function isRevertDataEmpty(data: string | null): boolean {
+  if (!data || typeof data !== 'string') return true;
+  const hex = data.startsWith('0x') ? data.slice(2) : data;
+  return hex.length < 10; // selector 4 bytes = 8 hex chars 未満は空扱い
+}
+
 const REWARD_CLAIM_ABI = [
   'function claimEIP712(address recipient, uint256 amount, uint256 nonce, uint256 deadline, bytes32 campaignId, uint8 v, bytes32 r, bytes32 s) external',
   'function signer() view returns (address)',
@@ -238,8 +245,8 @@ export async function executeClaim(signature: ClaimSignature): Promise<
           logClaimFailedForSupport('Simulation revert (operator/setup)', { reason });
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
-        // reason が require(false) かつ revert データが空 → トークンの transferFrom が revert。請求量 vs プール残高・allowance を比較して原因を特定
-        if (/require\s*\(\s*false\s*\)/i.test(reason) && !revertData) {
+        // revert データが空（'0x' 等）→ RPC が理由を返していない。transferFrom 失敗の可能性があるので請求量 vs プール残高・allowance を比較
+        if (isRevertDataEmpty(revertData)) {
           const poolInfo = await getPoolBalanceAndAllowance();
           if (poolInfo) {
             const bal = BigInt(poolInfo.balanceWei);
@@ -264,13 +271,17 @@ export async function executeClaim(signature: ClaimSignature): Promise<
               });
               return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
             }
-            logClaimFailedForSupport('Simulation: require(false) but amount <= balance and allowance', {
-              amountWei: signature.amountWei,
-              poolBalanceWei: poolInfo.balanceWei,
-              allowanceWei: poolInfo.allowanceWei,
-            });
+            logClaimFailedForSupport(
+              'Simulation: revert with no reason (often transferFrom). Amount <= pool balance and allowance here; token may differ on-chain (fee-on-transfer, pause, or pool/token address mismatch).',
+              {
+                amountSEED: Number(amountWei / 10n ** 18n),
+                amountWei: signature.amountWei,
+                poolBalanceWei: poolInfo.balanceWei,
+                allowanceWei: poolInfo.allowanceWei,
+              }
+            );
           } else {
-            logClaimFailedForSupport('Simulation: require(false), could not fetch pool info. Check DEBUG tab.');
+            logClaimFailedForSupport('Simulation: revert with no reason, could not fetch pool info. Check DEBUG tab.');
           }
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
