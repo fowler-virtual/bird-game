@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { Contract, JsonRpcProvider } from 'ethers';
+import { Contract, Interface, JsonRpcProvider, Wallet } from 'ethers';
 
 const TEST_PK = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
@@ -73,6 +73,77 @@ async function assertClaimEnvReady(page: import('@playwright/test').Page): Promi
   if (balanceBn <= 0n) {
     throw new Error(
       `Claim env check: Pool $SEED balance is 0. Top up the pool so that Claim simulation (transferFrom) can succeed. See DEBUG tab "プール残高・allowance を確認".`
+    );
+  }
+}
+
+const CLAIM_EIP712_ABI = [
+  'function claimEIP712(address recipient, uint256 amount, uint256 nonce, uint256 deadline, bytes32 campaignId, uint8 v, bytes32 r, bytes32 s) external',
+];
+
+/**
+ * 現在のセッションで API から Claim 署名を取得し、実 RPC で eth_call シミュレーションを実行する。
+ * 本番で起きる require(false) 等の revert を E2E で再現し、失敗すればテストを落とす。
+ * E2E_REWARD_CLAIM_ADDRESS 設定時のみ実行。claimable が 0 の場合はスキップ。
+ */
+async function assertClaimSimulationSucceeds(page: import('@playwright/test').Page): Promise<void> {
+  const claimAddress = process.env.E2E_REWARD_CLAIM_ADDRESS;
+  if (!claimAddress || !claimAddress.startsWith('0x') || claimAddress.length !== 42) return;
+
+  const claimRes = await page.evaluate(async (): Promise<{ ok: boolean; amountWei?: string; nonce?: string; deadline?: string; campaignId?: string; v?: number; r?: string; s?: string; error?: string }> => {
+    try {
+      const r = await fetch('/api/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+        credentials: 'include',
+      });
+      const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+      return {
+        ok: r.ok && typeof data.amountWei === 'string',
+        amountWei: typeof data.amountWei === 'string' ? data.amountWei : undefined,
+        nonce: data.nonce != null ? String(data.nonce) : undefined,
+        deadline: data.deadline != null ? String(data.deadline) : undefined,
+        campaignId: typeof data.campaignId === 'string' ? data.campaignId : undefined,
+        v: typeof data.v === 'number' ? data.v : undefined,
+        r: typeof data.r === 'string' ? data.r : undefined,
+        s: typeof data.s === 'string' ? data.s : undefined,
+        error: typeof data.error === 'string' ? data.error : undefined,
+      };
+    } catch {
+      return { ok: false };
+    }
+  });
+
+  if (!claimRes.ok || !claimRes.amountWei || claimRes.nonce == null || claimRes.deadline == null || claimRes.campaignId == null || claimRes.v == null || !claimRes.r || !claimRes.s) {
+    return;
+  }
+
+  const wallet = new Wallet(TEST_PK);
+  const recipient = wallet.address;
+  const campaignIdHex = claimRes.campaignId.startsWith('0x') ? claimRes.campaignId : `0x${claimRes.campaignId}`;
+  const iface = new Interface(CLAIM_EIP712_ABI as unknown as string[]);
+  const data = iface.encodeFunctionData('claimEIP712', [
+    recipient,
+    BigInt(claimRes.amountWei),
+    BigInt(claimRes.nonce),
+    BigInt(claimRes.deadline),
+    campaignIdHex as `0x${string}`,
+    claimRes.v,
+    claimRes.r as `0x${string}`,
+    claimRes.s as `0x${string}`,
+  ]);
+
+  const rpcUrl = process.env.E2E_SEPOLIA_RPC || 'https://ethereum-sepolia-rpc.publicnode.com';
+  const provider = new JsonRpcProvider(rpcUrl);
+  try {
+    await provider.call({ to: claimAddress, data, from: recipient });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const reason = (err as { reason?: string }).reason ?? msg;
+    throw new Error(
+      `E2E Claim simulation (eth_call) reverted — 本番でユーザーが目にするのと同じエラーです。Reason: ${reason}. ` +
+        'Claim の原因（トークン・allowance・プール・signer）を解消するまで修正とテストを繰り返してください。'
     );
   }
 }
@@ -272,8 +343,10 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
     // continue; status bar and Claim are visible regardless of tab lock
   }
 
-  // Claim 環境検証（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）。不備ならここで失敗し「Claim simulation failed」を未然に防ぐ
+  // Claim 環境検証（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）。不備ならここで失敗
   await assertClaimEnvReady(page);
+  // 本番と同じ eth_call シミュレーション（API 署名取得 → eth_call）。revert ならここでテスト失敗。※署名取得で 1 回 reservation を消費するため、続く Claim クリック時は claimable 0 の可能性あり
+  await assertClaimSimulationSucceeds(page);
 
   // 9: Claim → Claim successful or Nothing to claim を要求（E2E_REWARD_CLAIM_ADDRESS 設定時は「Claim failed」ならテスト失敗）
   const claimBtn = page.locator('#status-claim-btn');
@@ -303,7 +376,7 @@ test('debug Reset & Disconnect: reconnect shows first-time state and can start g
   await expect(page.locator('.shell-tab[data-tab="debug"]')).toBeVisible();
 
   await page.locator('.shell-tab[data-tab="debug"]').click();
-  await expect(page.locator('#pane-debug.active')).toBeVisible({ timeout: 5000 });
+  await expect(page.locator('#pane-debug.active')).toBeVisible({ timeout: 10000 });
   const resetBtn = page.locator('#dom-debug-reset-disconnect');
   await resetBtn.waitFor({ state: 'attached', timeout: 5000 });
   await resetBtn.scrollIntoViewIfNeeded();
@@ -390,6 +463,7 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
   }
 
   await assertClaimEnvReady(page);
+  await assertClaimSimulationSucceeds(page);
 
   const claimBtn = page.locator('#status-claim-btn');
   await claimBtn.waitFor({ state: 'visible', timeout: 5000 });

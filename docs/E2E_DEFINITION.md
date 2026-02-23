@@ -13,7 +13,7 @@
 | **実行環境** | テスト用デプロイの URL に E2E がアクセス。Playwright 等でヘッドレスブラウザを起動。CI またはローカルで `npm run test:e2e` を実行。 |
 | **ウォレット** | テスト用のモック `window.ethereum` をページ読み込み前に注入。`eth_requestAccounts` → 固定アドレスを返す。`personal_sign` → テスト用鍵で署名して返す。`eth_sendTransaction` 等はモックで成功/失敗を返す。 |
 | **API（game-state / claim / auth）** | **C（テスト用デプロイ）**: Vercel プレビュー等、デプロイされた URL を叩く。本物の API を使用（スタブは使わない）。 |
-| **チェーン** | 実際の Sepolia は使わない。RPC 呼び出しはモックが受け、固定のレスポンスを返す想定。 |
+| **チェーン** | **E2E_REWARD_CLAIM_ADDRESS 未設定時**: モックのみ。**設定時**: Claim に限り **実 RPC（Sepolia）** に転送し、本番と同一の revert（require(false) 等）を再現する。 |
 | **デバイス・viewport** | 下記「デバイス毎の表示」のとおり。 |
 
 ---
@@ -93,25 +93,24 @@
 ### 3.3.1 Claim の E2E スコープと本番環境の保証
 
 - **E2E で検証するもの**
-  - Claim の**フロー**：ボタン表示 → クリック → Confirm → 何らかの結果モーダル（「Claim successful」「Nothing to claim」「Claim failed」のいずれか）が表示されること。クラッシュや無限ローディングで止まらないこと。
-  - **Claim 環境（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）**：シナリオ 9 の直前で、API の signer とコントラクトの `signer()` の一致、報酬プールの RewardClaim への **allowance > 0**、およびプールの **$SEED 残高 > 0** を検証する。不備があれば E2E が失敗する。
-  - **Claim のオンチェーンは本番と同様**：`E2E_REWARD_CLAIM_ADDRESS` 設定時、Claim に限り **eth_call（シミュレーション）と eth_sendTransaction（送信）を実 RPC（Sepolia）に転送**する。本番で起きる「シミュレーション revert（require(false) 等）」や送信失敗が E2E でも同じように再現され、同じ「Claim failed」結果になる。ガス代はテスト用ウォレットが負担するため、テスト用ウォレットに Sepolia ETH が必要。ガチャなどその他のオンチェーンは従来どおりモック。
+  - Claim の**フロー**：ボタン表示 → クリック → Confirm → **「Claim successful」または「Nothing to claim」** が表示されること（**「Claim failed」はテスト失敗**）。クラッシュや無限ローディングで止まらないこと。
+  - **Claim 環境（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）**：シナリオ 9 の直前で、(1) API signer とコントラクト `signer()` の一致、プールの **allowance > 0**・**$SEED 残高 > 0** を検証。(2) **本番と同じ eth_call シミュレーション**を実行：現在セッションで API から署名を取得し、実 RPC で `claimEIP712` を eth_call。**revert（require(false) 等）すればその時点でテスト失敗**し、「本番でユーザーが目にするのと同じエラー」として検知する。不具合は **E2E が通るまで修正とテストを繰り返す**。
+  - **Claim のオンチェーンは本番と同様**：`E2E_REWARD_CLAIM_ADDRESS` 設定時、Claim に限り **eth_call と eth_sendTransaction を実 RPC（Sepolia）に転送**。ガチャなどその他はモック。テスト用ウォレットに Sepolia ETH が必要。
 - **E2E で検証しないもの**
-  - プール残高が「今回の請求量以上か」までは見ない（残高 > 0 であることのみ検証。請求量超過は本番・ステージングで確認）。
-- **本番環境で Claim を保証するには**
-  - **E2E 実行時に `E2E_REWARD_CLAIM_ADDRESS` を設定する**（テスト用デプロイの RewardClaim アドレス）。E2E が Signer 一致・allowance・プール残高をチェックし、不備なら失敗する。設定時は Claim のシミュレーション・送信が実 RPC で行われるため、本番と同様の挙動（プール残高十分でも transferFrom 失敗する事象など）を E2E で再現できる。
-  - テスト用ウォレットに **Sepolia ETH** を入れておく（Claim 送信のガス代。E2E_REWARD_CLAIM_ADDRESS 設定時のみ）。
-  - 必要に応じて、本番（またはステージング）で実ウォレットから 1 回 Claim を試すスモークチェックをチェックリストに含める。
+  - プール残高が「今回の請求量以上か」までは個別には見ない（シミュレーション revert で一括検知）。
+- **本番環境に極力近づける運用**
+  - **E2E_BASE_URL に本番 URL（または本番と同じ API・コントラクトを使うステージング URL）を設定し、E2E_REWARD_CLAIM_ADDRESS に本番の RewardClaim アドレスを設定する**。これにより本番で起きる Claim revert が E2E でも同じように発生し、テストが失敗する。失敗したら原因を修正し、E2E が通るまでテストを繰り返してからコミット・プッシュする。
+  - テスト用ウォレットに **Sepolia ETH** を入れておく（E2E_REWARD_CLAIM_ADDRESS 設定時）。
   - 環境変数・手順は `docs/VERCEL_ENV_VARS.md` および `docs/CLAIM_DEBUG_HANDOFF.md` を参照する。
 
-### 3.4 実行タイミング
+### 3.4 実行タイミングと「解消するまで繰り返す」
 
 - **決定**: **依頼時**。依頼者が何か修正を依頼したとき、AI は次の流れで動く。
   1. 修正を行う。
-  2. E2E を実行する（`npm run test:e2e` 等）。
-  3. 問題があれば修正に戻り、2 を繰り返す。
-  4. 問題がクリア（E2E が通る）になったら、コミット・プッシュまで行う。
-- つまり「渡す＝E2E が通った状態でプッシュ済み」となる。
+  2. **本番に極力近い環境**（E2E_BASE_URL＝本番または同一 API/コントラクトの URL、E2E_REWARD_CLAIM_ADDRESS＝本番の RewardClaim アドレス）で E2E を実行する（`npm run test:e2e`）。
+  3. **E2E が失敗したら（Claim の revert 含む）原因を特定し、修正に戻り、2 を繰り返す。不具合は全て E2E で解消するまで修正とテストを繰り返す。**
+  4. E2E が通ったら、コミット・プッシュまで行う。
+- つまり「渡す＝E2E が通った状態でプッシュ済み」であり、**Claim の require(false) 等も E2E のシミュレーションで検知し、通るまで修正する**。
 
 ---
 
@@ -152,12 +151,12 @@
        E2E_BASE_URL=https://あなたのテスト用デプロイURL
        ```
        ※ `.env` は通常 git に含めないので、チームで「テスト用 URL は〇〇」と共有するか、各自の `.env` に書いてください。
-  - **Claim 環境チェック（「Claim simulation failed」を E2E で解消する）**
-    - テスト用デプロイで Claim まで通す場合、**`E2E_REWARD_CLAIM_ADDRESS`** にそのデプロイの RewardClaim コントラクトアドレスを設定する。E2E がシナリオ 9 の直前に「API signer とコントラクト signer の一致」「プールの RewardClaim への allowance > 0」「プールの $SEED 残高 > 0」を検証し、不備があればテスト失敗で知らせる。**Claim の eth_call / eth_sendTransaction は実 RPC に転送され、本番と同様の動きになる**（テスト用ウォレットに Sepolia ETH が必要）。
-    - 省略可：**`E2E_SEPOLIA_RPC`** で Sepolia の RPC URL を指定（未設定時は `https://ethereum-sepolia-rpc.publicnode.com` を使用）。
+  - **Claim 環境チェックと本番同様シミュレーション**
+    - **`E2E_REWARD_CLAIM_ADDRESS`** に RewardClaim コントラクトアドレスを設定する。**本番で Claim 不具合を検知するには、E2E_BASE_URL に本番 URL、E2E_REWARD_CLAIM_ADDRESS に本番の RewardClaim アドレスを設定して E2E を実行する。** E2E が (1) Signer 一致・allowance・プール残高を検証、(2) 現在セッションで API から署名を取得して実 RPC で eth_call シミュレーションを実行。revert（require(false) 等）すればその時点でテスト失敗。不具合は E2E が通るまで修正とテストを繰り返す。
+    - 省略可：**`E2E_SEPOLIA_RPC`** で Sepolia の RPC URL を指定（未設定時は `https://ethereum-sepolia-rpc.publicnode.com`）。
     - 例（.env）: `E2E_REWARD_CLAIM_ADDRESS=0x...`（42 文字の 0x 付きアドレス）。
   4. **実行**
-     - `npm run test:e2e` … デスクトップ・モバイルの 2 viewport でシナリオ 1〜9 とチュートリアル assert を実行。E2E_BASE_URL 未設定時はローカルで `npm run dev` を自動起動。E2E_REWARD_CLAIM_ADDRESS を設定している場合、Claim 環境（Signer 一致・allowance・プール残高）を検証し、Claim 時は実 RPC で本番同様に動作する。
+     - `npm run test:e2e` … デスクトップ・モバイルの 2 viewport でシナリオ 1〜9 とチュートリアルを実行。E2E_REWARD_CLAIM_ADDRESS 設定時は Claim 環境検証に加え、**本番と同じ eth_call シミュレーション**を行い、revert すればテスト失敗する。
   5. **初回セットアップ**
      - `npx playwright install` でブラウザをインストール（未インストール時）。
 - 依頼時に AI は「修正 → E2E 実行 → 通るまで繰り返し → 通ったらコミット・プッシュ」で動く。
