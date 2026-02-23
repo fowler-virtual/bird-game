@@ -343,6 +343,28 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
     // continue; status bar and Claim are visible regardless of tab lock
   }
 
+  // E2E_REWARD_CLAIM_ADDRESS 設定時: 数分待って SEED を貯め、Farming → 再 SAVE でサーバーに反映し claimable > 0 にする
+  if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
+    const waitMs = 3 * 60 * 1000;
+    await page.waitForTimeout(waitMs);
+    await page.locator('.shell-tab[data-tab="farming"]').click();
+    await expect(page.locator('#pane-farming.active')).toBeVisible({ timeout: 5000 });
+    await page.waitForTimeout(10_000);
+    await page.locator('.shell-tab[data-tab="deck"]').click();
+    await expect(page.locator('#pane-deck.active')).toBeVisible({ timeout: 5000 });
+    await page.locator('#status-save-deck-btn').click();
+    await page.getByRole('button', { name: /Confirm/i }).click();
+    await Promise.race([
+      page.locator('#place-success-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+      page.locator('#message-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+    ]).catch(() => {});
+    if (await page.locator('#place-success-modal-backdrop.visible').isVisible()) {
+      await page.locator('#place-success-modal-goto-farming').click();
+    } else if (await page.locator('#message-modal-backdrop.visible').isVisible()) {
+      await page.locator('#message-modal-ok').click();
+    }
+  }
+
   // Claim 環境検証（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）。不備ならここで失敗
   await assertClaimEnvReady(page);
   // 本番と同じ eth_call シミュレーション（API 署名取得 → eth_call）。revert ならここでテスト失敗。※署名取得で 1 回 reservation を消費するため、続く Claim クリック時は claimable 0 の可能性あり
@@ -460,6 +482,27 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
     await expect(page.locator('.shell-tab[data-tab="farming"]')).not.toHaveClass(/onboarding-tab-locked/, { timeout: 5000 });
   } catch {
     // continue
+  }
+
+  if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
+    const waitMs = 3 * 60 * 1000;
+    await page.waitForTimeout(waitMs);
+    await page.locator('.shell-tab[data-tab="farming"]').click();
+    await expect(page.locator('#pane-farming.active')).toBeVisible({ timeout: 5000 });
+    await page.waitForTimeout(10_000);
+    await page.locator('.shell-tab[data-tab="deck"]').click();
+    await expect(page.locator('#pane-deck.active')).toBeVisible({ timeout: 5000 });
+    await page.locator('#status-save-deck-btn').click();
+    await page.getByRole('button', { name: /Confirm/i }).click();
+    await Promise.race([
+      page.locator('#place-success-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+      page.locator('#message-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+    ]).catch(() => {});
+    if (await page.locator('#place-success-modal-backdrop.visible').isVisible()) {
+      await page.locator('#place-success-modal-goto-farming').click();
+    } else if (await page.locator('#message-modal-backdrop.visible').isVisible()) {
+      await page.locator('#message-modal-ok').click();
+    }
   }
 
   await assertClaimEnvReady(page);

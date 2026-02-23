@@ -94,7 +94,7 @@
 
 - **E2E で検証するもの**
   - Claim の**フロー**：ボタン表示 → クリック → Confirm → **「Claim successful」または「Nothing to claim」** が表示されること（**「Claim failed」はテスト失敗**）。クラッシュや無限ローディングで止まらないこと。
-  - **Claim 環境（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）**：シナリオ 9 の直前で、(1) API signer とコントラクト `signer()` の一致、プールの **allowance > 0**・**$SEED 残高 > 0** を検証。(2) **本番と同じ eth_call シミュレーション**を実行：現在セッションで API から署名を取得し、実 RPC で `claimEIP712` を eth_call。**revert（require(false) 等）すればその時点でテスト失敗**し、「本番でユーザーが目にするのと同じエラー」として検知する。不具合は **E2E が通るまで修正とテストを繰り返す**。
+  - **Claim 環境（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）**：シナリオ 9 の直前に、(1) **テスト用ウォレットで claimable を貯める**：初回 SAVE 成功後 **3 分待機** → Farming タブで SEED 加算（クライアントで accrual）→ LOFT で再 SAVE してサーバーに反映。数分で Claim できる SEED が貯まる。(2) API signer とコントラクト `signer()` の一致、プールの allowance > 0・$SEED 残高 > 0 を検証。(3) **本番と同じ eth_call シミュレーション**を実行：API から署名を取得し、実 RPC で `claimEIP712` を eth_call。**revert（require(false) 等）すればその時点でテスト失敗**。不具合は E2E が通るまで修正とテストを繰り返す。
   - **Claim のオンチェーンは本番と同様**：`E2E_REWARD_CLAIM_ADDRESS` 設定時、Claim に限り **eth_call と eth_sendTransaction を実 RPC（Sepolia）に転送**。ガチャなどその他はモック。テスト用ウォレットに Sepolia ETH が必要。
 - **E2E で検証しないもの**
   - プール残高が「今回の請求量以上か」までは個別には見ない（シミュレーション revert で一括検知）。
