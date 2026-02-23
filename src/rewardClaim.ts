@@ -278,6 +278,8 @@ export async function executeClaim(signature: ClaimSignature): Promise<
                 amountWei: signature.amountWei,
                 poolBalanceWei: poolInfo.balanceWei,
                 allowanceWei: poolInfo.allowanceWei,
+                poolAddress: poolInfo.pool,
+                tokenAddress: poolInfo.seedToken,
               }
             );
           } else {
