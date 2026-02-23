@@ -22,11 +22,12 @@
 
 ---
 
-## 2. 現状の事象（ユーザー報告ベース）
+## 2. 現状の事象（ユーザー報告ベース・直近更新）
 
-- **Claim を押してもウォレットウィンドウが開かない**（開かないまま「Claim failed」モーダルが出る）。
-- コンソールには「[Claim] シミュレーション失敗。送信は続行します: execution reverted (no data present; likely require(false)...」と出ている。
-- つまり **staticCall は失敗しているが「送信は続行」まで進んでいる**。その後の **本番送信（contract.claimEIP712）の時点で、ウォレットが開かずにエラーになっている**可能性が高い。
+- **本番で Claim を押すと「Claim failed」**。送信前シミュレーション（eth_call）で **revert** しているため、**送信は行っていない**（ガス節約のため revert 時は送信しない実装）。
+- コンソール: `[Claim] 送信前シミュレーションで revert` → `reason: 'require(false)'`, `revertDataHex: '0x'`（理由なしの revert）。
+- **Signer 一致**・**プール残高 968,096 $SEED**・**allowance 無制限**は DEBUG で確認済み。クライアントが読む残高・allowance は十分なのに **transferFrom 相当で revert** している状態。
+- 直近のログ改善で `[Claim] FAILED` に **amountSEED / amountWei / poolBalanceWei / allowanceWei / poolAddress / tokenAddress** を出力済み。次回 Claim 失敗時にコンソールのオブジェクトを展開すると Etherscan 照合用のアドレスが取れる。
 
 ---
 
@@ -53,6 +54,8 @@
 - **送信前シミュレーション**: 送信前に **eth_call** で必ずシミュレート。revert する場合は理由をデコードして表示し、**送信しない**（ガス節約＋理由を確実に表示）。RPC 別のエラー形状に対応するため `getRevertDataFromError` で revert データを一括取得。
 - **API で署名量を min(プール残高, allowance) にキャップ**（transferFrom revert 防止）: `api/_lib/poolBalance.js` で `getPoolBalanceAndAllowanceWei` を取得し、`api/claim.js` で署名する amount を `min(balance, allowance)` でキャップ。allowance 不足でも transferFrom が revert しないようにした。
 - **クライアント: 同期失敗時は Claim を要求しない**: `flushServerSync()` が false のときは `requestClaim` を呼ばず、「LOFT で Save してから再度 Claim を試してください」とモーダル表示。409 等でサーバー状態が古いまま Claim すると claimable ずれや revert の原因になるため。
+- **revertData が '0x' のときもプール残高・allowance で切り分け**: `isRevertDataEmpty()` を追加し、RPC が理由を返さない場合でも getPoolBalanceAndAllowance で比較。amount > 残高 or allowance なら具体的メッセージ、そうでなければ「token may differ on-chain」ヒントをログに出力。
+- **Claim FAILED ログに poolAddress / tokenAddress を追加**: Etherscan でトークンの balanceOf(pool)、allowance(pool, RewardClaim) を照合できるようにした。
 
 ---
 
@@ -84,25 +87,15 @@
 
 - **Claim の責務・失敗原因・E2E で再現しない理由・再現と解消方針**は **`docs/CLAIM_ROOT_CAUSE_AND_E2E.md`** に整理した。本番でまだ Claim が失敗する場合は同ドキュメントの「4. どうしたら E2E で再現し、解消できるか」に沿って E2E_BASE_URL + E2E_REWARD_CLAIM_ADDRESS を設定して E2E を実行し、通るまで修正する。
 
-1. **最新コードのデプロイ確認と「ウォレットが開くか」の確認**
-   - 現在の main には **sendTransaction 直接送信**（estimateGas 回避）が入っている。  
-   - デプロイ後、Claim → ウォレットが開くか確認する。  
-   - 開く場合: オンチェーンで revert するか確認。revert するなら、その時のエラー（ウォレット表示・コンソールの [Claim] ログ）を記録する。  
-   - 開かない場合: 下記 2 に進む。
+1. **シミュレーション revert（現状）の根本原因特定**
+   - 本番では **送信前シミュレーション（eth_call）で revert** しており、`reason: 'require(false)'`, `revertDataHex: '0x'`。Signer・プール残高・allowance は十分なのに **transferFrom 相当で理由なし revert** している。
+   - **次の一手**: デプロイ後にもう一度 Claim を試し、コンソールの `[Claim] FAILED` のオブジェクトを展開して **poolAddress** と **tokenAddress** を取得。Etherscan（Sepolia）で (1) トークン契約の `balanceOf(poolAddress)` と `allowance(poolAddress, RewardClaim アドレス)` を Read で実行し、ログの値と一致するか確認。(2) 一致していれば **$SEED トークンの実装**（fee-on-transfer、pause、制限など）を確認。不一致なら RewardClaim の `pool`/`seedToken` やデプロイ設定の見直し。
+   - 必要なら Hardhat 等で同じ引数で claimEIP712 を呼び、revert 理由を再現する。
 
-2. **ウォレットが開かない場合の切り分け**
-   - 現在はすでに **sendTransaction 直接送信**（estimateGas 経由なし）になっている。  
-   - コンソールの `[Claim] eth_sendTransaction 送信直前` / `トランザクション送信済み` および `[Claim] executeClaim エラー` の有無で、どこで止まっているか確認する。  
-   - 必要なら、`provider.send('eth_sendTransaction', [...])` を直接呼ぶなど、さらに低レベルな送信経路でウォレットが開くか試す。
+2. **PUT /api/game-state の 409**
+   - 別件として、保存時に 409 Conflict が出ることがある。LOFT で SAVE 成功を待ってから Claim する、または 409 時の GET→再 PUT が正しく動いているか確認。
 
-3. **オンチェーンで revert する場合の根本原因特定**
-   - どの `require` で落ちているかを特定する。  
-   - 方法の例:  
-     - ローカルで Hardhat などを使い、同じ引数で claimEIP712 を呼んで revert 理由を再現する。  
-     - Sepolia 上の RewardClaim と $SEED トークンのデプロイ・設定（pool の allowance、トークンの仕様）を再確認する。  
-   - **$SEED トークン**が通常の ERC20 か、fee-on-transfer や rebase などがないか確認する。
-
-4. **ドキュメントの更新**
+3. **ドキュメントの更新**
    - 上記で分かったこと（根本原因または候補の絞り込み）をこのファイルまたは `docs/CONFIRMATION_*.md` に追記する。  
    - 根本原因が特定できたら、`docs/TODO.md` の「Claim 根本原因」まわりを「対応済み」に更新する。
 
