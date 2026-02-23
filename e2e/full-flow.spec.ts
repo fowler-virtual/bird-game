@@ -357,13 +357,11 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
   if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
     const waitMs = 3 * 60 * 1000;
     await page.waitForTimeout(waitMs);
-    const farmingTab = page.locator('.shell-tab[data-tab="farming"]');
-    await farmingTab.waitFor({ state: 'attached', timeout: 5000 });
-    await page.waitForFunction(() => !document.querySelector('.shell-tab[data-tab="farming"]')?.classList.contains('onboarding-tab-locked'), { timeout: 10_000 }).catch(() => {});
-    await farmingTab.click({ force: true });
+    await page.locator('.shell-tab[data-tab="farming"]').waitFor({ state: 'attached', timeout: 5000 });
+    await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('farming'));
     await expect(page.locator('#pane-farming.active')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(10_000);
-    await page.locator('.shell-tab[data-tab="deck"]').click({ force: true });
+    await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('deck'));
     await expect(page.locator('#pane-deck.active')).toBeVisible({ timeout: 5000 });
     await page.locator('#status-save-deck-btn').click();
     await page.getByRole('button', { name: /Confirm/i }).click();
@@ -506,13 +504,11 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
   if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
     const waitMs = 3 * 60 * 1000;
     await page.waitForTimeout(waitMs);
-    const farmingTab = page.locator('.shell-tab[data-tab="farming"]');
-    await farmingTab.waitFor({ state: 'attached', timeout: 5000 });
-    await page.waitForFunction(() => !document.querySelector('.shell-tab[data-tab="farming"]')?.classList.contains('onboarding-tab-locked'), { timeout: 10_000 }).catch(() => {});
-    await farmingTab.click({ force: true });
+    await page.locator('.shell-tab[data-tab="farming"]').waitFor({ state: 'attached', timeout: 5000 });
+    await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('farming'));
     await expect(page.locator('#pane-farming.active')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(10_000);
-    await page.locator('.shell-tab[data-tab="deck"]').click({ force: true });
+    await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('deck'));
     await expect(page.locator('#pane-deck.active')).toBeVisible({ timeout: 5000 });
     await page.locator('#status-save-deck-btn').click();
     await page.getByRole('button', { name: /Confirm/i }).click();

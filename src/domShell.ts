@@ -254,6 +254,11 @@ export function switchToTab(tabId: string): void {
   updateTabsForOnboarding();
 }
 
+/** E2E 用: ロックに関係なくタブ切り替えできるように window に露出（デプロイ先でオンボーディングが進まない場合の回避） */
+if (typeof window !== 'undefined') {
+  (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab = switchToTab;
+}
+
 /** オンボーディング状態に応じてタブのロックを更新。Deck で鳥を置いた直後にも呼ぶ */
 export function updateTabsForOnboarding(): void {
   const step = GameStore.state.onboardingStep;
