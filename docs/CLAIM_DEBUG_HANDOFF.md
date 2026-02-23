@@ -51,6 +51,8 @@
 - **gasLimit: 300_000 を指定**: ethers の内部 estimateGas が revert する問題を避けようとしたが、**ethers v6 は gasLimit を渡しても estimateGas を呼ぶ場合があり、ウォレットが開かない根本原因だった**。
 - **根本対応（2025-02）**: Contract メソッド呼び出しを廃止し、**Interface.encodeFunctionData + signer.sendTransaction** で送信。estimateGas を一切経由しない経路に変更。あわせて [Claim] 診断ログを追加。
 - **送信前シミュレーション**: 送信前に **eth_call** で必ずシミュレート。revert する場合は理由をデコードして表示し、**送信しない**（ガス節約＋理由を確実に表示）。RPC 別のエラー形状に対応するため `getRevertDataFromError` で revert データを一括取得。
+- **API で署名量を min(プール残高, allowance) にキャップ**（transferFrom revert 防止）: `api/_lib/poolBalance.js` で `getPoolBalanceAndAllowanceWei` を取得し、`api/claim.js` で署名する amount を `min(balance, allowance)` でキャップ。allowance 不足でも transferFrom が revert しないようにした。
+- **クライアント: 同期失敗時は Claim を要求しない**: `flushServerSync()` が false のときは `requestClaim` を呼ばず、「LOFT で Save してから再度 Claim を試してください」とモーダル表示。409 等でサーバー状態が古いまま Claim すると claimable ずれや revert の原因になるため。
 
 ---
 

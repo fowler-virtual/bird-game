@@ -6,7 +6,7 @@ import { getSessionAddress } from "./_lib/sessionCookie.js";
 import { checkRateLimit, getClientKey } from "./_lib/rateLimit.js";
 import { setCorsHeaders } from "./_lib/cors.js";
 import { reserve, getClaimableAsync, capReservationAmount } from "./_lib/claimStoreKV.js";
-import { getPoolBalanceWei } from "./_lib/poolBalance.js";
+import { getPoolBalanceAndAllowanceWei } from "./_lib/poolBalance.js";
 
 const DEFAULT_CAMPAIGN_ID = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -60,12 +60,22 @@ export default async function handler(req, res) {
   }
 
   let { amountWei, nonce, expiresAt } = reserved;
-  const poolBalanceWei = await getPoolBalanceWei();
-  if (poolBalanceWei !== null && BigInt(amountWei) > BigInt(poolBalanceWei)) {
-    const capped = await capReservationAmount(sessionAddress, nonce, poolBalanceWei);
-    if (capped) {
-      amountWei = capped;
-      console.warn("[claim] Capped amount to pool balance.", { requested: reserved.amountWei, poolBalance: poolBalanceWei, signed: amountWei });
+  const poolInfo = await getPoolBalanceAndAllowanceWei();
+  if (poolInfo) {
+    const balanceWei = BigInt(poolInfo.balanceWei);
+    const allowanceWei = BigInt(poolInfo.allowanceWei);
+    const capWei = balanceWei < allowanceWei ? balanceWei : allowanceWei;
+    if (BigInt(amountWei) > capWei) {
+      const capped = await capReservationAmount(sessionAddress, nonce, capWei.toString());
+      if (capped) {
+        amountWei = capped;
+        console.warn("[claim] Capped amount to min(pool balance, allowance).", {
+          requested: reserved.amountWei,
+          poolBalance: poolInfo.balanceWei,
+          allowance: poolInfo.allowanceWei,
+          signed: amountWei,
+        });
+      }
     }
   }
   if (BigInt(amountWei) <= 0n) {

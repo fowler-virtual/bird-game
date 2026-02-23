@@ -98,8 +98,9 @@
   - **Claim のオンチェーンは本番と同様**：`E2E_REWARD_CLAIM_ADDRESS` 設定時、Claim に限り **eth_call と eth_sendTransaction を実 RPC（Sepolia）に転送**。ガチャなどその他はモック。テスト用ウォレットに Sepolia ETH が必要。
 - **E2E で検証しないもの**
   - プール残高が「今回の請求量以上か」までは個別には見ない（シミュレーション revert で一括検知）。
-- **本番環境に極力近づける運用**
+  - **本番環境に極力近づける運用**
   - **E2E_BASE_URL に本番 URL（または本番と同じ API・コントラクトを使うステージング URL）を設定し、E2E_REWARD_CLAIM_ADDRESS に本番の RewardClaim アドレスを設定する**。これにより本番で起きる Claim revert が E2E でも同じように発生し、テストが失敗する。失敗したら原因を修正し、E2E が通るまでテストを繰り返してからコミット・プッシュする。
+  - **Claim revert を減らすための実装**: API で署名量を min(プール残高, allowance) にキャップ（`api/claim.js`・`api/_lib/poolBalance.js`）。クライアントで `flushServerSync` 失敗時は Claim を要求せず Save を促す（`src/domShell.ts`）。これにより「Simulation revert: require(false)」や 409 直後の不整合を E2E／本番双方で起こりにくくする。
   - テスト用ウォレットに **Sepolia ETH** を入れておく（E2E_REWARD_CLAIM_ADDRESS 設定時）。
   - 環境変数・手順は `docs/VERCEL_ENV_VARS.md` および `docs/CLAIM_DEBUG_HANDOFF.md` を参照する。
 

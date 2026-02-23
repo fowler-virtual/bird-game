@@ -1639,7 +1639,18 @@ function initTabListeners(): void {
 
           flushServerSync()
             .then((syncOk) => {
-              if (!syncOk) console.warn('[Claim] Game state sync to server failed. Claim may show "Nothing to claim".');
+              if (!syncOk) {
+                console.warn('[Claim] Game state sync to server failed. Skipping claim request.');
+                showMessageModal({
+                  title: 'Save required',
+                  message:
+                    'Your game progress could not be synced with the server. Please open the LOFT tab, press Save, wait a few seconds, then try Claim again.',
+                  success: false,
+                }).then(() => {
+                  if (claimBtn) claimBtn.disabled = false;
+                });
+                return Promise.reject({ skipClaim: true });
+              }
               return new Promise<void>((r) => setTimeout(r, 1800));
             })
             .then(() => doRequestClaim())
@@ -1697,7 +1708,11 @@ showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown erro
               return;
             }
             runClaimWithSignature(result.signature);
-          });
+          })
+            .catch((err: unknown) => {
+              if ((err as { skipClaim?: boolean })?.skipClaim) return;
+              if (claimBtn) claimBtn.disabled = false;
+            });
 
           function runClaimWithSignature(signature: ClaimSignature): void {
             showProcessingModal('Claiming your $SEED rewards… This may take a few seconds.');
