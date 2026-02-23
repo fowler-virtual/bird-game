@@ -82,6 +82,8 @@
 
 ## 6. 次のセッションで行うこと（推奨順）
 
+- **Claim の責務・失敗原因・E2E で再現しない理由・再現と解消方針**は **`docs/CLAIM_ROOT_CAUSE_AND_E2E.md`** に整理した。本番でまだ Claim が失敗する場合は同ドキュメントの「4. どうしたら E2E で再現し、解消できるか」に沿って E2E_BASE_URL + E2E_REWARD_CLAIM_ADDRESS を設定して E2E を実行し、通るまで修正する。
+
 1. **最新コードのデプロイ確認と「ウォレットが開くか」の確認**
    - 現在の main には **sendTransaction 直接送信**（estimateGas 回避）が入っている。  
    - デプロイ後、Claim → ウォレットが開くか確認する。  

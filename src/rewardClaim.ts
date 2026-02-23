@@ -176,6 +176,28 @@ export async function executeClaim(signature: ClaimSignature): Promise<
     savedData = data;
     const GAS_LIMIT = 300_000;
 
+    // 送信前にオンチェーンの min(プール残高, allowance) と照合。超過していれば送信しない（署名発行後の状態変化で revert を防ぐ）
+    const poolInfo = await getPoolBalanceAndAllowance();
+    if (poolInfo) {
+      const bal = BigInt(poolInfo.balanceWei);
+      const all = BigInt(poolInfo.allowanceWei);
+      const cap = bal < all ? bal : all;
+      if (amountWei > cap) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[Claim] Amount exceeds current on-chain min(balance, allowance). Skipping send.', {
+            amountWei: signature.amountWei,
+            poolBalanceWei: poolInfo.balanceWei,
+            allowanceWei: poolInfo.allowanceWei,
+          });
+        }
+        return {
+          ok: false,
+          error:
+            "The pool or allowance has changed since your claim was prepared. Please try again in a moment.",
+        };
+      }
+    }
+
     // 送信前に必ず eth_call でシミュレート。revert する場合は理由を表示して送信しない（ガス節約＋理由を確実に表示）
     try {
       await provider.call({ to: contractAddress, data, from: recipient });

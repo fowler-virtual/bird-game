@@ -60,7 +60,7 @@ export default async function handler(req, res) {
   }
 
   let { amountWei, nonce, expiresAt } = reserved;
-  const poolInfo = await getPoolBalanceAndAllowanceWei();
+  const poolInfo = await getPoolBalanceAndAllowanceWei({ bypassCache: true });
   if (poolInfo) {
     const balanceWei = BigInt(poolInfo.balanceWei);
     const allowanceWei = BigInt(poolInfo.allowanceWei);

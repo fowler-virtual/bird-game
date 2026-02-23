@@ -29,15 +29,18 @@ export async function getPoolBalanceWei() {
 /**
  * Pool の $SEED 残高と RewardClaim への allowance を取得。
  * transferFrom が revert しないよう、署名量を min(balance, allowance) でキャップするために使用。
+ * @param {object} [opts] - オプション
+ * @param {boolean} [opts.bypassCache] - true の場合キャッシュを使わず必ず RPC で取得（Claim 署名時推奨）
  * @returns {Promise<{ balanceWei: string, allowanceWei: string }|null>}
  */
-export async function getPoolBalanceAndAllowanceWei() {
+export async function getPoolBalanceAndAllowanceWei(opts = {}) {
   const rpc = (process.env.RPC_URL || "").trim();
   const claimAddr = (process.env.REWARD_CLAIM_CONTRACT_ADDRESS || "").trim();
   if (!rpc || !claimAddr || !claimAddr.startsWith("0x")) return null;
 
   const now = Date.now();
-  if (cached.balance !== null && cached.allowance !== null && now - cached.at < CACHE_MS) {
+  const useCache = !opts.bypassCache && cached.balance !== null && cached.allowance !== null && now - cached.at < CACHE_MS;
+  if (useCache) {
     return { balanceWei: cached.balance, allowanceWei: cached.allowance };
   }
 

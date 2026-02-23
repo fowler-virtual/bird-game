@@ -101,6 +101,7 @@
   - **本番環境に極力近づける運用**
   - **E2E_BASE_URL に本番 URL（または本番と同じ API・コントラクトを使うステージング URL）を設定し、E2E_REWARD_CLAIM_ADDRESS に本番の RewardClaim アドレスを設定する**。これにより本番で起きる Claim revert が E2E でも同じように発生し、テストが失敗する。失敗したら原因を修正し、E2E が通るまでテストを繰り返してからコミット・プッシュする。
   - **Claim revert を減らすための実装**: API で署名量を min(プール残高, allowance) にキャップ（`api/claim.js`・`api/_lib/poolBalance.js`）。クライアントで `flushServerSync` 失敗時は Claim を要求せず Save を促す（`src/domShell.ts`）。これにより「Simulation revert: require(false)」や 409 直後の不整合を E2E／本番双方で起こりにくくする。
+  - **E2E で本番と同じ Claim 経路を必ず通す**: **E2E_BASE_URL を設定してデプロイ先に対して E2E を回す場合は、E2E_REWARD_CLAIM_ADDRESS の設定が必須**。未設定だとテストは意図的に失敗する（「E2E_BASE_URL is set but E2E_REWARD_CLAIM_ADDRESS is not」）。これにより、デプロイ先向け E2E では必ず assertClaimEnvReady と assertClaimSimulationSucceeds が実行され、本番で revert する条件があれば E2E も失敗する。詳細は **`docs/CLAIM_ROOT_CAUSE_AND_E2E.md`**。
   - テスト用ウォレットに **Sepolia ETH** を入れておく（E2E_REWARD_CLAIM_ADDRESS 設定時）。
   - 環境変数・手順は `docs/VERCEL_ENV_VARS.md` および `docs/CLAIM_DEBUG_HANDOFF.md` を参照する。
 

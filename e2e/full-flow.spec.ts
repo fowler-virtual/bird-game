@@ -267,6 +267,11 @@ test('scenario 1: title shows Connect Wallet, no white screen', async ({ page })
 });
 
 test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
+  if (process.env.E2E_BASE_URL && !process.env.E2E_REWARD_CLAIM_ADDRESS) {
+    throw new Error(
+      'E2E_BASE_URL is set but E2E_REWARD_CLAIM_ADDRESS is not. Set both to verify Claim against real chain (see docs/CLAIM_ROOT_CAUSE_AND_E2E.md).'
+    );
+  }
   if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
     test.setTimeout(5 * 60 * 1000); // 3min wait + flow
   }
@@ -433,6 +438,11 @@ test('debug Reset & Disconnect: reconnect shows first-time state and can start g
 });
 
 test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
+  if (process.env.E2E_BASE_URL && !process.env.E2E_REWARD_CLAIM_ADDRESS) {
+    throw new Error(
+      'E2E_BASE_URL is set but E2E_REWARD_CLAIM_ADDRESS is not. Set both to verify Claim against real chain (see docs/CLAIM_ROOT_CAUSE_AND_E2E.md).'
+    );
+  }
   if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
     test.setTimeout(5 * 60 * 1000); // 3min wait + flow
   }
