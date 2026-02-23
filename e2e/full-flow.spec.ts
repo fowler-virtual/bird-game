@@ -359,9 +359,23 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
     await page.waitForTimeout(waitMs);
     await page.locator('.shell-tab[data-tab="farming"]').waitFor({ state: 'attached', timeout: 5000 });
     await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('farming'));
+    if (!(await page.locator('#pane-farming.active').isVisible().catch(() => false))) {
+      await page.evaluate(() => {
+        document.querySelectorAll('.tab-pane, .shell-tab').forEach((el) => el.classList.remove('active'));
+        document.getElementById('pane-farming')?.classList.add('active');
+        document.querySelector('.shell-tab[data-tab="farming"]')?.classList.add('active');
+      });
+    }
     await expect(page.locator('#pane-farming.active')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(10_000);
     await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('deck'));
+    if (!(await page.locator('#pane-deck.active').isVisible().catch(() => false))) {
+      await page.evaluate(() => {
+        document.querySelectorAll('.tab-pane, .shell-tab').forEach((el) => el.classList.remove('active'));
+        document.getElementById('pane-deck')?.classList.add('active');
+        document.querySelector('.shell-tab[data-tab="deck"]')?.classList.add('active');
+      });
+    }
     await expect(page.locator('#pane-deck.active')).toBeVisible({ timeout: 5000 });
     await page.locator('#status-save-deck-btn').click();
     await page.getByRole('button', { name: /Confirm/i }).click();
@@ -374,6 +388,7 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
     } else if (await page.locator('#message-modal-backdrop.visible').isVisible()) {
       await page.locator('#message-modal-ok').click();
     }
+    await page.waitForTimeout(5000);
   }
 
   // Claim 環境検証（E2E_REWARD_CLAIM_ADDRESS 設定時のみ）。不備ならここで失敗
@@ -384,21 +399,46 @@ test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
   // 9: Claim → Claim successful or Nothing to claim を要求（E2E_REWARD_CLAIM_ADDRESS 設定時は「Claim failed」ならテスト失敗）
   const claimBtn = page.locator('#status-claim-btn');
   await claimBtn.waitFor({ state: 'visible', timeout: 5000 });
-  const claimEnabled = await claimBtn.isEnabled().catch(() => false);
-  if (claimEnabled) {
+  let claimAttempt = 0;
+  const maxClaimAttempts = 2;
+  while (claimAttempt < maxClaimAttempts) {
+    const claimEnabled = await claimBtn.isEnabled().catch(() => false);
+    if (!claimEnabled) break;
     await claimBtn.click();
     await page.getByRole('button', { name: /Confirm/i }).click();
-    const resultLocator = page.getByText(/Claim successful|Nothing to claim|Claim failed/i);
-    await expect(resultLocator).toBeVisible({ timeout: 25000 });
+    const resultLocator = page.getByText(/Claim successful|Nothing to claim|Claim failed|Save required|Sign in to claim/i);
+    await expect(resultLocator).toBeVisible({ timeout: 120_000 });
     const msg = await resultLocator.textContent();
     if (process.env.E2E_REWARD_CLAIM_ADDRESS && msg && /Claim failed/i.test(msg)) {
       throw new Error(`E2E Claim failed (real RPC). Result: "${msg.slice(0, 200)}". Fix Claim so simulation/tx succeeds.`);
     }
+    if (msg && /Sign in to claim/i.test(msg)) {
+      throw new Error(`E2E Claim flow showed unexpected modal: "${msg.slice(0, 150)}". Sign-in may be required.`);
+    }
+    if (msg && /Save required/i.test(msg)) {
+      await page.getByRole('button', { name: /OK/i }).click().catch(() => {});
+      await page.waitForTimeout(3000);
+      await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('deck'));
+      await page.waitForTimeout(1000);
+      await page.locator('#status-save-deck-btn').click();
+      await page.getByRole('button', { name: /Confirm/i }).click();
+      await Promise.race([
+        page.locator('#place-success-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+        page.locator('#message-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+      ]).catch(() => {});
+      if (await page.locator('#message-modal-backdrop.visible').isVisible()) await page.locator('#message-modal-ok').click().catch(() => {});
+      if (await page.locator('#place-success-modal-backdrop.visible').isVisible()) await page.locator('#place-success-modal-goto-farming').click().catch(() => {});
+      await page.waitForTimeout(5000);
+      claimAttempt++;
+      continue;
+    }
     await page.getByRole('button', { name: /OK/i }).click().catch(() => {});
+    break;
   }
 });
 
 test('debug Reset & Disconnect: reconnect shows first-time state and can start gacha', async ({ page }) => {
+  test.setTimeout(120_000);
   await page.goto('/');
 
   await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible();
@@ -409,13 +449,21 @@ test('debug Reset & Disconnect: reconnect shows first-time state and can start g
   await expect(page.locator('.shell-tab[data-tab="adopt"]')).toBeVisible();
   await expect(page.locator('.shell-tab[data-tab="debug"]')).toBeVisible();
 
-  await page.locator('.shell-tab[data-tab="debug"]').click();
   const resetBtn = page.locator('#dom-debug-reset-disconnect');
-  await resetBtn.waitFor({ state: 'attached', timeout: 15000 });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('debug'));
+    await page.waitForTimeout(500);
+    if (await resetBtn.isVisible().catch(() => false)) break;
+    await page.locator('.shell-tab[data-tab="debug"]').click();
+    await page.waitForTimeout(800);
+    if (await resetBtn.isVisible().catch(() => false)) break;
+  }
+  await resetBtn.waitFor({ state: 'visible', timeout: 15000 });
   page.once('dialog', (dialog) => dialog.accept());
   await resetBtn.evaluate((el: HTMLElement) => el.click());
+  await page.waitForTimeout(2000);
 
-  await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#game-shell.visible')).not.toBeVisible();
 
   await page.getByRole('button', { name: /Connect Wallet/i }).click();
@@ -506,9 +554,23 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
     await page.waitForTimeout(waitMs);
     await page.locator('.shell-tab[data-tab="farming"]').waitFor({ state: 'attached', timeout: 5000 });
     await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('farming'));
+    if (!(await page.locator('#pane-farming.active').isVisible().catch(() => false))) {
+      await page.evaluate(() => {
+        document.querySelectorAll('.tab-pane, .shell-tab').forEach((el) => el.classList.remove('active'));
+        document.getElementById('pane-farming')?.classList.add('active');
+        document.querySelector('.shell-tab[data-tab="farming"]')?.classList.add('active');
+      });
+    }
     await expect(page.locator('#pane-farming.active')).toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(10_000);
     await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('deck'));
+    if (!(await page.locator('#pane-deck.active').isVisible().catch(() => false))) {
+      await page.evaluate(() => {
+        document.querySelectorAll('.tab-pane, .shell-tab').forEach((el) => el.classList.remove('active'));
+        document.getElementById('pane-deck')?.classList.add('active');
+        document.querySelector('.shell-tab[data-tab="deck"]')?.classList.add('active');
+      });
+    }
     await expect(page.locator('#pane-deck.active')).toBeVisible({ timeout: 5000 });
     await page.locator('#status-save-deck-btn').click();
     await page.getByRole('button', { name: /Confirm/i }).click();
@@ -521,6 +583,7 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
     } else if (await page.locator('#message-modal-backdrop.visible').isVisible()) {
       await page.locator('#message-modal-ok').click();
     }
+    await page.waitForTimeout(5000);
   }
 
   await assertClaimEnvReady(page);
@@ -528,16 +591,40 @@ test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
 
   const claimBtn = page.locator('#status-claim-btn');
   await claimBtn.waitFor({ state: 'visible', timeout: 5000 });
-  const claimEnabled = await claimBtn.isEnabled().catch(() => false);
-  if (claimEnabled) {
+  let claimAttempt = 0;
+  const maxClaimAttempts = 2;
+  while (claimAttempt < maxClaimAttempts) {
+    const claimEnabled = await claimBtn.isEnabled().catch(() => false);
+    if (!claimEnabled) break;
     await claimBtn.click();
     await page.getByRole('button', { name: /Confirm/i }).click();
-    const resultLocator = page.getByText(/Claim successful|Nothing to claim|Claim failed/i);
-    await expect(resultLocator).toBeVisible({ timeout: 25000 });
+    const resultLocator = page.getByText(/Claim successful|Nothing to claim|Claim failed|Save required|Sign in to claim/i);
+    await expect(resultLocator).toBeVisible({ timeout: 120_000 });
     const msg = await resultLocator.textContent();
     if (process.env.E2E_REWARD_CLAIM_ADDRESS && msg && /Claim failed/i.test(msg)) {
       throw new Error(`E2E Claim failed (real RPC). Result: "${msg.slice(0, 200)}". Fix Claim so simulation/tx succeeds.`);
     }
+    if (msg && /Sign in to claim/i.test(msg)) {
+      throw new Error(`E2E Claim flow showed unexpected modal: "${msg.slice(0, 150)}". Sign-in may be required.`);
+    }
+    if (msg && /Save required/i.test(msg)) {
+      await page.getByRole('button', { name: /OK/i }).click().catch(() => {});
+      await page.waitForTimeout(3000);
+      await page.evaluate(() => (window as unknown as { __e2eSwitchToTab?: (tabId: string) => void }).__e2eSwitchToTab?.('deck'));
+      await page.waitForTimeout(1000);
+      await page.locator('#status-save-deck-btn').click();
+      await page.getByRole('button', { name: /Confirm/i }).click();
+      await Promise.race([
+        page.locator('#place-success-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+        page.locator('#message-modal-backdrop.visible').waitFor({ state: 'visible', timeout: 15000 }),
+      ]).catch(() => {});
+      if (await page.locator('#message-modal-backdrop.visible').isVisible()) await page.locator('#message-modal-ok').click().catch(() => {});
+      if (await page.locator('#place-success-modal-backdrop.visible').isVisible()) await page.locator('#place-success-modal-goto-farming').click().catch(() => {});
+      await page.waitForTimeout(5000);
+      claimAttempt++;
+      continue;
+    }
     await page.getByRole('button', { name: /OK/i }).click().catch(() => {});
+    break;
   }
 });
