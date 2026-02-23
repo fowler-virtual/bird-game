@@ -12,7 +12,13 @@ const ERROR_STRING_SELECTOR = '0x08c379a0';
 
 /** 本番で一般ユーザーに表示するメッセージ（DEBUG・Signer・pool 等の技術用語は出さない） */
 const CLAIM_UNAVAILABLE_USER_MESSAGE =
-  "We couldn't complete your claim right now. Please try again in a few minutes. If the problem continues, please contact support.";
+  "We couldn't complete your claim right now. Please try again in a few minutes. If the problem continues, please contact support. Open the browser console (F12 → Console) and try Claim again to see the technical reason.";
+
+function logClaimFailedForSupport(detail: string, extra?: Record<string, unknown>): void {
+  if (typeof console !== 'undefined' && console.error) {
+    console.error('[Claim] FAILED (user sees generic message):', detail, extra ?? '');
+  }
+}
 
 function decodeRevertReason(data: unknown): string | null {
   if (typeof data !== 'string' || !data.startsWith('0x')) return null;
@@ -229,9 +235,7 @@ export async function executeClaim(signature: ClaimSignature): Promise<
             reason
           )
         ) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[Claim] Simulation revert (operator/setup):', reason);
-          }
+          logClaimFailedForSupport('Simulation revert (operator/setup)', { reason });
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
         // reason が require(false) かつ revert データが空 → トークンの transferFrom が revert。請求量 vs プール残高・allowance を比較して原因を特定
@@ -254,40 +258,26 @@ export async function executeClaim(signature: ClaimSignature): Promise<
               };
             }
             if (amountWei > all) {
-              if (typeof console !== 'undefined' && console.warn) {
-                console.warn('[Claim] Simulation revert: claim amount exceeds allowance', {
-                  amountWei: signature.amountWei,
-                  allowanceWei: poolInfo.allowanceWei,
-                });
-              }
-              return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
-            }
-            if (typeof console !== 'undefined' && console.warn) {
-              console.warn('[Claim] Simulation revert: require(false) but amount <= balance and allowance', {
+              logClaimFailedForSupport('Simulation: claim amount exceeds allowance', {
                 amountWei: signature.amountWei,
-                poolBalanceWei: poolInfo.balanceWei,
                 allowanceWei: poolInfo.allowanceWei,
               });
+              return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
             }
+            logClaimFailedForSupport('Simulation: require(false) but amount <= balance and allowance', {
+              amountWei: signature.amountWei,
+              poolBalanceWei: poolInfo.balanceWei,
+              allowanceWei: poolInfo.allowanceWei,
+            });
           } else {
-            if (typeof console !== 'undefined' && console.warn) {
-              console.warn(
-                '[Claim] Simulation revert: require(false) with no revert data. Could not fetch pool info. Check DEBUG tab.'
-              );
-            }
+            logClaimFailedForSupport('Simulation: require(false), could not fetch pool info. Check DEBUG tab.');
           }
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('[Claim] Simulation revert:', reason);
-        }
+        logClaimFailedForSupport('Simulation revert', { reason });
         return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
       }
-      if (typeof console !== 'undefined' && console.warn) {
-        console.warn(
-          '[Claim] Simulation failed (reason not decoded). Check DEBUG tab: Signer 一致確認 and プール残高・allowance.'
-        );
-      }
+      logClaimFailedForSupport('Simulation failed (reason not decoded). Check DEBUG: Signer and pool balance/allowance.');
       return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
     }
 
@@ -374,30 +364,24 @@ export async function executeClaim(signature: ClaimSignature): Promise<
           return { ok: false, error: 'Please claim from the same wallet you used to connect.' };
         }
         if (/invalid signature|transfer failed|insufficient/i.test(reason)) {
-          if (typeof console !== 'undefined' && console.warn) {
-            console.warn('[Claim] Tx revert (operator/setup):', reason);
-          }
+          logClaimFailedForSupport('Tx revert (operator/setup)', { reason });
           return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('[Claim] Tx revert:', reason);
-        }
+        logClaimFailedForSupport('Tx revert', { reason });
         return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
       }
       if (/expired|signature expired/i.test(msg)) {
         return { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
       }
-      if (typeof console !== 'undefined' && console.warn) {
-        const txHash =
-          savedTxHash ??
-          err?.hash ??
-          err?.receipt?.hash ??
-          (err?.receipt as { transactionHash?: string } | undefined)?.transactionHash;
-        console.warn(
-          '[Claim] Tx reverted (reason not decoded).',
-          txHash ? `Transaction: https://sepolia.etherscan.io/tx/${txHash}` : ''
-        );
-      }
+      const txHash =
+        savedTxHash ??
+        err?.hash ??
+        err?.receipt?.hash ??
+        (err?.receipt as { transactionHash?: string } | undefined)?.transactionHash;
+      logClaimFailedForSupport(
+        'Tx reverted (reason not decoded)',
+        txHash ? { txUrl: `https://sepolia.etherscan.io/tx/${txHash}` } : {}
+      );
       return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
     }
     if (/429|Too Many Requests/i.test(msg)) {
