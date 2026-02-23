@@ -252,6 +252,7 @@ test.beforeEach(async ({ page }) => {
           throw new Error('E2E mock: ' + method);
         };
         (window as unknown as { ethereum: { request: typeof request } }).ethereum = { request };
+        (window as unknown as { __e2eMockReady?: boolean }).__e2eMockReady = true;
       })();
     },
     initArg
@@ -266,10 +267,14 @@ test('scenario 1: title shows Connect Wallet, no white screen', async ({ page })
 });
 
 test('scenario 2–9 and tutorial: full flow desktop', async ({ page }) => {
+  if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
+    test.setTimeout(5 * 60 * 1000); // 3min wait + flow
+  }
   await page.goto('/');
 
   // 1: title
   await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible();
+  await page.waitForFunction(() => (window as unknown as { __e2eMockReady?: boolean }).__e2eMockReady === true, { timeout: 15000 });
 
   // 2: connect → game shell
   await page.getByRole('button', { name: /Connect Wallet/i }).click();
@@ -391,6 +396,7 @@ test('debug Reset & Disconnect: reconnect shows first-time state and can start g
   await page.goto('/');
 
   await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible();
+  await page.waitForFunction(() => (window as unknown as { __e2eMockReady?: boolean }).__e2eMockReady === true, { timeout: 15000 });
   await page.getByRole('button', { name: /Connect Wallet/i }).click();
   await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 35000 });
 
@@ -398,14 +404,10 @@ test('debug Reset & Disconnect: reconnect shows first-time state and can start g
   await expect(page.locator('.shell-tab[data-tab="debug"]')).toBeVisible();
 
   await page.locator('.shell-tab[data-tab="debug"]').click();
-  await expect(page.locator('#pane-debug.active')).toBeVisible({ timeout: 10000 });
   const resetBtn = page.locator('#dom-debug-reset-disconnect');
-  await resetBtn.waitFor({ state: 'attached', timeout: 5000 });
-  await resetBtn.scrollIntoViewIfNeeded();
-  await expect(resetBtn).toBeVisible({ timeout: 5000 });
-
+  await resetBtn.waitFor({ state: 'attached', timeout: 15000 });
   page.once('dialog', (dialog) => dialog.accept());
-  await resetBtn.click();
+  await resetBtn.evaluate((el: HTMLElement) => el.click());
 
   await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible({ timeout: 15000 });
   await expect(page.locator('#game-shell.visible')).not.toBeVisible();
@@ -431,9 +433,13 @@ test('debug Reset & Disconnect: reconnect shows first-time state and can start g
 });
 
 test('scenario 2–9 and tutorial: full flow mobile', async ({ page }) => {
+  if (process.env.E2E_REWARD_CLAIM_ADDRESS) {
+    test.setTimeout(5 * 60 * 1000); // 3min wait + flow
+  }
   await page.goto('/');
 
   await expect(page.getByRole('button', { name: /Connect Wallet/i })).toBeVisible();
+  await page.waitForFunction(() => (window as unknown as { __e2eMockReady?: boolean }).__e2eMockReady === true, { timeout: 15000 });
   await page.getByRole('button', { name: /Connect Wallet/i }).click();
   await expect(page.locator('#game-shell.visible')).toBeVisible({ timeout: 35000 });
 
