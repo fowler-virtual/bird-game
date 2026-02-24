@@ -1880,8 +1880,12 @@ export function updateShellStatus(payload: {
   updateClaimButton();
 }
 
-/** サーバーから取得した claimable (wei)。0 なら Claim ボタンを無効化する。 */
-let cachedClaimableWei = "0";
+/**
+ * サーバーから取得した claimable (wei)。
+ * null = 未取得または API エラー（フォールバック: seed > 0 のみで判定）。
+ * "0" = 取得成功で claimable なし。
+ */
+let cachedClaimableWei: string | null = null;
 
 /** /api/claimable を取得してキャッシュを更新し、ボタン状態を反映する。 */
 async function refreshClaimable(): Promise<void> {
@@ -1893,7 +1897,13 @@ async function refreshClaimable(): Promise<void> {
 function updateClaimButton(): void {
   const btn = document.getElementById(STATUS_CLAIM_BTN_ID) as HTMLButtonElement | null;
   if (!btn) return;
-  btn.disabled = GameStore.state.seed <= 0 || BigInt(cachedClaimableWei) <= 0n;
+  if (GameStore.state.seed <= 0) { btn.disabled = true; return; }
+  // claimable が取得できている場合のみその値で判定。未取得・エラー時は seed > 0 で有効化。
+  if (cachedClaimableWei !== null) {
+    btn.disabled = BigInt(cachedClaimableWei) <= 0n;
+  } else {
+    btn.disabled = false;
+  }
 }
 
 export function isShellVisible(): boolean {
