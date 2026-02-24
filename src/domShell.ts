@@ -1730,11 +1730,6 @@ showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown erro
                 return;
               }
               const claimedAmount = Math.floor(Number(BigInt(signature.amountWei) / 10n ** 18n));
-              const currentSeed = GameStore.state.seed;
-              const newSeed = Math.max(0, currentSeed - claimedAmount);
-              GameStore.setState({ seed: newSeed });
-              GameStore.save();
-              flushServerSync().catch(() => {});
               const state = GameStore.state;
               updateShellStatus({
                 seed: state.seed,
