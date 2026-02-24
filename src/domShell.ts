@@ -7,7 +7,7 @@ import { GameStore, GACHA_COST } from './store/GameStore';
 import { scheduleServerSync, flushServerSync } from './gameStateApi';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
-import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase } from './claimApi';
+import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase, getClaimable } from './claimApi';
 
 GameStore.setOnSaveCallback(scheduleServerSync);
 import type { ClaimSignature } from './claimApi';
@@ -1740,7 +1740,7 @@ showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown erro
               refreshSeedTokenFromChain().then(() => {
                 updateAdoptPane();
                 updateGachaButtonsAndCosts();
-                updateClaimButton();
+                refreshClaimable();
                 hideProcessingModal();
                 showMessageModal({
                   title: 'Claim successful',
@@ -1762,7 +1762,7 @@ showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown erro
   }
   updateAdoptPaneForOnboarding();
   updateGachaButtonsAndCosts();
-  updateClaimButton();
+  refreshClaimable();
   tabListenersInited = true;
 }
 
@@ -1880,10 +1880,20 @@ export function updateShellStatus(payload: {
   updateClaimButton();
 }
 
+/** サーバーから取得した claimable (wei)。0 なら Claim ボタンを無効化する。 */
+let cachedClaimableWei = "0";
+
+/** /api/claimable を取得してキャッシュを更新し、ボタン状態を反映する。 */
+async function refreshClaimable(): Promise<void> {
+  const result = await getClaimable().catch(() => null);
+  if (result?.ok) cachedClaimableWei = result.claimable;
+  updateClaimButton();
+}
+
 function updateClaimButton(): void {
   const btn = document.getElementById(STATUS_CLAIM_BTN_ID) as HTMLButtonElement | null;
   if (!btn) return;
-  btn.disabled = GameStore.state.seed <= 0;
+  btn.disabled = GameStore.state.seed <= 0 || BigInt(cachedClaimableWei) <= 0n;
 }
 
 export function isShellVisible(): boolean {
