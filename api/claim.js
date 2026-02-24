@@ -100,11 +100,15 @@ export default async function handler(req, res) {
         { name: "campaignId", type: "bytes32" },
       ],
     };
+    // On-chain deadline: 1 hour from now. The server-side reservation still expires in
+    // RESERVE_DEADLINE_SEC (5 min) for quick-retry, but the contract deadline needs to
+    // be long enough to survive MetaMask approval + block mining (can take several minutes).
+    const contractDeadline = Math.floor(Date.now() / 1000) + 3600;
     const value = {
       recipient: userAddress,
       amount: BigInt(amountWei),
       nonce: BigInt(nonce),
-      deadline: BigInt(expiresAt),
+      deadline: BigInt(contractDeadline),
       campaignId: DEFAULT_CAMPAIGN_ID,
     };
     const sigHex = await wallet.signTypedData(domain, types, value);
@@ -114,7 +118,7 @@ export default async function handler(req, res) {
       ok: true,
       amountWei,
       nonce: String(nonce),
-      deadline: String(expiresAt),
+      deadline: String(contractDeadline),
       campaignId: DEFAULT_CAMPAIGN_ID,
       v: Number(v),
       r: String(r),
