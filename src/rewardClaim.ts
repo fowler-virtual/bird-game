@@ -211,7 +211,11 @@ export async function executeClaim(signature: ClaimSignature): Promise<
       }
     }
 
-    // 送信前に必ず eth_call でシミュレート。revert する場合は理由を表示して送信しない（ガス節約＋理由を確実に表示）
+    // 送信前に eth_call でシミュレート。revert 理由が明確な場合のみ送信をブロックする。
+    // Sepolia の一部 RPC（publicnode 等）は revert データを返さず常に data:'0x' になる。
+    // その場合はプール残高・allowance を確認し、問題なければ送信に進む。
+    let simulationBlocksSend = false;
+    let simulationBlockError: { ok: false; error: string } | undefined;
     try {
       await provider.call({ to: contractAddress, data, from: recipient });
     } catch (preflightErr: unknown) {
@@ -227,71 +231,78 @@ export async function executeClaim(signature: ClaimSignature): Promise<
           revertDataHex: typeof revertData === 'string' ? revertData : undefined,
         });
       }
+      // revert 理由が明確にデコードできた場合のみブロック
       if (reason) {
         if (/signature expired|expired/i.test(reason)) {
-          return { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
-        }
-        if (/nonce already used/i.test(reason)) {
-          return { ok: false, error: 'This claim was already used. Request a new claim and try again.' };
-        }
-        if (/recipient must be caller/i.test(reason)) {
-          return { ok: false, error: 'Please claim from the same wallet you used to connect.' };
-        }
-        if (
-          /invalid signature|transfer failed|transfer amount exceeds|insufficient allowance|insufficient balance/i.test(
-            reason
-          )
+          simulationBlocksSend = true;
+          simulationBlockError = { ok: false, error: 'The claim signature has expired. Please try again to get a new one.' };
+        } else if (/nonce already used/i.test(reason)) {
+          simulationBlocksSend = true;
+          simulationBlockError = { ok: false, error: 'This claim was already used. Request a new claim and try again.' };
+        } else if (/recipient must be caller/i.test(reason)) {
+          simulationBlocksSend = true;
+          simulationBlockError = { ok: false, error: 'Please claim from the same wallet you used to connect.' };
+        } else if (
+          /invalid signature|transfer failed|transfer amount exceeds|insufficient allowance|insufficient balance/i.test(reason)
         ) {
           logClaimFailedForSupport('Simulation revert (operator/setup)', { reason });
-          return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+          simulationBlocksSend = true;
+          simulationBlockError = { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
         }
-        // revert データが空（'0x' 等）→ RPC が理由を返していない。transferFrom 失敗の可能性があるので請求量 vs プール残高・allowance を比較
-        if (isRevertDataEmpty(revertData)) {
-          const poolInfo = await getPoolBalanceAndAllowance();
-          if (poolInfo) {
-            const bal = BigInt(poolInfo.balanceWei);
-            const all = BigInt(poolInfo.allowanceWei);
-            if (amountWei > bal) {
-              if (typeof console !== 'undefined' && console.warn) {
-                console.warn('[Claim] Simulation revert: claim amount exceeds pool balance', {
-                  amountWei: signature.amountWei,
-                  poolBalanceWei: poolInfo.balanceWei,
-                });
-              }
-              return {
-                ok: false,
-                error:
-                  "The claim amount is higher than the pool's available balance. Please try again later or contact support.",
-              };
-            }
-            if (amountWei > all) {
-              logClaimFailedForSupport('Simulation: claim amount exceeds allowance', {
+      }
+      if (!simulationBlocksSend && isRevertDataEmpty(revertData)) {
+        // RPC が revert データを返さない（Sepolia の制限など）。
+        // プール残高・allowance が十分なら送信に進む。
+        const poolInfo2 = await getPoolBalanceAndAllowance();
+        if (poolInfo2) {
+          const bal2 = BigInt(poolInfo2.balanceWei);
+          const all2 = BigInt(poolInfo2.allowanceWei);
+          if (amountWei > bal2) {
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn('[Claim] Simulation revert: claim amount exceeds pool balance', {
                 amountWei: signature.amountWei,
-                allowanceWei: poolInfo.allowanceWei,
+                poolBalanceWei: poolInfo2.balanceWei,
               });
-              return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
             }
-            logClaimFailedForSupport(
-              'Simulation: revert with no reason (often transferFrom). Amount <= pool balance and allowance here; token may differ on-chain (fee-on-transfer, pause, or pool/token address mismatch).',
-              {
+            simulationBlocksSend = true;
+            simulationBlockError = { ok: false, error: "The claim amount is higher than the pool's available balance. Please try again later or contact support." };
+          } else if (amountWei > all2) {
+            logClaimFailedForSupport('Simulation: claim amount exceeds allowance', {
+              amountWei: signature.amountWei,
+              allowanceWei: poolInfo2.allowanceWei,
+            });
+            simulationBlocksSend = true;
+            simulationBlockError = { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+          } else {
+            // 残高・allowance は十分。RPC の制限で revert データが取れないだけなので送信に進む。
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn('[Claim] Simulation returned no revert data but balance/allowance OK - proceeding with send.', {
                 amountSEED: Number(amountWei / 10n ** 18n),
                 amountWei: signature.amountWei,
-                poolBalanceWei: poolInfo.balanceWei,
-                allowanceWei: poolInfo.allowanceWei,
-                poolAddress: poolInfo.pool,
-                tokenAddress: poolInfo.seedToken,
-              }
-            );
-          } else {
-            logClaimFailedForSupport('Simulation: revert with no reason, could not fetch pool info. Check DEBUG tab.');
+                poolBalanceWei: poolInfo2.balanceWei,
+                allowanceWei: poolInfo2.allowanceWei,
+                poolAddress: poolInfo2.pool,
+                tokenAddress: poolInfo2.seedToken,
+              });
+            }
+            // simulationBlocksSend は false のまま → sendTransaction へ進む
           }
-          return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+        } else {
+          // プール情報取得失敗 → 念のため送信を続行
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[Claim] Simulation returned no revert data, pool info unavailable - proceeding with send.');
+          }
+          // simulationBlocksSend は false のまま → sendTransaction へ進む
         }
-        logClaimFailedForSupport('Simulation revert', { reason });
-        return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+      } else if (!simulationBlocksSend && !isRevertDataEmpty(revertData)) {
+        // 非空の revert データがあるが known reason にマッチしない
+        logClaimFailedForSupport('Simulation failed (reason not decoded). Check DEBUG: Signer and pool balance/allowance.');
+        simulationBlocksSend = true;
+        simulationBlockError = { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
       }
-      logClaimFailedForSupport('Simulation failed (reason not decoded). Check DEBUG: Signer and pool balance/allowance.');
-      return { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
+    }
+    if (simulationBlocksSend) {
+      return simulationBlockError ?? { ok: false, error: CLAIM_UNAVAILABLE_USER_MESSAGE };
     }
 
     if (typeof console !== 'undefined' && console.log) {
