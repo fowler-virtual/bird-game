@@ -447,6 +447,29 @@ export const GameStore = {
     this.seedToken = Math.max(0, this.seedToken - amount);
   },
 
+  /** オンチェーン記録が拒否された場合にガチャ結果をロールバックする */
+  rollbackGacha(birds: Bird[]): void {
+    const ids = new Set(birds.map((b) => b.id));
+    const newBirdsOwned = this.state.birdsOwned.filter((b) => !ids.has(b.id));
+    const newInventory = { ...this.state.inventory };
+    for (const bird of birds) {
+      const key = this.getBirdTypeKey(bird);
+      if (newInventory[key] != null) {
+        newInventory[key] = Math.max(0, (newInventory[key] ?? 0) - 1);
+        if (newInventory[key] === 0) delete newInventory[key];
+      }
+    }
+    // 初回無料ガチャのロールバック: hasFreeGacha を復元
+    const wasFree = birds.length === 1 && !this.state.hasFreeGacha;
+    this.state = {
+      ...this.state,
+      birdsOwned: newBirdsOwned,
+      inventory: newInventory,
+      hasFreeGacha: wasFree ? true : this.state.hasFreeGacha,
+    };
+    this.save();
+  },
+
   /**
    * ガチャを N 回引く。1回引くときのみ初回無料（hasFreeGacha）。10連は常に 100 $SEED。
    * @returns ok: false のとき error にメッセージ、birds は空。ok: true のとき birds に今回引いた鳥。

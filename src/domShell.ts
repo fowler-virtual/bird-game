@@ -1201,6 +1201,18 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
           GameStore.setState({ hasFreeGacha: true });
           GameStore.save();
         }
+
+        // オンチェーンにレアリティ記録を書く（ユーザー承認が必要）。
+        // 拒否されたらガチャ失敗とする（鳥を付与しない）。
+        // RPC の一時エラーはリトライし、それでもダメならスキップして鳥は付与する。
+        const isTransientRpcError = (err: string) =>
+          /too many errors|retrying in|RPC endpoint|UNKNOWN_ERROR|-32002|coalesce|network error|ECONNREFUSED|ETIMEDOUT/i.test(err);
+        const isUserRejection = (err: string) =>
+          /rejected|denied|cancelled|user refused/i.test(err);
+
+        // pullGacha をまだ呼ばない段階でレアリティ配分は不明なので、
+        // まず仮に count 分の Common として送信し、実際の結果で差分を後で補正する方法もあるが、
+        // ここではまず pullGacha を実行し、失敗時はロールバックする方式を取る。
         gachaLog('calling pullGacha', { count });
         const result = GameStore.pullGacha(count);
         gachaLog('pullGacha result', { ok: result.ok, error: result.error, birdsCount: result.birds?.length });
@@ -1212,9 +1224,7 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
           return;
         }
 
-        clearInsufficientBalanceMessage();
-        // 結果モーダルを出す前にオンチェーン処理をすべて完了する（MetaMask の送金承認が結果より先になるように）
-        if (cost > 0) await refreshSeedTokenFromChain();
+        // オンチェーン記録
         const rarityCounts = [0, 0, 0, 0, 0];
         for (const bird of result.birds) {
           const idx = RARITY_COLUMN_ORDER.indexOf(bird.rarity);
@@ -1222,10 +1232,7 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         }
         let addRarityTx: { wait: () => Promise<unknown> } | undefined;
         if (rarityCounts.some((c) => c > 0) && hasNetworkStateContract()) {
-          const isTransientRpcError = (err: string) =>
-            /too many errors|retrying in|RPC endpoint|UNKNOWN_ERROR|-32002|coalesce|network error|ECONNREFUSED|ETIMEDOUT/i.test(err);
-          const isUserRejection = (err: string) =>
-            /rejected|denied|cancelled|user refused/i.test(err);
+          showProcessingModal('Recording adoption on-chain… Please approve the transaction.');
           let addResult = await addRarityCountsOnChain(rarityCounts, { waitForConfirmation: false });
           const maxRetries = 2;
           for (let r = 0; r < maxRetries && !addResult.ok && isTransientRpcError(addResult.error ?? ''); r++) {
@@ -1233,25 +1240,33 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
             await new Promise((res) => setTimeout(res, 1500));
             addResult = await addRarityCountsOnChain(rarityCounts, { waitForConfirmation: false });
           }
+          hideProcessingModal();
+          if (!addResult.ok && isUserRejection(addResult.error ?? '')) {
+            // ユーザーが拒否 → ガチャをロールバック
+            gachaLog('user rejected on-chain tx, rolling back gacha');
+            GameStore.rollbackGacha(result.birds);
+            setGachaAreaMessage('Adoption cancelled.');
+            return;
+          }
           if (addResult.ok && addResult.tx) addRarityTx = addResult.tx;
           if (!addResult.ok) {
-            gachaLog('addRarityCountsOnChain failed', addResult.error);
-            if (!isTransientRpcError(addResult.error ?? '') && !isUserRejection(addResult.error ?? '')) {
-              await showMessageModal({
-                title: 'Network stats not updated',
-                message: addResult.error + ' Redeploy the NetworkState contract (with addRarityCounts / getGlobalRarityCounts) and set VITE_NETWORK_STATE_ADDRESS to see rarity counts on the NETWORK tab.',
-                success: false,
-              });
-            }
+            // RPC エラー等 → ログのみ、鳥は付与する
+            gachaLog('addRarityCountsOnChain failed (non-blocking)', addResult.error);
           }
         }
+
+        clearInsufficientBalanceMessage();
+        // burn 後の残高更新（有料ガチャのみ）
+        if (cost > 0) await refreshSeedTokenFromChain();
+
         const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
         game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
-        gachaLog('gacha flow done');
-        // 結果モーダルを即表示（addRarityCounts の確定は待たない）
+
+        // 結果モーダルを表示
         gachaLog('calling showGachaResultModal', { birdsCount: result.birds.length });
         showGachaResultModal(result.birds, count);
-        // 結果モーダル表示後にデッキへ切り替え（初回ガチャで「確認前にインベントリにいる」ように見えないようにする）
+
+        // 結果モーダル表示後にデッキへ切り替え
         if (step === 'need_gacha' && count === 1) {
           GameStore.setState({ onboardingStep: 'need_place' });
           GameStore.save();
@@ -1261,7 +1276,7 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         updateAdoptPaneForOnboarding();
         updateGachaButtonsAndCosts();
         updateDeckPaneVisibility();
-        // ステータス・NETWORKタブの更新はバックグラウンドで実行（モーダル表示をブロックしない）
+        // ステータス・NETWORKタブの更新はバックグラウンドで実行
         const applyStatus = () => {
           const state = GameStore.state;
           updateShellStatus({
