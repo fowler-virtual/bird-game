@@ -1241,18 +1241,18 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
             addResult = await addRarityCountsOnChain(rarityCounts, { waitForConfirmation: false });
           }
           hideProcessingModal();
-          if (!addResult.ok && isUserRejection(addResult.error ?? '')) {
-            // ユーザーが拒否 → ガチャをロールバック
-            gachaLog('user rejected on-chain tx, rolling back gacha');
-            GameStore.rollbackGacha(result.birds);
-            setGachaAreaMessage('Adoption cancelled.');
-            return;
-          }
-          if (addResult.ok && addResult.tx) addRarityTx = addResult.tx;
           if (!addResult.ok) {
-            // RPC エラー等 → ログのみ、鳥は付与する
+            if (cost === 0) {
+              // 無料ガチャ: オンチェーン記録が必須（burn がないため、これが唯一のゲート）
+              gachaLog('on-chain recording failed for free gacha, rolling back', addResult.error);
+              GameStore.rollbackGacha(result.birds);
+              setGachaAreaMessage('Adoption cancelled. Please try again.');
+              return;
+            }
+            // 有料ガチャ: burn 済みなのでベストエフォート（鳥は付与する）
             gachaLog('addRarityCountsOnChain failed (non-blocking)', addResult.error);
           }
+          if (addResult.ok && addResult.tx) addRarityTx = addResult.tx;
         }
 
         clearInsufficientBalanceMessage();
