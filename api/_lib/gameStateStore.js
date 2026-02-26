@@ -4,6 +4,11 @@
  */
 const key = (address) => (address || "").toLowerCase();
 const KV_PREFIX = "game-state:";
+const SNAPSHOT_PREFIX = "game-state-snapshots:";
+const MAX_SNAPSHOTS = 10;
+
+/* ── In-memory fallback for snapshots ── */
+const memorySnapshotStore = new Map();
 
 function getInitialState() {
   return {
@@ -96,6 +101,10 @@ export async function setAsync(address, state, clientVersion) {
   const current = currentData ? currentData.version : 0;
   const allowed = current === clientVersion || (current === 0 && clientVersion === 1);
   if (!allowed) return { ok: false, reason: "STALE" };
+  // Save snapshot before overwriting
+  if (currentData) {
+    await saveSnapshot(address, currentData, "setAsync");
+  }
   const nextVersion = current === 0 ? 1 : current + 1;
   const row = {
     version: nextVersion,
@@ -132,6 +141,8 @@ export async function forceUpdateState(address, mutator) {
   const storeKey = `${KV_PREFIX}${k}`;
   const currentData = await getAsync(address);
   if (!currentData) return { ok: false, reason: "NOT_FOUND" };
+  // Save snapshot before overwriting
+  await saveSnapshot(address, currentData, "forceUpdateState");
   const newState = mutator(currentData.state);
   const nextVersion = currentData.version + 1;
   const row = {
@@ -149,6 +160,159 @@ export async function forceUpdateState(address, mutator) {
       return { ok: true, version: nextVersion };
     } catch (e) {
       console.error("[gameStateStore] forceUpdateState failed:", e);
+      return { ok: false, reason: "WRITE_ERROR" };
+    }
+  }
+  memoryStore.set(k, row);
+  return { ok: true, version: nextVersion };
+}
+
+/* ── Snapshot helpers ── */
+
+/**
+ * Save a snapshot of the current row before overwriting.
+ * Ring-buffer: keeps at most MAX_SNAPSHOTS entries.
+ * Failures are swallowed so they never block the main write path.
+ */
+async function saveSnapshot(address, currentRow, trigger) {
+  if (!currentRow || !currentRow.state) return;
+  try {
+    const backend = await getRedisBackend();
+    const k = key(address);
+    const snapshotKey = `${SNAPSHOT_PREFIX}${k}`;
+    const entry = {
+      version: currentRow.version,
+      state: currentRow.state,
+      updatedAt: currentRow.updatedAt,
+      savedAt: new Date().toISOString(),
+      trigger,
+    };
+
+    let list = [];
+    if (backend) {
+      if (backend.type === "redis") {
+        const raw = await backend.client.get(snapshotKey);
+        if (raw) list = JSON.parse(raw);
+      } else {
+        const stored = await backend.client.get(snapshotKey);
+        if (Array.isArray(stored)) list = stored;
+      }
+    } else {
+      list = memorySnapshotStore.get(k) || [];
+    }
+
+    list.push(entry);
+    if (list.length > MAX_SNAPSHOTS) list = list.slice(list.length - MAX_SNAPSHOTS);
+
+    if (backend) {
+      if (backend.type === "redis") {
+        await backend.client.set(snapshotKey, JSON.stringify(list));
+      } else {
+        await backend.client.set(snapshotKey, list);
+      }
+    } else {
+      memorySnapshotStore.set(k, list);
+    }
+  } catch (e) {
+    console.warn("[gameStateStore] saveSnapshot failed (non-blocking):", e?.message);
+  }
+}
+
+/**
+ * Get all snapshots for an address.
+ */
+export async function getSnapshots(address) {
+  const backend = await getRedisBackend();
+  const k = key(address);
+  const snapshotKey = `${SNAPSHOT_PREFIX}${k}`;
+  try {
+    if (backend) {
+      if (backend.type === "redis") {
+        const raw = await backend.client.get(snapshotKey);
+        return raw ? JSON.parse(raw) : [];
+      }
+      const stored = await backend.client.get(snapshotKey);
+      return Array.isArray(stored) ? stored : [];
+    }
+    return memorySnapshotStore.get(k) || [];
+  } catch (e) {
+    console.error("[gameStateStore] getSnapshots failed:", e);
+    return [];
+  }
+}
+
+/**
+ * Restore a snapshot by version number.
+ * Before restoring, saves the current state as a snapshot (trigger: "pre-restore").
+ */
+export async function restoreSnapshot(address, targetVersion) {
+  const snapshots = await getSnapshots(address);
+  const target = snapshots.find((s) => s.version === targetVersion);
+  if (!target) return { ok: false, reason: "SNAPSHOT_NOT_FOUND" };
+
+  // Save current state before overwriting
+  const currentData = await getAsync(address);
+  if (currentData) {
+    await saveSnapshot(address, currentData, "pre-restore");
+  }
+
+  const backend = await getRedisBackend();
+  const k = key(address);
+  const storeKey = `${KV_PREFIX}${k}`;
+  const nextVersion = currentData ? currentData.version + 1 : 1;
+  const row = {
+    version: nextVersion,
+    state: target.state,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (backend) {
+    try {
+      if (backend.type === "redis") {
+        await backend.client.set(storeKey, JSON.stringify(row));
+      } else {
+        await backend.client.set(storeKey, row);
+      }
+      return { ok: true, version: nextVersion, restoredFromVersion: targetVersion };
+    } catch (e) {
+      console.error("[gameStateStore] restoreSnapshot write failed:", e);
+      return { ok: false, reason: "WRITE_ERROR" };
+    }
+  }
+  memoryStore.set(k, row);
+  return { ok: true, version: nextVersion, restoredFromVersion: targetVersion };
+}
+
+/**
+ * Admin: directly set state for an address (emergency use).
+ * Saves current state as a snapshot (trigger: "pre-admin-set") before overwriting.
+ */
+export async function adminSetState(address, newState) {
+  const currentData = await getAsync(address);
+  if (currentData) {
+    await saveSnapshot(address, currentData, "pre-admin-set");
+  }
+
+  const backend = await getRedisBackend();
+  const k = key(address);
+  const storeKey = `${KV_PREFIX}${k}`;
+  const nextVersion = currentData ? currentData.version + 1 : 1;
+  const row = {
+    version: nextVersion,
+    state: newState,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (backend) {
+    try {
+      if (backend.type === "redis") {
+        await backend.client.set(storeKey, JSON.stringify(row));
+      } else {
+        await backend.client.set(storeKey, row);
+      }
+      return { ok: true, version: nextVersion };
+    } catch (e) {
+      console.error("[gameStateStore] adminSetState failed:", e);
       return { ok: false, reason: "WRITE_ERROR" };
     }
   }

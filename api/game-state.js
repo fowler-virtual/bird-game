@@ -50,6 +50,23 @@ export default async function handler(req, res) {
 
     const prevData = await getAsync(sessionAddress);
     const prevState = prevData ? prevData.state : null;
+
+    // ── State integrity checks (log only, never block) ──
+    if (prevState) {
+      const prevBirds = Array.isArray(prevState.birdsOwned) ? prevState.birdsOwned.length : 0;
+      const newBirds = Array.isArray(state.birdsOwned) ? state.birdsOwned.length : 0;
+      if (newBirds === 0 && prevBirds > 0) {
+        console.error(`[ALERT] birdsOwned dropped to 0 | addr=${sessionAddress} prev=${prevBirds}`);
+      } else if (prevBirds > 0 && newBirds < prevBirds * 0.5) {
+        console.warn(`[WARNING] birdsOwned dropped >50% | addr=${sessionAddress} prev=${prevBirds} new=${newBirds}`);
+      }
+      const prevSeed = typeof prevState.seed === "number" ? prevState.seed : 0;
+      const newSeed = typeof state.seed === "number" ? state.seed : 0;
+      if (prevSeed >= 100 && newSeed === 0) {
+        console.error(`[ALERT] seed dropped from ${prevSeed} to 0 | addr=${sessionAddress}`);
+      }
+    }
+
     const seedResult = validateAndCapSeed(state, prevState);
     const finalState = seedResult.state;
 
