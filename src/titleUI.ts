@@ -5,11 +5,11 @@
 
 import { GameStore } from './store/GameStore';
 import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia } from './wallet';
-import { showGameShell, hideGameShell, setSyncStatusGet, getSyncStatusGet } from './domShell';
+import { showGameShell, hideGameShell, setSyncStatusGet } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
 import { getGameState, putGameState } from './gameStateApi';
-import { signInForClaim, getSessionToken } from './claimApi';
+import { signInForClaim } from './claimApi';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -70,20 +70,35 @@ function onConnectClick(): void {
           sessionStorage.removeItem('bird-game-reset-pending');
         } catch (_) {}
       } else {
-        GameStore.setStateFromServer(gs.state, gs.version);
-        GameStore.save();
+        // Check if local state has significantly more progress than server state.
+        // If so, local was likely more up-to-date and server was corrupted by
+        // a previous failed mobile session. Prefer local and re-push to server.
+        const localState = GameStore.state;
+        const serverState = gs.state as { loftLevel?: number; birdsOwned?: unknown[] };
+        const localProgress = (localState.loftLevel ?? 0) + (localState.birdsOwned?.length ?? 0);
+        const serverProgress = (serverState.loftLevel ?? 0) + (serverState.birdsOwned?.length ?? 0);
+        if (localProgress > serverProgress + 2 && localProgress > 3) {
+          console.warn(
+            '[TitleUI] Local state has more progress than server (local:', localProgress, 'server:', serverProgress,
+            '). Keeping local state and re-syncing to server.'
+          );
+          GameStore.serverStateVersion = gs.version;
+          GameStore.loadedFromStorage = true;
+          const putResult = await putGameState(GameStore.state, gs.version);
+          if (putResult.ok) {
+            GameStore.serverStateVersion = putResult.version;
+            GameStore.save();
+          }
+        } else {
+          GameStore.setStateFromServer(gs.state, gs.version);
+          GameStore.save();
+        }
       }
     } else {
-      GameStore.resetToInitial();
+      // Server unreachable or not authenticated - use localStorage, do NOT push initial state
+      console.warn('[TitleUI] getGameState failed:', gs.error, '- using localStorage state.');
       GameStore.loadedFromStorage = true;
-      console.warn('[TitleUI] getGameState failed:', gs.error, '- using initial state. Will try to bootstrap server.');
-      const putResult = await putGameState(GameStore.state, 1);
-      if (putResult.ok) {
-        GameStore.serverStateVersion = putResult.version;
-        GameStore.save();
-      } else {
-        GameStore.serverStateVersion = 0;
-      }
+      GameStore.serverStateVersion = 0;
     }
     setSyncStatusGet(gs.ok ? 'ok' : 'fail');
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
@@ -133,19 +148,11 @@ function onConnectClick(): void {
       GameStore.setWalletConnected(true, result.address, { skipLoadState: true });
       // 接続直後に SIWE を実行し、ウォレットが2回目（署名）を開くようにする
       await new Promise((r) => setTimeout(r, 100));
-      const diag: string[] = [`addr: ${result.address.slice(0, 8)}...`];
       const auth = await signInForClaim(result.address);
-      diag.push(`SIWE: ${auth.ok ? 'OK' : 'FAIL ' + (auth as { error?: string }).error}`);
-      diag.push(`token: ${getSessionToken() ? 'stored' : 'missing'}`);
       if (!auth.ok) {
         console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
       }
       await postConnectWithTimeout();
-      // Show diagnostic on mobile (will be removed once issue is resolved)
-      const syncStatus = getSyncStatusGet();
-      diag.push(`sync: ${syncStatus}`);
-      diag.push(`seed: ${GameStore.state.seed}, loft: ${GameStore.state.loftLevel}, birds: ${GameStore.state.birdsOwned?.length ?? 0}`);
-      alert('[Debug Sync]\n' + diag.join('\n'));
       resetButton(btn);
     })
     .catch((err) => {
