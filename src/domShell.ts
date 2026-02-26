@@ -4,12 +4,13 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { scheduleServerSync, flushServerSync } from './gameStateApi';
+import { scheduleServerSync, flushServerSync, getGameState, setOnSyncSuccessCallback } from './gameStateApi';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase, getClaimable } from './claimApi';
 
 GameStore.setOnSaveCallback(scheduleServerSync);
+setOnSyncSuccessCallback(() => refreshClaimable());
 import type { ClaimSignature } from './claimApi';
 import { executeClaim, getContractSignerAddress, getPoolBalanceAndAllowance, hasClaimContract } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
@@ -1730,6 +1731,10 @@ showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown erro
                 return;
               }
               const claimedAmount = Math.floor(Number(BigInt(signature.amountWei) / 10n ** 18n));
+              // Reduce local seed immediately so display reflects the claim.
+              const newSeed = Math.max(0, GameStore.state.seed - claimedAmount);
+              GameStore.setState({ seed: newSeed });
+              GameStore.save();
               const state = GameStore.state;
               updateShellStatus({
                 seed: state.seed,
@@ -1749,7 +1754,17 @@ showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown erro
                   if (claimBtn) claimBtn.disabled = false;
                 });
               });
-              postClaimConfirm(signature.nonce, signature.amountWei).catch(() => {});
+              // Notify server, then sync version (local seed is already correctly reduced).
+              // Don't overwrite local state: if confirmReservation failed to reduce
+              // server-side seed, getGameState would restore the unreduced value.
+              postClaimConfirm(signature.nonce, signature.amountWei)
+                .then(async () => {
+                  const gs = await getGameState();
+                  if (gs.ok) {
+                    GameStore.serverStateVersion = gs.version;
+                  }
+                })
+                .catch(() => {});
             });
           }
         });
@@ -1886,11 +1901,16 @@ export function updateShellStatus(payload: {
  * "0" = 取得成功で claimable なし。
  */
 let cachedClaimableWei: string | null = null;
+/** claimable 取得時のローカル seed 値。seed が増えたらキャッシュを無効化する。 */
+let cachedClaimableSeed = 0;
 
 /** /api/claimable を取得してキャッシュを更新し、ボタン状態を反映する。 */
 async function refreshClaimable(): Promise<void> {
   const result = await getClaimable().catch(() => null);
-  if (result?.ok) cachedClaimableWei = result.claimable;
+  if (result?.ok) {
+    cachedClaimableWei = result.claimable;
+    cachedClaimableSeed = GameStore.state.seed;
+  }
   updateClaimButton();
 }
 
@@ -1898,6 +1918,10 @@ function updateClaimButton(): void {
   const btn = document.getElementById(STATUS_CLAIM_BTN_ID) as HTMLButtonElement | null;
   if (!btn) return;
   if (GameStore.state.seed <= 0) { btn.disabled = true; return; }
+  // seed が前回の claimable 取得時から増えていたらキャッシュを無効化（サーバーにまだ反映されていない可能性）
+  if (cachedClaimableWei !== null && GameStore.state.seed > cachedClaimableSeed) {
+    cachedClaimableWei = null;
+  }
   // claimable が取得できている場合のみその値で判定。未取得・エラー時は seed > 0 で有効化。
   if (cachedClaimableWei !== null) {
     btn.disabled = BigInt(cachedClaimableWei) <= 0n;

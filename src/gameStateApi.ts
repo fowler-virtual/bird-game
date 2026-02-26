@@ -119,6 +119,12 @@ export async function putGameState(state: GameState, version: number): Promise<P
 const SERVER_SAVE_DEBOUNCE_MS = 2000;
 let serverSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** サーバー同期成功後に呼ぶコールバック（例: claimable の再取得）。 */
+let onSyncSuccessCallback: (() => void) | null = null;
+export function setOnSyncSuccessCallback(cb: (() => void) | null): void {
+  onSyncSuccessCallback = cb;
+}
+
 /**
  * 現在の GameStore の状態をサーバーへ送る（デバウンス付き）。
  * VITE_CLAIM_API_URL が未設定のときは何もしない。GameStore.save() の後に呼ぶ想定。
@@ -130,7 +136,9 @@ export function scheduleServerSync(): void {
     serverSyncTimer = null;
     const v = GameStore.serverStateVersion || 1;
     const result = await putGameState(GameStore.state, v);
-    if (!result.ok && result.error !== 'Stale data.') {
+    if (result.ok) {
+      if (onSyncSuccessCallback) onSyncSuccessCallback();
+    } else if (result.error !== 'Stale data.') {
       console.warn('[gameStateApi] server sync failed:', result.error);
     }
   }, SERVER_SAVE_DEBOUNCE_MS);
