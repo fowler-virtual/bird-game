@@ -1224,6 +1224,8 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         if (rarityCounts.some((c) => c > 0) && hasNetworkStateContract()) {
           const isTransientRpcError = (err: string) =>
             /too many errors|retrying in|RPC endpoint|UNKNOWN_ERROR|-32002|coalesce|network error|ECONNREFUSED|ETIMEDOUT/i.test(err);
+          const isUserRejection = (err: string) =>
+            /rejected|denied|cancelled|user refused/i.test(err);
           let addResult = await addRarityCountsOnChain(rarityCounts, { waitForConfirmation: false });
           const maxRetries = 2;
           for (let r = 0; r < maxRetries && !addResult.ok && isTransientRpcError(addResult.error ?? ''); r++) {
@@ -1234,7 +1236,7 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
           if (addResult.ok && addResult.tx) addRarityTx = addResult.tx;
           if (!addResult.ok) {
             gachaLog('addRarityCountsOnChain failed', addResult.error);
-            if (!isTransientRpcError(addResult.error ?? '')) {
+            if (!isTransientRpcError(addResult.error ?? '') && !isUserRejection(addResult.error ?? '')) {
               await showMessageModal({
                 title: 'Network stats not updated',
                 message: addResult.error + ' Redeploy the NetworkState contract (with addRarityCounts / getGlobalRarityCounts) and set VITE_NETWORK_STATE_ADDRESS to see rarity counts on the NETWORK tab.',
