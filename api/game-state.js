@@ -11,6 +11,7 @@ import {
   validateState,
   setAsync,
 } from "./_lib/gameStateStore.js";
+import { validateAndCapSeed } from "./_lib/seedValidation.js";
 
 export default async function handler(req, res) {
   setCorsHeaders(req, res);
@@ -46,7 +47,13 @@ export default async function handler(req, res) {
     if (!validation.ok) {
       return res.status(400).json({ error: validation.error });
     }
-    const result = await setAsync(sessionAddress, state, version);
+
+    const prevData = await getAsync(sessionAddress);
+    const prevState = prevData ? prevData.state : null;
+    const seedResult = validateAndCapSeed(state, prevState);
+    const finalState = seedResult.state;
+
+    const result = await setAsync(sessionAddress, finalState, version);
     if (!result.ok) {
       return res.status(409).json({
         code: "STALE_DATA",
