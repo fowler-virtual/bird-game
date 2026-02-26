@@ -119,6 +119,43 @@ export async function setAsync(address, state, clientVersion) {
   return { ok: true, version: nextVersion };
 }
 
+/**
+ * Force-update state: read current, apply mutator, write back bypassing version check.
+ * For server-internal use only (e.g. post-claim seed reduction).
+ * @param {string} address
+ * @param {(state: object) => object} mutator - receives current state, returns new state
+ * @returns {{ ok: boolean, version?: number }}
+ */
+export async function forceUpdateState(address, mutator) {
+  const backend = await getRedisBackend();
+  const k = key(address);
+  const storeKey = `${KV_PREFIX}${k}`;
+  const currentData = await getAsync(address);
+  if (!currentData) return { ok: false, reason: "NOT_FOUND" };
+  const newState = mutator(currentData.state);
+  const nextVersion = currentData.version + 1;
+  const row = {
+    version: nextVersion,
+    state: newState,
+    updatedAt: new Date().toISOString(),
+  };
+  if (backend) {
+    try {
+      if (backend.type === "redis") {
+        await backend.client.set(storeKey, JSON.stringify(row));
+      } else {
+        await backend.client.set(storeKey, row);
+      }
+      return { ok: true, version: nextVersion };
+    } catch (e) {
+      console.error("[gameStateStore] forceUpdateState failed:", e);
+      return { ok: false, reason: "WRITE_ERROR" };
+    }
+  }
+  memoryStore.set(k, row);
+  return { ok: true, version: nextVersion };
+}
+
 export function getInitialStateExport() {
   return getInitialState();
 }

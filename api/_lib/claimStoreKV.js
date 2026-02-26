@@ -3,7 +3,7 @@
  * Same backends as gameStateStore (REDIS_URL or @vercel/kv); fallback in-memory (no persistence).
  */
 
-import { getAsync } from "./gameStateStore.js";
+import { getAsync, setAsync, forceUpdateState } from "./gameStateStore.js";
 
 const DECIMALS = 18n;
 const RESERVE_DEADLINE_SEC = 300;
@@ -185,7 +185,7 @@ export async function capReservationAmount(address, nonce, maxAmountWei) {
 }
 
 /**
- * After on-chain claim success: move reserved to claimed_total.
+ * After on-chain claim success: move reserved to claimed_total, then reduce game-state seed.
  */
 export async function confirmReservation(address, nonce, amountWei) {
   const state = await getClaimState(address);
@@ -198,5 +198,24 @@ export async function confirmReservation(address, nonce, amountWei) {
   state.reserved = (BigInt(state.reserved || "0") - BigInt(amountWei)).toString();
   if (BigInt(state.reserved) < 0n) state.reserved = "0";
   await setClaimState(address, state);
+
+  // Reduce game-state seed so display shows correct (post-claim) value.
+  // Uses forceUpdateState to bypass version check (auto-save races are common).
+  // Also reduces claimed_total to keep the claimable formula balanced.
+  try {
+    const claimedSeed = Number(BigInt(amountWei) / 10n ** DECIMALS);
+    const result = await forceUpdateState(address, (s) => ({
+      ...s,
+      seed: Math.max(0, (typeof s.seed === "number" ? s.seed : 0) - claimedSeed),
+    }));
+    if (result.ok) {
+      state.claimed_total = (BigInt(state.claimed_total) - BigInt(amountWei)).toString();
+      if (BigInt(state.claimed_total) < 0n) state.claimed_total = "0";
+      await setClaimState(address, state);
+    }
+  } catch (e) {
+    console.warn("[claimStoreKV] failed to reduce game-state seed after confirm:", e?.message);
+  }
+
   return true;
 }
