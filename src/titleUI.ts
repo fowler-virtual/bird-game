@@ -70,29 +70,8 @@ function onConnectClick(): void {
           sessionStorage.removeItem('bird-game-reset-pending');
         } catch (_) {}
       } else {
-        // Check if local state has significantly more progress than server state.
-        // If so, local was likely more up-to-date and server was corrupted by
-        // a previous failed mobile session. Prefer local and re-push to server.
-        const localState = GameStore.state;
-        const serverState = gs.state as { loftLevel?: number; birdsOwned?: unknown[] };
-        const localProgress = (localState.loftLevel ?? 0) + (localState.birdsOwned?.length ?? 0);
-        const serverProgress = (serverState.loftLevel ?? 0) + (serverState.birdsOwned?.length ?? 0);
-        if (localProgress > serverProgress + 2 && localProgress > 3) {
-          console.warn(
-            '[TitleUI] Local state has more progress than server (local:', localProgress, 'server:', serverProgress,
-            '). Keeping local state and re-syncing to server.'
-          );
-          GameStore.serverStateVersion = gs.version;
-          GameStore.loadedFromStorage = true;
-          const putResult = await putGameState(GameStore.state, gs.version);
-          if (putResult.ok) {
-            GameStore.serverStateVersion = putResult.version;
-            GameStore.save();
-          }
-        } else {
-          GameStore.setStateFromServer(gs.state, gs.version);
-          GameStore.save();
-        }
+        GameStore.setStateFromServer(gs.state, gs.version);
+        GameStore.save();
       }
     } else {
       // Server unreachable or not authenticated - use localStorage, do NOT push initial state
