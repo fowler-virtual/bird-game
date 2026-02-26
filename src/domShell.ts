@@ -1207,8 +1207,6 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         // RPC の一時エラーはリトライし、それでもダメならスキップして鳥は付与する。
         const isTransientRpcError = (err: string) =>
           /too many errors|retrying in|RPC endpoint|UNKNOWN_ERROR|-32002|coalesce|network error|ECONNREFUSED|ETIMEDOUT/i.test(err);
-        const isUserRejection = (err: string) =>
-          /rejected|denied|cancelled|user refused/i.test(err);
 
         // pullGacha をまだ呼ばない段階でレアリティ配分は不明なので、
         // まず仮に count 分の Common として送信し、実際の結果で差分を後で補正する方法もあるが、
