@@ -1197,10 +1197,8 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         void showMessageModal({ title: 'Adoption failed', message: msg, success: false });
       },
       onSuccess: async () => {
-        if (count === 1 && isFirstAdoptionFree() && !GameStore.state.hasFreeGacha) {
-          GameStore.setState({ hasFreeGacha: true });
-          GameStore.save();
-        }
+        // hasFreeGacha はオンチェーン記録成功後に設定する（失敗時のロールバックで矛盾しないように）
+        const wasFreeGacha = count === 1 && isFirstAdoptionFree() && !GameStore.state.hasFreeGacha;
 
         // オンチェーンにレアリティ記録を書く（ユーザー承認が必要）。
         // 拒否されたらガチャ失敗とする（鳥を付与しない）。
@@ -1251,6 +1249,12 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
             gachaLog('addRarityCountsOnChain failed (non-blocking)', addResult.error);
           }
           if (addResult.ok && addResult.tx) addRarityTx = addResult.tx;
+        }
+
+        // オンチェーン記録成功（またはスキップ）後に hasFreeGacha を設定
+        if (wasFreeGacha) {
+          GameStore.setState({ hasFreeGacha: true });
+          GameStore.save();
         }
 
         clearInsufficientBalanceMessage();

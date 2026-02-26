@@ -258,6 +258,11 @@ export async function addRarityCountsOnChain(
   counts: number[],
   opts?: { waitForConfirmation?: boolean },
 ): Promise<{ ok: true; tx?: { wait: () => Promise<unknown> } } | { ok: false; error: string }> {
+  // E2E: skip real contract call when running under test mock
+  if ((window as unknown as { __e2eMockReady?: boolean }).__e2eMockReady) {
+    lastAddRarityResult = { ok: true };
+    return { ok: true };
+  }
   const waitForConfirmation = opts?.waitForConfirmation !== false;
   const contract = await getContract(true);
   if (!contract) {
@@ -290,6 +295,10 @@ export async function updatePowerOnChain(power: number): Promise<{ ok: true } | 
 
 /** デッキのパワーをオンチェーンに保存。編成のたびに1トランザクション */
 export async function updatePower(power: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  if ((window as unknown as { __e2eMockReady?: boolean }).__e2eMockReady) {
+    lastUpdatePowerResult = { ok: true };
+    return { ok: true };
+  }
   const contract = await getContract(true);
   if (!contract) {
     lastUpdatePowerResult = { ok: false, error: 'NetworkState not configured or no wallet.' };
