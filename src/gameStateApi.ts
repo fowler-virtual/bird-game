@@ -135,7 +135,15 @@ export function scheduleServerSync(): void {
   serverSyncTimer = setTimeout(async () => {
     serverSyncTimer = null;
     const v = GameStore.serverStateVersion || 1;
-    const result = await putGameState(GameStore.state, v);
+    let result = await putGameState(GameStore.state, v);
+    // version 競合時は最新 version を取得して 1 回リトライ
+    if (!result.ok && result.error === 'Stale data.') {
+      const gs = await getGameState();
+      if (gs.ok && typeof gs.version === 'number') {
+        GameStore.serverStateVersion = gs.version;
+        result = await putGameState(GameStore.state, gs.version);
+      }
+    }
     if (result.ok) {
       if (onSyncSuccessCallback) onSyncSuccessCallback();
     } else if (result.error !== 'Stale data.') {

@@ -11,7 +11,7 @@ import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase, getCla
 
 GameStore.setOnSaveCallback(scheduleServerSync);
 setOnSyncSuccessCallback(() => refreshClaimable());
-import type { ClaimSignature } from './claimApi';
+
 import { executeClaim, getContractSignerAddress, getPoolBalanceAndAllowance, hasClaimContract } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';
 import { showTitleUI } from './titleUI';
@@ -1630,144 +1630,147 @@ function initTabListeners(): void {
   const claimBtn = document.getElementById(STATUS_CLAIM_BTN_ID) as HTMLButtonElement | null;
   if (claimBtn) {
     claimBtn.addEventListener('click', () => {
-      const amount = GameStore.state.seed;
-      if (amount <= 0) return;
-      showClaimConfirmModal(amount).then((confirmed) => {
-        if (!confirmed) return;
-        requestAccounts().then((connectResult) => {
-          if (!connectResult.ok) return;
-          const address = connectResult.address as string;
-          claimBtn.disabled = true;
+      if (GameStore.state.seed <= 0) return;
+      claimBtn.disabled = true;
 
-          function doRequestClaim() {
-            return requestClaim(address);
+      // --- Phase 1: sync → claimable 取得 → 確認モーダル ---
+      (async () => {
+        const syncOk = await flushServerSync();
+        if (!syncOk) {
+          await showMessageModal({
+            title: 'Save required',
+            message: 'Your game progress could not be synced with the server. Please open the LOFT tab, press Save, wait a few seconds, then try Claim again.',
+            success: false,
+          });
+          claimBtn.disabled = false;
+          return;
+        }
+        // サーバー反映を少し待つ
+        await new Promise<void>((r) => setTimeout(r, 800));
+
+        // サーバーの claimable を取得して確認モーダルに表示
+        const claimableResult = await getClaimable().catch(() => null);
+        let claimableAmount = 0;
+        if (claimableResult?.ok) {
+          claimableAmount = Math.floor(Number(BigInt(claimableResult.claimable) / 10n ** 18n));
+        }
+        if (claimableAmount <= 0) {
+          // フォールバック: ローカル seed を表示（差異が出る可能性はあるが 0 よりは良い）
+          claimableAmount = Math.floor(GameStore.state.seed);
+        }
+        if (claimableAmount <= 0) {
+          await showMessageModal({
+            title: 'Nothing to claim',
+            message: 'There is nothing to claim right now.',
+            success: false,
+          });
+          claimBtn.disabled = false;
+          return;
+        }
+
+        const confirmed = await showClaimConfirmModal(claimableAmount);
+        if (!confirmed) {
+          claimBtn.disabled = false;
+          return;
+        }
+
+        // --- Phase 2: ウォレット接続確認 → claim 署名要求 ---
+        const connectResult = await requestAccounts();
+        if (!connectResult.ok) {
+          claimBtn.disabled = false;
+          return;
+        }
+        const address = connectResult.address as string;
+
+        async function doRequestClaim(): Promise<import('./claimApi').ClaimResult> {
+          return requestClaim(address);
+        }
+
+        let result = await doRequestClaim();
+
+        // 401 → SIWE 再署名してリトライ
+        if (!result.ok && result.error === 'Not logged in. Sign in with your wallet first.') {
+          await showMessageModal({
+            title: 'Sign in to claim',
+            message: 'Your wallet will open. Sign the message to verify you own this address and enable claiming.',
+            success: true,
+          });
+          const authResult = await signInForClaim(address);
+          if (!authResult.ok) {
+            await showMessageModal({ title: 'Sign-in failed', message: authResult.error ?? 'Unknown error.', success: false });
+            claimBtn.disabled = false;
+            return;
           }
+          result = await doRequestClaim();
+        }
 
-          flushServerSync()
-            .then((syncOk) => {
-              if (!syncOk) {
-                console.warn('[Claim] Game state sync to server failed. Skipping claim request.');
-                showMessageModal({
-                  title: 'Save required',
-                  message:
-                    'Your game progress could not be synced with the server. Please open the LOFT tab, press Save, wait a few seconds, then try Claim again.',
-                  success: false,
-                }).then(() => {
-                  if (claimBtn) claimBtn.disabled = false;
-                });
-                return Promise.reject({ skipClaim: true });
-              }
-              return new Promise<void>((r) => setTimeout(r, 1800));
-            })
-            .then(() => doRequestClaim())
-            .then((result) => {
-            if (!result.ok) {
-              if (result.error === 'No claimable amount.') {
-                return flushServerSync().then((retrySyncOk) => {
-                  if (!retrySyncOk) console.warn('[Claim] Retry sync failed.');
-                  return new Promise<void>((r) => setTimeout(r, 1500)).then(() => doRequestClaim());
-                }).then((retryResult) => {
-                  if (!retryResult.ok && retryResult.error === 'No claimable amount.') {
-                    showMessageModal({
-                      title: 'Nothing to claim',
-                      message: 'There is nothing to claim right now. If you increased SEED in Debug, open the LOFT tab, press Save, wait a few seconds, then try Claim again.',
-                      success: false,
-                    }).then(() => { if (claimBtn) claimBtn.disabled = false; });
-                    return;
-                  }
-                  if (!retryResult.ok) {
-                    showMessageModal({ title: 'Claim failed', message: retryResult.error ?? 'Unknown error.', success: false }).then(() => { if (claimBtn) claimBtn.disabled = false; });
-                    return;
-                  }
-                  runClaimWithSignature(retryResult.signature);
-                });
-              }
-              if (result.error === 'Not logged in. Sign in with your wallet first.') {
-                showMessageModal({
-                  title: 'Sign in to claim',
-                  message: 'Your wallet will open. Sign the message to verify you own this address and enable claiming.',
-                  success: true,
-                }).then(() => {
-                  signInForClaim(address).then((authResult) => {
-                    if (!authResult.ok) {
-                      showMessageModal({ title: 'Sign-in failed', message: authResult.error ?? 'Unknown error.', success: false }).then(() => {
-                        if (claimBtn) claimBtn.disabled = false;
-                      });
-                      return;
-                    }
-                    doRequestClaim().then((retryResult) => {
-                      if (!retryResult.ok) {
-showMessageModal({ title: 'Claim failed', message: retryResult.error ?? 'Unknown error.', success: false }).then(() => {
-                        if (claimBtn) claimBtn.disabled = false;
-                      });
-                        return;
-                      }
-                      runClaimWithSignature(retryResult.signature);
-                    });
-                  });
-                });
-                return;
-              }
-showMessageModal({ title: 'Claim failed', message: result.error ?? 'Unknown error.', success: false }).then(() => {
-              if (claimBtn) claimBtn.disabled = false;
-            });
-              return;
-            }
-            runClaimWithSignature(result.signature);
-          })
-            .catch((err: unknown) => {
-              if ((err as { skipClaim?: boolean })?.skipClaim) return;
-              if (claimBtn) claimBtn.disabled = false;
-            });
+        // "No claimable" → リトライ 1 回
+        if (!result.ok && result.error === 'No claimable amount.') {
+          const retrySyncOk = await flushServerSync();
+          if (!retrySyncOk) console.warn('[Claim] Retry sync failed.');
+          await new Promise<void>((r) => setTimeout(r, 1500));
+          result = await doRequestClaim();
+        }
 
-          function runClaimWithSignature(signature: ClaimSignature): void {
-            showProcessingModal('Claiming your $SEED rewards… This may take a few seconds.');
-            executeClaim(signature).then((txResult) => {
-              if (!txResult.ok) {
-                showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false }).then(() => {
-                  if (claimBtn) claimBtn.disabled = false;
-                });
-                hideProcessingModal();
-                return;
-              }
-              const claimedAmount = Math.floor(Number(BigInt(signature.amountWei) / 10n ** 18n));
-              // Reduce local seed immediately so display reflects the claim.
-              const newSeed = Math.max(0, GameStore.state.seed - claimedAmount);
-              GameStore.setState({ seed: newSeed });
-              GameStore.save();
-              const state = GameStore.state;
-              updateShellStatus({
-                seed: state.seed,
-                seedPerDay: getProductionRatePerHour(state) * 24,
-                loftLevel: state.loftLevel,
-                networkSharePercent: getNetworkSharePercent(state),
-              });
-              refreshSeedTokenFromChain().then(() => {
-                updateAdoptPane();
-                updateGachaButtonsAndCosts();
-                refreshClaimable();
-                hideProcessingModal();
-                showMessageModal({
-                  title: 'Claim successful',
-                  message: `${claimedAmount} $SEED acquired!`,
-                }).then(() => {
-                  if (claimBtn) claimBtn.disabled = false;
-                });
-              });
-              // Notify server, then sync version (local seed is already correctly reduced).
-              // Don't overwrite local state: if confirmReservation failed to reduce
-              // server-side seed, getGameState would restore the unreduced value.
-              postClaimConfirm(signature.nonce, signature.amountWei)
-                .then(async () => {
-                  const gs = await getGameState();
-                  if (gs.ok) {
-                    GameStore.serverStateVersion = gs.version;
-                  }
-                })
-                .catch(() => {});
-            });
-          }
+        if (!result.ok) {
+          const msg = result.error === 'No claimable amount.'
+            ? 'There is nothing to claim right now. If you increased SEED in Debug, open the LOFT tab, press Save, wait a few seconds, then try Claim again.'
+            : (result.error ?? 'Unknown error.');
+          const title = result.error === 'No claimable amount.' ? 'Nothing to claim' : 'Claim failed';
+          await showMessageModal({ title, message: msg, success: false });
+          claimBtn.disabled = false;
+          return;
+        }
+
+        // --- Phase 3: オンチェーン実行 ---
+        const signature = result.signature;
+        showProcessingModal('Claiming your $SEED rewards… This may take a few seconds.');
+        const txResult = await executeClaim(signature);
+        if (!txResult.ok) {
+          hideProcessingModal();
+          await showMessageModal({ title: 'Claim failed', message: txResult.error ?? 'Unknown error.', success: false });
+          claimBtn.disabled = false;
+          return;
+        }
+
+        const claimedSeed = Math.floor(Number(BigInt(signature.amountWei) / 10n ** 18n));
+
+        // --- Phase 4: サーバー確認 → サーバー state 取得 → ローカル同期 ---
+        // postClaimConfirm を先に await してから state を取得することで
+        // scheduleServerSync とのレースコンディションを排除する
+        await postClaimConfirm(signature.nonce, signature.amountWei).catch(() => {});
+        const gs = await getGameState();
+        if (gs.ok) {
+          // サーバーの canonical state を適用（seed は confirmReservation で削減済み）
+          GameStore.setStateFromServer(gs.state, gs.version);
+        } else {
+          // フォールバック: ローカルで seed を減算
+          const newSeed = Math.max(0, GameStore.state.seed - claimedSeed);
+          GameStore.setState({ seed: newSeed });
+        }
+        GameStore.save();
+
+        const postState = GameStore.state;
+        updateShellStatus({
+          seed: postState.seed,
+          seedPerDay: getProductionRatePerHour(postState) * 24,
+          loftLevel: postState.loftLevel,
+          networkSharePercent: getNetworkSharePercent(postState),
         });
+        await refreshSeedTokenFromChain();
+        updateAdoptPane();
+        updateGachaButtonsAndCosts();
+        await refreshClaimable();
+        hideProcessingModal();
+        await showMessageModal({
+          title: 'Claim successful',
+          message: `${claimedSeed} $SEED acquired!`,
+        });
+        claimBtn.disabled = false;
+      })().catch((err) => {
+        console.error('[Claim] unexpected error:', err);
+        hideProcessingModal();
+        claimBtn.disabled = false;
       });
     });
   }
