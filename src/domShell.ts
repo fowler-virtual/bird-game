@@ -1432,8 +1432,15 @@ function initDebugPaneListeners(): void {
         });
         const data = await res.json();
         if (data.ok) {
-          GameStore.setState({ seed: data.newSeed });
-          GameStore.save();
+          // サーバーから最新 state を取得して version を同期（409 防止）
+          const gs = await getGameState().catch(() => null);
+          if (gs?.ok) {
+            GameStore.setStateFromServer(gs.state, gs.version);
+            GameStore.save();
+          } else {
+            GameStore.setState({ seed: data.newSeed });
+            GameStore.save();
+          }
           refreshDebugPane();
           emitGameRefresh();
         } else {
