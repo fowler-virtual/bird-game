@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GameStore } from '../store/GameStore';
 import { hideTitleUI, showTitleUI } from '../titleUI';
 import { destroyPhaserGame } from '../phaserBoot';
-import { isShellVisible, updateShellStatus, setCanvasCardDeckView, setDisconnectCallback, getLastCanvasCardSize, showMessageModal, runConfirmBurnThenSuccess } from '../domShell';
+import { isShellVisible, updateShellStatus, setCanvasCardDeckView, setDisconnectCallback, getLastCanvasCardSize, showMessageModal, runConfirmBurnThenSuccess, getIsAdmin } from '../domShell';
 import { revokeWalletPermissions } from '../wallet';
 import { refreshSeedTokenFromChain } from '../seedToken';
 import { setLoftLevel, refreshNetworkStateFromChain } from '../networkState';
@@ -302,19 +302,21 @@ export class GameScene extends Phaser.Scene {
     this.leftPanelContainer.add(this.upgradeLoftLabel);
     const btnH = 40;
     const debugBtnY = h - 172;
-    const debugBtn = this.add
-      .rectangle(PANEL_PADDING + btnW / 2, debugBtnY, btnW, btnH, BG_ELEVATED, 1)
-      .setStrokeStyle(1, BORDER)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerover', () => debugBtn.setFillStyle(BG_HOVER))
-      .on('pointerout', () => debugBtn.setFillStyle(BG_ELEVATED))
-      .on('pointerdown', () => {
-        this.setDrawerOpen(false);
-        this.scene.launch('DebugScene');
-        this.scene.bringToTop('DebugScene');
-      });
-    const debugLabel = this.add.text(PANEL_PADDING + btnW / 2, debugBtnY, 'Debug', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5);
-    this.leftPanelContainer.add([debugBtn, debugLabel]);
+    if (getIsAdmin()) {
+      const debugBtn = this.add
+        .rectangle(PANEL_PADDING + btnW / 2, debugBtnY, btnW, btnH, BG_ELEVATED, 1)
+        .setStrokeStyle(1, BORDER)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => debugBtn.setFillStyle(BG_HOVER))
+        .on('pointerout', () => debugBtn.setFillStyle(BG_ELEVATED))
+        .on('pointerdown', () => {
+          this.setDrawerOpen(false);
+          this.scene.launch('DebugScene');
+          this.scene.bringToTop('DebugScene');
+        });
+      const debugLabel = this.add.text(PANEL_PADDING + btnW / 2, debugBtnY, 'Debug', { resolution: TEXT_RESOLUTION, fontSize: FONT_BODY_LARGE, color: TEXT_PRIMARY }).setOrigin(0.5);
+      this.leftPanelContainer.add([debugBtn, debugLabel]);
+    }
 
     const gachaBtnY = h - 120;
     const gachaBtn = this.add

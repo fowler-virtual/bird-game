@@ -36,6 +36,26 @@ import {
   getLastUpdatePowerResult,
 } from './networkState';
 
+/** Admin whitelist state */
+let isAdmin = false;
+export function getIsAdmin(): boolean { return isAdmin; }
+
+async function checkAdminStatus(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/admin/check', { credentials: 'include' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return data.isAdmin === true;
+  } catch {
+    return false;
+  }
+}
+
+function setDebugVisible(visible: boolean): void {
+  const tab = document.querySelector('.shell-tab[data-tab="debug"]') as HTMLElement | null;
+  if (tab) tab.style.display = visible ? '' : 'none';
+}
+
 /** リセット後は SAVE するまでステータスカードにオンチェーン値を出さない（sessionStorage） */
 const SUPPRESS_CHAIN_DISPLAY_KEY = 'bird-game-suppress-chain-display';
 export function clearSuppressChainDisplay(): void {
@@ -1381,15 +1401,34 @@ function refreshDebugPane(): void {
 function initDebugPaneListeners(): void {
   const seedSetBtn = document.getElementById('dom-debug-seed-set');
   if (seedSetBtn) {
-    seedSetBtn.addEventListener('click', () => {
-      const v = window.prompt('SEED', String(GameStore.state.seed));
+    seedSetBtn.textContent = 'Grant';
+    seedSetBtn.addEventListener('click', async () => {
+      const v = window.prompt('付与する SEED 量を入力', '100');
       if (v == null) return;
-      const n = Math.floor(Number(v));
-      if (!Number.isFinite(n) || n < 0) return;
-      GameStore.setState({ seed: n });
-      GameStore.save();
-      refreshDebugPane();
-      emitGameRefresh();
+      const amount = Math.floor(Number(v));
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      seedSetBtn.setAttribute('disabled', 'true');
+      try {
+        const res = await fetch('/api/admin/grant-seed-session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          GameStore.setState({ seed: data.newSeed });
+          GameStore.save();
+          refreshDebugPane();
+          emitGameRefresh();
+        } else {
+          window.alert('Grant failed: ' + (data.error || 'unknown'));
+        }
+      } catch (e) {
+        window.alert('Grant failed: ' + (e instanceof Error ? e.message : String(e)));
+      } finally {
+        seedSetBtn.removeAttribute('disabled');
+      }
     });
   }
   // $SEED はオンチェーンに移行しているため Set ボタンは廃止（書き換え不可）
@@ -1805,6 +1844,13 @@ export function showGameShell(): void {
   }
 
   initTabListeners();
+
+  /* Admin check: DEBUG タブの表示切り替え */
+  setDebugVisible(false); // hide until checked
+  checkAdminStatus().then((result) => {
+    isAdmin = result;
+    setDebugVisible(isAdmin);
+  });
 
   /* 初回表示: オンボーディング状態に応じて適切なタブから開始する */
   const step = GameStore.state.onboardingStep;

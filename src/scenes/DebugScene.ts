@@ -125,10 +125,24 @@ export class DebugScene extends Phaser.Scene {
   }
 
   private setSeed(): void {
-    this.openNumberInput('SEED', String(GameStore.state.seed), (n) => {
-      GameStore.setState({ seed: n });
-      GameStore.save();
-      this.seedText.setText(String(n));
+    this.openNumberInput('Grant SEED', '100', async (amount) => {
+      if (amount <= 0) return;
+      try {
+        const res = await fetch('/api/admin/grant-seed-session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          GameStore.setState({ seed: data.newSeed });
+          GameStore.save();
+          this.seedText.setText(String(data.newSeed));
+        }
+      } catch {
+        // silently fail
+      }
     });
   }
 
