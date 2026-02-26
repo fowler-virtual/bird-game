@@ -5,11 +5,11 @@
 
 import { GameStore } from './store/GameStore';
 import { requestAccounts, hasWallet, setJustConnectingFlag, ensureSepolia } from './wallet';
-import { showGameShell, hideGameShell, setSyncStatusGet } from './domShell';
+import { showGameShell, hideGameShell, setSyncStatusGet, getSyncStatusGet } from './domShell';
 import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
 import { getGameState, putGameState } from './gameStateApi';
-import { signInForClaim } from './claimApi';
+import { signInForClaim, getSessionToken } from './claimApi';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -133,11 +133,19 @@ function onConnectClick(): void {
       GameStore.setWalletConnected(true, result.address, { skipLoadState: true });
       // 接続直後に SIWE を実行し、ウォレットが2回目（署名）を開くようにする
       await new Promise((r) => setTimeout(r, 100));
+      const diag: string[] = [`addr: ${result.address.slice(0, 8)}...`];
       const auth = await signInForClaim(result.address);
+      diag.push(`SIWE: ${auth.ok ? 'OK' : 'FAIL ' + (auth as { error?: string }).error}`);
+      diag.push(`token: ${getSessionToken() ? 'stored' : 'missing'}`);
       if (!auth.ok) {
         console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
       }
       await postConnectWithTimeout();
+      // Show diagnostic on mobile (will be removed once issue is resolved)
+      const syncStatus = getSyncStatusGet();
+      diag.push(`sync: ${syncStatus}`);
+      diag.push(`seed: ${GameStore.state.seed}, loft: ${GameStore.state.loftLevel}, birds: ${GameStore.state.birdsOwned?.length ?? 0}`);
+      alert('[Debug Sync]\n' + diag.join('\n'));
       resetButton(btn);
     })
     .catch((err) => {
