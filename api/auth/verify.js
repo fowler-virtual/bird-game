@@ -4,7 +4,7 @@
  */
 import { setCorsHeaders } from "../_lib/cors.js";
 import { consumeNonce } from "../_lib/siweNonceStore.js";
-import { setSessionCookie } from "../_lib/sessionCookie.js";
+import { setSessionCookie, createSessionToken } from "../_lib/sessionCookie.js";
 import { SiweMessage } from "siwe";
 
 export default async function handler(req, res) {
@@ -36,7 +36,9 @@ export default async function handler(req, res) {
     if (!setSessionCookie(res, address)) {
       return res.status(500).json({ ok: false, error: "Session not configured." });
     }
-    return res.status(200).json({ ok: true });
+    // Return token in body as fallback for WebViews that don't store cookies
+    const token = createSessionToken(address);
+    return res.status(200).json({ ok: true, token });
   } catch (e) {
     const msg = e?.message || String(e);
     return res.status(400).json({ ok: false, error: msg || "Verify failed." });

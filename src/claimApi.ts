@@ -13,6 +13,26 @@ export function getClaimApiBase(): string | null {
 
 const credentials: RequestCredentials = "include";
 
+/** Bearer token stored in localStorage as fallback for WebViews that don't handle cookies */
+const SESSION_TOKEN_KEY = "bird-game-session-token";
+
+export function getSessionToken(): string | null {
+  try {
+    return localStorage.getItem(SESSION_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setSessionToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(SESSION_TOKEN_KEY, token);
+    else localStorage.removeItem(SESSION_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export type ClaimSignature = {
   amountWei: string;
   nonce: string;
@@ -34,6 +54,15 @@ export type AuthVerifyResult = { ok: true } | { ok: false; error: string };
 function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const base = getClaimApiBase();
   if (!base) throw new Error("Claim API not configured (VITE_CLAIM_API_URL).");
+  // Attach Bearer token for WebViews that don't send cookies
+  const token = getSessionToken();
+  if (token) {
+    const headers = new Headers(init.headers);
+    if (!headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    init = { ...init, headers };
+  }
   return fetch(`${base}${path}`, { ...init, credentials });
 }
 
@@ -155,11 +184,18 @@ export async function postAuthVerify(message: string, signature: string, address
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, signature, address }),
     });
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string | { message?: string } };
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; token?: string; error?: string | { message?: string } };
     const errStr = (v: unknown): string =>
       typeof v === "string" ? v : v && typeof v === "object" && "message" in v ? String((v as { message: unknown }).message) : JSON.stringify(v);
     if (!res.ok) return { ok: false, error: errStr(data.error) || `Failed (${res.status})` };
-    return data.ok ? { ok: true } : { ok: false, error: errStr(data.error) || "Verify failed." };
+    if (data.ok) {
+      // Store token for WebView environments that don't handle cookies
+      if (data.token) {
+        setSessionToken(data.token);
+      }
+      return { ok: true };
+    }
+    return { ok: false, error: errStr(data.error) || "Verify failed." };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

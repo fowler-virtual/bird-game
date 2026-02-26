@@ -6,6 +6,7 @@
 
 import { GameStore, getStateKeyForAddress, parseGameStateFromRaw } from './store/GameStore';
 import type { GameState } from './types';
+import { getSessionToken } from './claimApi';
 
 const credentials: RequestCredentials = 'include';
 
@@ -35,7 +36,10 @@ export async function getGameState(): Promise<GetGameStateResult> {
   const base = getClaimApiBase();
   if (base) {
     try {
-      const res = await fetch(`${base}/game-state`, { method: 'GET', credentials });
+      const headers: Record<string, string> = {};
+      const token = getSessionToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${base}/game-state`, { method: 'GET', credentials, headers });
       const data = (await res.json().catch(() => ({}))) as { state?: GameState; version?: number; code?: string };
       if (res.status === 401) return { ok: false, error: 'Not logged in.' };
       if (res.ok && data.state != null && typeof data.version === 'number') {
@@ -73,10 +77,13 @@ export async function putGameState(state: GameState, version: number): Promise<P
   const base = getClaimApiBase();
   if (base) {
     try {
+      const putHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      const putToken = getSessionToken();
+      if (putToken) putHeaders['Authorization'] = `Bearer ${putToken}`;
       const res = await fetch(`${base}/game-state`, {
         method: 'PUT',
         credentials,
-        headers: { 'Content-Type': 'application/json' },
+        headers: putHeaders,
         body: JSON.stringify({ state, version }),
       });
       const data = (await res.json().catch(() => ({}))) as { version?: number; code?: string };

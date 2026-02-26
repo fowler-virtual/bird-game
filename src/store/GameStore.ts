@@ -249,6 +249,8 @@ export const GameStore = {
     localStorage.setItem(WALLET_KEY, JSON.stringify({ connected: false, address: null }));
     this.walletConnected = false;
     this.walletAddress = null;
+    // Clear session token (Bearer fallback) on disconnect
+    try { localStorage.removeItem('bird-game-session-token'); } catch (_) {}
   },
 
   save(): void {
