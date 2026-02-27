@@ -43,25 +43,15 @@ async function autoConnect(): Promise<void> {
     }
   }
 
-  // 4. ローカル state とサーバー state を比較して統合
-  //    旧コード（SIWE なし）ではサーバー同期が 401 で失敗し、サーバー側 seed が古いままの場合がある。
-  //    ローカル seed の方が多ければサーバーへ push し、サーバーの方が多ければローカルに適用する。
-  const { flushServerSync } = await import('./gameStateApi');
+  // 4. サーバー state を採用（サーバーが権威: ガチャ・Loft はサーバー API 経由）
   if (gs.ok) {
-    const localSeed = GameStore.state.seed;
-    const serverSeed = gs.state?.seed ?? 0;
-    if (serverSeed > localSeed) {
-      // サーバーの方が新しい → サーバー state を適用
-      GameStore.setStateFromServer(gs.state, gs.version);
-      GameStore.save();
-    } else {
-      // ローカルの方が同等以上 → バージョンを合わせてローカル state をサーバーに送る
-      GameStore.serverStateVersion = gs.version;
-      await flushServerSync();
-    }
+    GameStore.setStateFromServer(gs.state, gs.version);
+    GameStore.save();
   } else {
-    // サーバー取得失敗 → ローカルのまま続行、セッションがあれば同期を試みる
-    await flushServerSync();
+    // サーバー取得失敗 → ローカルのまま続行
+    console.warn('[AutoConnect] Using localStorage state (server unavailable).');
+    GameStore.loadedFromStorage = true;
+    GameStore.serverStateVersion = 0;
   }
 
   // 5. ゲーム画面表示
