@@ -22,6 +22,25 @@ export const DECK_UNLOCK_COSTS = [
   { bird: 5000 },  // 10→12
 ];
 
+const INITIAL_UNLOCKED_DECK_COUNT = 2;
+
+/** 新規ユーザー用の初期 GameState を生成する */
+export function createDefaultGameState() {
+  return {
+    gems: { sapphire: 0, ruby: 0, emerald: 0, diamond: 0 },
+    birdsOwned: [],
+    deckSlots: Array.from({ length: 12 }, () => null),
+    lastAccrualAt: new Date().toISOString(),
+    unlockedDeckCount: INITIAL_UNLOCKED_DECK_COUNT,
+    loftLevel: 1,
+    inventory: {},
+    hasFreeGacha: true,
+    hasShownPlacementHint: false,
+    seed: 0,
+    onboardingStep: "need_gacha",
+  };
+}
+
 export function getNextUnlockCost(unlockedDeckCount) {
   if (unlockedDeckCount >= 12) return null;
   const index = (unlockedDeckCount - 2) / 2;

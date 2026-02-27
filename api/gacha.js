@@ -7,7 +7,7 @@
 import { getSessionAddress } from "./_lib/sessionCookie.js";
 import { setCorsHeaders } from "./_lib/cors.js";
 import { getAsync, setAsync, validateState } from "./_lib/gameStateStore.js";
-import { pullGachaServer } from "./_lib/gachaLogic.js";
+import { pullGachaServer, createDefaultGameState } from "./_lib/gachaLogic.js";
 
 const MAX_CAS_RETRIES = 2;
 
@@ -30,9 +30,21 @@ export default async function handler(req, res) {
 
   // CAS loop: read → generate birds → write
   for (let attempt = 0; attempt <= MAX_CAS_RETRIES; attempt++) {
-    const data = await getAsync(sessionAddress);
+    let data = await getAsync(sessionAddress);
+    let currentVersion;
+
     if (!data) {
-      return res.status(404).json({ error: "No game state found. Play the game first." });
+      // 新規ユーザー: 初期 state を作成して保存
+      const initialState = createDefaultGameState();
+      const initResult = await setAsync(sessionAddress, initialState, 1);
+      if (!initResult.ok) {
+        // 別リクエストが先に作成した → リトライで読み直す
+        continue;
+      }
+      data = { state: initialState, version: initResult.version };
+      currentVersion = initResult.version;
+    } else {
+      currentVersion = data.version;
     }
 
     const { newState, birds } = pullGachaServer(data.state, count);
@@ -42,7 +54,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: "Generated invalid state: " + validation.error });
     }
 
-    const result = await setAsync(sessionAddress, newState, data.version);
+    const result = await setAsync(sessionAddress, newState, currentVersion);
     if (result.ok) {
       return res.status(200).json({
         ok: true,
