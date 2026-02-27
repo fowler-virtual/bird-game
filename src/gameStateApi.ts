@@ -132,6 +132,12 @@ export function setOnSyncSuccessCallback(cb: (() => void) | null): void {
   onSyncSuccessCallback = cb;
 }
 
+/** サーバー state を採用したときに呼ぶコールバック（UI リフレッシュ用）。 */
+let onStateAdoptedCallback: (() => void) | null = null;
+export function setOnStateAdoptedCallback(cb: (() => void) | null): void {
+  onStateAdoptedCallback = cb;
+}
+
 /**
  * 現在の GameStore の状態をサーバーへ送る（デバウンス付き）。
  * VITE_CLAIM_API_URL が未設定のときは何もしない。GameStore.save() の後に呼ぶ想定。
@@ -155,6 +161,7 @@ export function scheduleServerSync(): void {
         console.info('[gameStateApi] 409: adopting server state v' + gs.version);
         GameStore.setStateFromServer(gs.state, gs.version);
         GameStore.save();
+        if (onStateAdoptedCallback) onStateAdoptedCallback();
       }
       return;
     }
@@ -184,6 +191,7 @@ export async function flushServerSync(): Promise<boolean> {
       console.info('[gameStateApi] flush 409: adopting server state v' + gs.version);
       GameStore.setStateFromServer(gs.state, gs.version);
       GameStore.save();
+      if (onStateAdoptedCallback) onStateAdoptedCallback();
     }
     return false;
   }
@@ -216,6 +224,7 @@ export function initVisibilitySync(): void {
         console.info('[gameStateApi] visibility sync: adopting server state v' + gs.version + ' (local was v' + localVersion + ')');
         GameStore.setStateFromServer(gs.state, gs.version);
         GameStore.save();
+        if (onStateAdoptedCallback) onStateAdoptedCallback();
       }
     } catch (e) {
       // 取得失敗は無視（次の save cycle に任せる）

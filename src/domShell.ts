@@ -4,12 +4,24 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { flushServerSync, getGameState, setOnSyncSuccessCallback, initVisibilitySync, initBeforeUnloadSync, postGacha } from './gameStateApi';
+import { flushServerSync, getGameState, setOnSyncSuccessCallback, setOnStateAdoptedCallback, initVisibilitySync, initBeforeUnloadSync, postGacha } from './gameStateApi';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase, getClaimable } from './claimApi';
 
 setOnSyncSuccessCallback(() => refreshClaimable());
+setOnStateAdoptedCallback(() => {
+  // サーバー state 採用後に UI を再描画（visibility sync / 409 採用時）
+  const state = GameStore.state;
+  updateShellStatus({
+    seed: state.seed,
+    seedPerDay: getProductionRatePerHour(state) * 24,
+    loftLevel: state.loftLevel,
+    networkSharePercent: getNetworkSharePercent(state),
+  });
+  refreshClaimable();
+  refreshNetworkStats();
+});
 initVisibilitySync();
 initBeforeUnloadSync();
 
