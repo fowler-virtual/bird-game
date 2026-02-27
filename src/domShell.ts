@@ -4,13 +4,15 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { scheduleServerSync, flushServerSync, getGameState, setOnSyncSuccessCallback } from './gameStateApi';
+import { scheduleServerSync, flushServerSync, getGameState, setOnSyncSuccessCallback, initVisibilitySync, initBeforeUnloadSync } from './gameStateApi';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase, getClaimable } from './claimApi';
 
 GameStore.setOnSaveCallback(scheduleServerSync);
 setOnSyncSuccessCallback(() => refreshClaimable());
+initVisibilitySync();
+initBeforeUnloadSync();
 
 import { executeClaim, getContractSignerAddress, getPoolBalanceAndAllowance, hasClaimContract } from './rewardClaim';
 import { requestAccounts, revokeWalletPermissions } from './wallet';

@@ -7,6 +7,53 @@ const KV_PREFIX = "game-state:";
 const SNAPSHOT_PREFIX = "game-state-snapshots:";
 const MAX_SNAPSHOTS = 10;
 
+/* ── Lua CAS script ── */
+// Atomically check version and write. Returns 1 on success, 0 on conflict.
+const LUA_CAS = `
+local current = redis.call('GET', KEYS[1])
+local expected = tonumber(ARGV[1])
+if current == false then
+  if expected == 0 then
+    redis.call('SET', KEYS[1], ARGV[2])
+    return 1
+  end
+  return 0
+end
+local row = cjson.decode(current)
+if row['version'] == expected then
+  redis.call('SET', KEYS[1], ARGV[2])
+  return 1
+end
+return 0
+`;
+
+/**
+ * Atomic CAS write via Lua EVAL.
+ * @returns {Promise<boolean>} true if write succeeded, false if version conflict
+ */
+async function casWrite(backend, storeKey, expectedVersion, newRowJSON) {
+  if (!backend) return null; // signal caller to use in-memory path
+  try {
+    if (backend.type === "redis") {
+      const result = await backend.client.eval(LUA_CAS, {
+        keys: [storeKey],
+        arguments: [String(expectedVersion), newRowJSON],
+      });
+      return Number(result) === 1;
+    }
+    // vercel-kv (Upstash REST)
+    const result = await backend.client.eval(
+      LUA_CAS,
+      [storeKey],
+      [String(expectedVersion), newRowJSON],
+    );
+    return Number(result) === 1;
+  } catch (e) {
+    console.error("[gameStateStore] casWrite EVAL failed:", e);
+    return false;
+  }
+}
+
 /* ── In-memory fallback for snapshots ── */
 const memorySnapshotStore = new Map();
 
@@ -91,46 +138,48 @@ export async function getAsync(address) {
 }
 
 /**
- * Set state (async). Uses Redis if configured, else in-memory.
+ * Set state (async). Uses Lua CAS for atomic version check + write on Redis.
  */
 export async function setAsync(address, state, clientVersion) {
   const backend = await getRedisBackend();
   const k = key(address);
   const storeKey = `${KV_PREFIX}${k}`;
+
+  // Read current state (for snapshot + early version check)
   const currentData = await getAsync(address);
   const current = currentData ? currentData.version : 0;
   const allowed = current === clientVersion || (current === 0 && clientVersion === 1);
   if (!allowed) return { ok: false, reason: "STALE" };
+
   // Save snapshot before overwriting
   if (currentData) {
     await saveSnapshot(address, currentData, "setAsync");
   }
+
   const nextVersion = current === 0 ? 1 : current + 1;
   const row = {
     version: nextVersion,
     state,
     updatedAt: new Date().toISOString(),
   };
+
   if (backend) {
-    try {
-      if (backend.type === "redis") {
-        await backend.client.set(storeKey, JSON.stringify(row));
-      } else {
-        await backend.client.set(storeKey, row);
-      }
-      return { ok: true, version: nextVersion };
-    } catch (e) {
-      console.error("[gameStateStore] set failed:", e);
-      return { ok: false, reason: "STALE" };
-    }
+    // Atomic CAS via Lua — prevents TOCTOU race between concurrent writers
+    const rowJSON = JSON.stringify(row);
+    const ok = await casWrite(backend, storeKey, current, rowJSON);
+    if (!ok) return { ok: false, reason: "STALE" };
+    return { ok: true, version: nextVersion };
   }
+
+  // In-memory (Node.js single-threaded — safe without Lua)
   memoryStore.set(k, row);
   return { ok: true, version: nextVersion };
 }
 
 /**
- * Force-update state: read current, apply mutator, write back bypassing version check.
+ * Force-update state: read current, apply mutator, CAS write.
  * For server-internal use only (e.g. post-claim seed reduction).
+ * Retries up to 3 times on CAS conflict (read → mutate → CAS loop).
  * @param {string} address
  * @param {(state: object) => object} mutator - receives current state, returns new state
  * @returns {{ ok: boolean, version?: number }}
@@ -139,32 +188,41 @@ export async function forceUpdateState(address, mutator) {
   const backend = await getRedisBackend();
   const k = key(address);
   const storeKey = `${KV_PREFIX}${k}`;
-  const currentData = await getAsync(address);
-  if (!currentData) return { ok: false, reason: "NOT_FOUND" };
-  // Save snapshot before overwriting
-  await saveSnapshot(address, currentData, "forceUpdateState");
-  const newState = mutator(currentData.state);
-  const nextVersion = currentData.version + 1;
-  const row = {
-    version: nextVersion,
-    state: newState,
-    updatedAt: new Date().toISOString(),
-  };
-  if (backend) {
-    try {
-      if (backend.type === "redis") {
-        await backend.client.set(storeKey, JSON.stringify(row));
-      } else {
-        await backend.client.set(storeKey, row);
-      }
-      return { ok: true, version: nextVersion };
-    } catch (e) {
-      console.error("[gameStateStore] forceUpdateState failed:", e);
-      return { ok: false, reason: "WRITE_ERROR" };
+  const MAX_RETRIES = 3;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const currentData = await getAsync(address);
+    if (!currentData) return { ok: false, reason: "NOT_FOUND" };
+
+    // Save snapshot before overwriting (only on first attempt to avoid duplicates)
+    if (attempt === 0) {
+      await saveSnapshot(address, currentData, "forceUpdateState");
     }
+
+    const newState = mutator(currentData.state);
+    const nextVersion = currentData.version + 1;
+    const row = {
+      version: nextVersion,
+      state: newState,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (backend) {
+      const rowJSON = JSON.stringify(row);
+      const ok = await casWrite(backend, storeKey, currentData.version, rowJSON);
+      if (ok) return { ok: true, version: nextVersion };
+      // CAS failed — retry with fresh read
+      console.warn(`[gameStateStore] forceUpdateState CAS conflict, attempt ${attempt + 1}/${MAX_RETRIES}`);
+      continue;
+    }
+
+    // In-memory (Node.js single-threaded — safe without CAS)
+    memoryStore.set(k, row);
+    return { ok: true, version: nextVersion };
   }
-  memoryStore.set(k, row);
-  return { ok: true, version: nextVersion };
+
+  console.error("[gameStateStore] forceUpdateState failed after max retries");
+  return { ok: false, reason: "CAS_CONFLICT" };
 }
 
 /* ── Snapshot helpers ── */

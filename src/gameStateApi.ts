@@ -135,6 +135,7 @@ export function setOnSyncSuccessCallback(cb: (() => void) | null): void {
 /**
  * 現在の GameStore の状態をサーバーへ送る（デバウンス付き）。
  * VITE_CLAIM_API_URL が未設定のときは何もしない。GameStore.save() の後に呼ぶ想定。
+ * 409 時はサーバー state を採用し、ローカル state で再送しない。
  */
 export function scheduleServerSync(): void {
   if (!getClaimApiBase()) return;
@@ -142,28 +143,30 @@ export function scheduleServerSync(): void {
   serverSyncTimer = setTimeout(async () => {
     serverSyncTimer = null;
     const v = GameStore.serverStateVersion || 1;
-    let result = await putGameState(GameStore.state, v);
-    // version 競合時は最新 version を取得して 1 回リトライ
-    if (!result.ok && result.error === 'Stale data.') {
-      const gs = await getGameState();
-      if (gs.ok && typeof gs.version === 'number') {
-        GameStore.serverStateVersion = gs.version;
-        result = await putGameState(GameStore.state, gs.version);
-      }
-    }
+    const result = await putGameState(GameStore.state, v);
     if (result.ok) {
       if (onSyncSuccessCallback) onSyncSuccessCallback();
-    } else if (result.error !== 'Stale data.') {
-      console.warn('[gameStateApi] server sync failed:', result.error);
+      return;
     }
+    // 409 (STALE) → サーバー state を正とし、ローカルを上書き（他デバイスの変更を尊重）
+    if (result.error === 'Stale data.') {
+      const gs = await getGameState();
+      if (gs.ok) {
+        console.info('[gameStateApi] 409: adopting server state v' + gs.version);
+        GameStore.setStateFromServer(gs.state, gs.version);
+        GameStore.save();
+      }
+      return;
+    }
+    console.warn('[gameStateApi] server sync failed:', result.error);
   }, SERVER_SAVE_DEBOUNCE_MS);
 }
 
 /**
  * 未送信の状態をただちにサーバーへ送る（デバウンスタイマーをキャンセルして即実行）。
  * Claim 前に呼ぶと、デバッグで増やした SEED がサーバーに反映されてから claimable が計算される。
- * 409 (Stale data) のときはサーバー最新 version を取得して 1 回だけ再 PUT する。
- * @returns サーバーへの保存が成功したか（API 未設定の場合は true）
+ * 409 (Stale data) のときはサーバー state を採用し、ローカル state で再送しない。
+ * @returns サーバーへの保存が成功した場合 true。409 でサーバー state を採用した場合 false。
  */
 export async function flushServerSync(): Promise<boolean> {
   if (serverSyncTimer != null) {
@@ -172,17 +175,85 @@ export async function flushServerSync(): Promise<boolean> {
   }
   if (!getClaimApiBase()) return true;
   const v = GameStore.serverStateVersion || 1;
-  let result = await putGameState(GameStore.state, v);
+  const result = await putGameState(GameStore.state, v);
   if (result.ok) return true;
+  // 409 → サーバー state を正とし、ローカルを上書き（他デバイスの変更を尊重）
   if (result.error === 'Stale data.') {
-    const getResult = await getGameState();
-    if (getResult.ok && typeof getResult.version === 'number') {
-      result = await putGameState(GameStore.state, getResult.version);
-      if (result.ok) return true;
+    const gs = await getGameState();
+    if (gs.ok) {
+      console.info('[gameStateApi] flush 409: adopting server state v' + gs.version);
+      GameStore.setStateFromServer(gs.state, gs.version);
+      GameStore.save();
     }
+    return false;
   }
-  if (result.error !== 'Stale data.') {
-    console.warn('[gameStateApi] flush server sync failed:', result.error);
-  }
+  console.warn('[gameStateApi] flush server sync failed:', result.error);
   return false;
+}
+
+/* ── Tab visibility sync ── */
+
+const VISIBILITY_DEBOUNCE_MS = 5000;
+let lastVisibilitySync = 0;
+
+/**
+ * タブが hidden → visible に戻ったとき、サーバー最新 state を取得してローカルを更新する。
+ * 5 秒以内の連続復帰はデバウンスで無視。
+ */
+export function initVisibilitySync(): void {
+  if (typeof document === 'undefined') return;
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    if (!getClaimApiBase()) return;
+    const now = Date.now();
+    if (now - lastVisibilitySync < VISIBILITY_DEBOUNCE_MS) return;
+    lastVisibilitySync = now;
+    try {
+      const gs = await getGameState();
+      if (!gs.ok) return;
+      const localVersion = GameStore.serverStateVersion || 0;
+      if (gs.version > localVersion) {
+        console.info('[gameStateApi] visibility sync: adopting server state v' + gs.version + ' (local was v' + localVersion + ')');
+        GameStore.setStateFromServer(gs.state, gs.version);
+        GameStore.save();
+      }
+    } catch (e) {
+      // 取得失敗は無視（次の save cycle に任せる）
+    }
+  });
+}
+
+/* ── beforeunload sync ── */
+
+/**
+ * タブを閉じる直前に保留中の sync を best-effort で flush する。
+ */
+export function initBeforeUnloadSync(): void {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('beforeunload', () => {
+    if (serverSyncTimer != null) {
+      clearTimeout(serverSyncTimer);
+      serverSyncTimer = null;
+      // Best-effort: fetch keepalive でタブ閉鎖後も送信を継続
+      const v = GameStore.serverStateVersion || 1;
+      const base = getClaimApiBase();
+      if (base) {
+        const token = getSessionToken();
+        const body = JSON.stringify({ state: GameStore.state, version: v });
+        try {
+          const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (token) fetchHeaders['Authorization'] = `Bearer ${token}`;
+          fetch(`${base}/game-state`, {
+            method: 'PUT',
+            headers: fetchHeaders,
+            body,
+            keepalive: true,
+            credentials,
+          });
+        } catch {
+          // best-effort — ignore errors
+        }
+      }
+    }
+  });
 }
