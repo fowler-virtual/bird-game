@@ -8,6 +8,7 @@ import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRate
 import { COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, updateTabsForOnboarding, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
 import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getLoftLevelRaw } from '../networkState';
+import { scheduleServerSync, flushServerSync, postLoftUpgrade } from '../gameStateApi';
 import * as deckView from './deckView';
 
 const LOFT_GRID_ID = 'loft-grid';
@@ -104,6 +105,7 @@ function refreshShellStatus(): void {
 function tickAccrual(): void {
   GameStore.applyAccrual();
   GameStore.save();
+  scheduleServerSync();
   refreshShellStatus();
 }
 
@@ -155,23 +157,23 @@ async function confirmUpgrade(): Promise<void> {
     amount: cost.bird,
     context: 'loft',
     onSuccess: async () => {
-      if (!GameStore.unlockNextDeckSlot()) {
-        void showMessageModal({ message: 'Unlock failed.', success: false });
+      // Server-authoritative upgrade
+      const upgradeResult = await postLoftUpgrade();
+      if (!upgradeResult.ok) {
+        void showMessageModal({ message: upgradeResult.error ?? 'Upgrade failed.', success: false });
         return;
       }
+      GameStore.setStateFromServer(upgradeResult.state, upgradeResult.version);
       GameStore.save();
       refresh();
       deckView.refresh();
       const levelResult = await setLoftLevel(GameStore.state.loftLevel, { waitForConfirmation: false });
       if (!levelResult.ok) {
-        GameStore.rollbackLastLoftUpgrade();
-        GameStore.save();
-        refresh();
-        deckView.refresh();
+        // サーバー上は upgrade 済み（burn 済みなので正当）。on-chain 記録のみ失敗。
         void showMessageModal({
-          title: 'Upgrade cancelled',
-          message: 'The level update was not sent to the chain. Your Loft is unchanged. The $SEED for the upgrade was already spent; you can try the upgrade again.',
-          success: false,
+          title: 'Upgrade complete',
+          message: '2 slots unlocked. On-chain level recording failed — it will be retried on next Save.',
+          success: true,
         });
         return;
       }
@@ -327,6 +329,8 @@ export function init(): void {
       const result = await updatePowerOnChain(power);
       if (result.ok) {
         clearSuppressChainDisplay();
+        // Save 成功後にデッキ state をサーバーへ即時同期
+        flushServerSync().catch(() => {});
         // モーダルを先に表示し、ステータス更新はバックグラウンドで実行
         refreshNetworkStateFromChain().then(() => {
           refreshShellStatus();

@@ -10,39 +10,6 @@ import { getSessionToken } from './claimApi';
 
 const credentials: RequestCredentials = 'include';
 
-/**
- * 409 時のマージ: サーバー state をベースに、ローカルにしかない鳥（ガチャ結果等）を追加。
- * seed 等のサーバー権威フィールドはサーバー値を維持する。
- * ローカルに新しい鳥がなければサーバー state をそのまま返す。
- */
-function mergeLocalIntoServer(local: GameState, server: GameState): { merged: GameState; hadLocalBirds: boolean } {
-  const serverBirdIds = new Set(server.birdsOwned.map(b => b.id));
-  const localOnlyBirds = local.birdsOwned.filter(b => !serverBirdIds.has(b.id));
-
-  if (localOnlyBirds.length === 0) {
-    return { merged: server, hadLocalBirds: false };
-  }
-
-  // サーバー state + ローカルにしかない鳥を追加
-  const mergedBirds = [...server.birdsOwned, ...localOnlyBirds];
-  const mergedBirdIds = new Set(mergedBirds.map(b => b.id));
-
-  // deckSlots: ローカルの配置意図を尊重（ただし存在しない鳥IDは除外）
-  const mergedDeck = local.deckSlots.map(id =>
-    id && mergedBirdIds.has(id) ? id : null
-  );
-
-  const merged: GameState = {
-    ...server,                    // seed, loftLevel 等はサーバー値
-    birdsOwned: mergedBirds,
-    deckSlots: mergedDeck,
-    inventory: {},                // rebuildInventory で再構築される
-    hasFreeGacha: local.hasFreeGacha,  // ガチャで消費された可能性
-  };
-
-  return { merged, hadLocalBirds: true };
-}
-
 function getClaimApiBase(): string | null {
   const url = import.meta.env.VITE_CLAIM_API_URL;
   if (typeof url === 'string' && url.length > 0) return url.replace(/\/$/, '');
@@ -181,23 +148,13 @@ export function scheduleServerSync(): void {
       if (onSyncSuccessCallback) onSyncSuccessCallback();
       return;
     }
-    // 409 (STALE) → サーバー state とローカルをマージ（ガチャ鳥の保全 + claim seed 尊重）
+    // 409 (STALE) → サーバー state をそのまま採用（ガチャ・Loft はサーバー API 経由なのでマージ不要）
     if (result.error === 'Stale data.') {
       const gs = await getGameState();
       if (gs.ok) {
-        const { merged, hadLocalBirds } = mergeLocalIntoServer(GameStore.state, gs.state);
-        if (hadLocalBirds) {
-          // ローカルにしかない鳥がある → マージして再PUT
-          console.info('[gameStateApi] 409: merging ' + (merged.birdsOwned.length - gs.state.birdsOwned.length) + ' local birds into server state v' + gs.version);
-          GameStore.setStateFromServer(merged, gs.version);
-          GameStore.save();
-          // マージ後の state を再送（save → scheduleServerSync で自動）
-        } else {
-          // ローカルに追加鳥なし → サーバー state をそのまま採用
-          console.info('[gameStateApi] 409: adopting server state v' + gs.version);
-          GameStore.setStateFromServer(gs.state, gs.version);
-          GameStore.save();
-        }
+        console.info('[gameStateApi] 409: adopting server state v' + gs.version);
+        GameStore.setStateFromServer(gs.state, gs.version);
+        GameStore.save();
       }
       return;
     }
@@ -220,23 +177,13 @@ export async function flushServerSync(): Promise<boolean> {
   const v = GameStore.serverStateVersion || 1;
   const result = await putGameState(GameStore.state, v);
   if (result.ok) return true;
-  // 409 → サーバー state とローカルをマージ（ガチャ鳥の保全 + claim seed 尊重）
+  // 409 → サーバー state をそのまま採用（ガチャ・Loft はサーバー API 経由なのでマージ不要）
   if (result.error === 'Stale data.') {
     const gs = await getGameState();
     if (gs.ok) {
-      const { merged, hadLocalBirds } = mergeLocalIntoServer(GameStore.state, gs.state);
-      if (hadLocalBirds) {
-        console.info('[gameStateApi] flush 409: merging ' + (merged.birdsOwned.length - gs.state.birdsOwned.length) + ' local birds into server state v' + gs.version);
-        GameStore.setStateFromServer(merged, gs.version);
-        GameStore.save();
-        // マージ後の state を即時再送
-        const retryResult = await putGameState(GameStore.state, gs.version);
-        if (retryResult.ok) return true;
-      } else {
-        console.info('[gameStateApi] flush 409: adopting server state v' + gs.version);
-        GameStore.setStateFromServer(gs.state, gs.version);
-        GameStore.save();
-      }
+      console.info('[gameStateApi] flush 409: adopting server state v' + gs.version);
+      GameStore.setStateFromServer(gs.state, gs.version);
+      GameStore.save();
     }
     return false;
   }
@@ -309,4 +256,79 @@ export function initBeforeUnloadSync(): void {
       }
     }
   });
+}
+
+/* ── Server-authoritative API calls ── */
+
+import type { Bird } from './types';
+
+export type PostGachaResult =
+  | { ok: true; birds: Bird[]; state: GameState; version: number }
+  | { ok: false; error: string };
+
+/**
+ * POST /api/gacha — server-side gacha pull.
+ * Returns generated birds and updated state.
+ */
+export async function postGacha(count: 1 | 10): Promise<PostGachaResult> {
+  const base = getClaimApiBase();
+  if (!base) return { ok: false, error: 'API not configured.' };
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = getSessionToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${base}/gacha`, {
+      method: 'POST',
+      credentials,
+      headers,
+      body: JSON.stringify({ count }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      return {
+        ok: true,
+        birds: data.birds as Bird[],
+        state: data.state as GameState,
+        version: data.version as number,
+      };
+    }
+    return { ok: false, error: data.error ?? `Gacha failed (${res.status})` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+export type PostLoftUpgradeResult =
+  | { ok: true; state: GameState; version: number; newLoftLevel: number }
+  | { ok: false; error: string };
+
+/**
+ * POST /api/loft-upgrade — server-side loft upgrade.
+ * Returns updated state and new loft level.
+ */
+export async function postLoftUpgrade(): Promise<PostLoftUpgradeResult> {
+  const base = getClaimApiBase();
+  if (!base) return { ok: false, error: 'API not configured.' };
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = getSessionToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${base}/loft-upgrade`, {
+      method: 'POST',
+      credentials,
+      headers,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.ok) {
+      return {
+        ok: true,
+        state: data.state as GameState,
+        version: data.version as number,
+        newLoftLevel: data.newLoftLevel as number,
+      };
+    }
+    return { ok: false, error: data.error ?? `Loft upgrade failed (${res.status})` };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }

@@ -4,12 +4,11 @@
  */
 
 import { GameStore, GACHA_COST } from './store/GameStore';
-import { scheduleServerSync, flushServerSync, getGameState, setOnSyncSuccessCallback, initVisibilitySync, initBeforeUnloadSync } from './gameStateApi';
+import { flushServerSync, getGameState, setOnSyncSuccessCallback, initVisibilitySync, initBeforeUnloadSync, postGacha } from './gameStateApi';
 import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase, getClaimable } from './claimApi';
 
-GameStore.setOnSaveCallback(scheduleServerSync);
 setOnSyncSuccessCallback(() => refreshClaimable());
 initVisibilitySync();
 initBeforeUnloadSync();
@@ -1199,21 +1198,10 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         void showMessageModal({ title: 'Adoption failed', message: msg, success: false });
       },
       onSuccess: async () => {
-        // hasFreeGacha はオンチェーン記録成功後に設定する（失敗時のロールバックで矛盾しないように）
-        const wasFreeGacha = count === 1 && isFirstAdoptionFree() && !GameStore.state.hasFreeGacha;
-
-        // オンチェーンにレアリティ記録を書く（ユーザー承認が必要）。
-        // 拒否されたらガチャ失敗とする（鳥を付与しない）。
-        // RPC の一時エラーはリトライし、それでもダメならスキップして鳥は付与する。
-        const isTransientRpcError = (err: string) =>
-          /too many errors|retrying in|RPC endpoint|UNKNOWN_ERROR|-32002|coalesce|network error|ECONNREFUSED|ETIMEDOUT/i.test(err);
-
-        // pullGacha をまだ呼ばない段階でレアリティ配分は不明なので、
-        // まず仮に count 分の Common として送信し、実際の結果で差分を後で補正する方法もあるが、
-        // ここではまず pullGacha を実行し、失敗時はロールバックする方式を取る。
-        gachaLog('calling pullGacha', { count });
-        const result = GameStore.pullGacha(count);
-        gachaLog('pullGacha result', { ok: result.ok, error: result.error, birdsCount: result.birds?.length });
+        // Server-authoritative gacha
+        gachaLog('calling postGacha', { count });
+        const result = await postGacha(count);
+        gachaLog('postGacha result', { ok: result.ok, error: 'error' in result ? result.error : undefined, birdsCount: result.ok ? result.birds?.length : 0 });
 
         if (!area) return;
         clearGachaAreaMessage();
@@ -1222,7 +1210,11 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
           return;
         }
 
-        // オンチェーン記録
+        // サーバーの state をローカルに反映
+        GameStore.setStateFromServer(result.state, result.version);
+        GameStore.save();
+
+        // オンチェーン記録 (best-effort)
         const rarityCounts = [0, 0, 0, 0, 0];
         for (const bird of result.birds) {
           const idx = RARITY_COLUMN_ORDER.indexOf(bird.rarity);
@@ -1231,6 +1223,8 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         let addRarityTx: { wait: () => Promise<unknown> } | undefined;
         if (rarityCounts.some((c) => c > 0) && hasNetworkStateContract()) {
           showProcessingModal('Recording adoption on-chain… Please approve the transaction.');
+          const isTransientRpcError = (err: string) =>
+            /too many errors|retrying in|RPC endpoint|UNKNOWN_ERROR|-32002|coalesce|network error|ECONNREFUSED|ETIMEDOUT/i.test(err);
           let addResult = await addRarityCountsOnChain(rarityCounts, { waitForConfirmation: false });
           const maxRetries = 2;
           for (let r = 0; r < maxRetries && !addResult.ok && isTransientRpcError(addResult.error ?? ''); r++) {
@@ -1240,31 +1234,15 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
           }
           hideProcessingModal();
           if (!addResult.ok) {
-            if (cost === 0) {
-              // 無料ガチャ: オンチェーン記録が必須（burn がないため、これが唯一のゲート）
-              gachaLog('on-chain recording failed for free gacha, rolling back', addResult.error);
-              GameStore.rollbackGacha(result.birds);
-              setGachaAreaMessage('Adoption cancelled. Please try again.');
-              return;
-            }
-            // 有料ガチャ: burn 済みなのでベストエフォート（鳥は付与する）
+            // サーバーが権威なので rollback 不要。on-chain 記録は best-effort。
             gachaLog('addRarityCountsOnChain failed (non-blocking)', addResult.error);
           }
           if (addResult.ok && addResult.tx) addRarityTx = addResult.tx;
         }
 
-        // オンチェーン記録成功（またはスキップ）後に hasFreeGacha を設定
-        if (wasFreeGacha) {
-          GameStore.setState({ hasFreeGacha: true });
-          GameStore.save();
-        }
-
         clearInsufficientBalanceMessage();
         // burn 後の残高更新（有料ガチャのみ）
         if (cost > 0) await refreshSeedTokenFromChain();
-
-        // ガチャ結果を即時サーバー同期（デバウンスを待たず確実に反映）
-        await flushServerSync();
 
         const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
         game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
