@@ -1263,6 +1263,9 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         // burn 後の残高更新（有料ガチャのみ）
         if (cost > 0) await refreshSeedTokenFromChain();
 
+        // ガチャ結果を即時サーバー同期（デバウンスを待たず確実に反映）
+        await flushServerSync();
+
         const game = (window as unknown as { __phaserGame?: { scene?: { get?: (k: string) => { events?: { emit?: (e: string) => void } } } } }).__phaserGame;
         game?.scene?.get?.('GameScene')?.events?.emit?.('refresh');
 
