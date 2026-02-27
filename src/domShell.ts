@@ -305,11 +305,12 @@ export function updateTabsForOnboarding(): void {
   const step = GameStore.state.onboardingStep;
   const lockFarming = step === 'need_gacha' || step === 'need_place' || step === 'need_save';
   const lockExceptDeck = step === 'need_place' || step === 'need_save';
+  const lockDuringGacha = step === 'need_gacha';
   const tabs = [
     { id: 'farming', lock: lockFarming },
-    { id: 'adopt', lock: step === 'need_gacha' || lockExceptDeck },
-    { id: 'deck', lock: false },
-    { id: 'network', lock: lockExceptDeck },
+    { id: 'adopt', lock: lockDuringGacha || lockExceptDeck },
+    { id: 'deck', lock: lockDuringGacha },
+    { id: 'network', lock: lockDuringGacha || lockExceptDeck },
     { id: 'debug', lock: false },
   ];
   tabs.forEach(({ id, lock }) => {
