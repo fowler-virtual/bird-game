@@ -442,8 +442,15 @@ export const GameStore = {
   },
 
   applyAccrual(now?: Date): number {
-    const { state: nextState, delta } = applyAccrualPure(this.state, now);
-    this.state = nextState;
+    // savedDeckSlots で accrual を計算（未保存のデッキ編集は farming レートに影響しない）
+    const savedDeck = this.savedDeckSlots ?? this.state.deckSlots;
+    const accrualState = { ...this.state, deckSlots: savedDeck };
+    const { state: nextState, delta } = applyAccrualPure(accrualState, now);
+    this.state = {
+      ...this.state,
+      seed: nextState.seed,
+      lastAccrualAt: nextState.lastAccrualAt,
+    };
     return delta;
   },
 
