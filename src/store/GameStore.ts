@@ -172,6 +172,8 @@ export const GameStore = {
   loadedFromStorage: false,
   /** サーバから取得した状態のバージョン（未取得時は 0） */
   serverStateVersion: 0 as number,
+  /** Save/サーバー同期済みのデッキ配置。未保存のデッキ編集は accrual に影響しない。 */
+  savedDeckSlots: null as DeckSlots | null,
 
   load(): void {
     try {
@@ -201,6 +203,7 @@ export const GameStore = {
       this.seedToken = parseSeedToken(rawToken);
       this.rebuildInventory();
       this.normalizeOnboardingStep();
+      this.savedDeckSlots = [...this.state.deckSlots];
       this.loadedFromStorage = true;
     } catch (e) {
       console.error('[Bird Game] loadStateForCurrentWallet failed:', e);
@@ -220,9 +223,15 @@ export const GameStore = {
   setStateFromServer(serverState: GameState, version: number): void {
     this.state = { ...serverState };
     this.serverStateVersion = version;
+    this.savedDeckSlots = [...serverState.deckSlots];
     this.rebuildInventory();
     this.normalizeOnboardingStep();
     this.loadedFromStorage = true;
+  },
+
+  /** Save 成功後に現在のデッキ配置を「確定済み」として記録する */
+  commitDeckSlots(): void {
+    this.savedDeckSlots = [...this.state.deckSlots];
   },
 
   /** localStorage に現在のウォレット状態を書き込む（Disconnect 時も確実に反映） */

@@ -4,7 +4,7 @@
  */
 
 import { GameStore } from '../store/GameStore';
-import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL } from '../types';
+import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, applyAccrualPure } from '../types';
 import { COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, updateTabsForOnboarding, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
 import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getLoftLevelRaw } from '../networkState';
@@ -103,7 +103,15 @@ function refreshShellStatus(): void {
 }
 
 function tickAccrual(): void {
-  GameStore.applyAccrual();
+  // accrual はサーバー確定済みのデッキで計算（未保存のデッキ編集は farming レートに影響しない）
+  const savedDeck = GameStore.savedDeckSlots ?? GameStore.state.deckSlots;
+  const accrualState = { ...GameStore.state, deckSlots: savedDeck };
+  const { state: nextState } = applyAccrualPure(accrualState);
+  GameStore.state = {
+    ...GameStore.state,
+    seed: nextState.seed,
+    lastAccrualAt: nextState.lastAccrualAt,
+  };
   GameStore.save();
   scheduleServerSync();
   refreshShellStatus();
@@ -329,7 +337,8 @@ export function init(): void {
       const result = await updatePowerOnChain(power);
       if (result.ok) {
         clearSuppressChainDisplay();
-        // Save 成功後にデッキ state をサーバーへ即時同期
+        // Save 成功: デッキ確定 → サーバーへ即時同期
+        GameStore.commitDeckSlots();
         flushServerSync().catch(() => {});
         // モーダルを先に表示し、ステータス更新はバックグラウンドで実行
         refreshNetworkStateFromChain().then(() => {

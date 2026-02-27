@@ -149,7 +149,12 @@ export function scheduleServerSync(): void {
   serverSyncTimer = setTimeout(async () => {
     serverSyncTimer = null;
     const v = GameStore.serverStateVersion || 1;
-    const result = await putGameState(GameStore.state, v);
+    // 未保存のデッキ編集をサーバーに push しない（確定済みデッキで送信）
+    const savedDeck = GameStore.savedDeckSlots;
+    const syncState = savedDeck
+      ? { ...GameStore.state, deckSlots: savedDeck }
+      : GameStore.state;
+    const result = await putGameState(syncState, v);
     if (result.ok) {
       if (onSyncSuccessCallback) onSyncSuccessCallback();
       return;
@@ -248,7 +253,12 @@ export function initBeforeUnloadSync(): void {
       const base = getClaimApiBase();
       if (base) {
         const token = getSessionToken();
-        const body = JSON.stringify({ state: GameStore.state, version: v });
+        // 未保存のデッキ編集をサーバーに push しない（確定済みデッキで送信）
+        const savedDeck = GameStore.savedDeckSlots;
+        const syncState = savedDeck
+          ? { ...GameStore.state, deckSlots: savedDeck }
+          : GameStore.state;
+        const body = JSON.stringify({ state: syncState, version: v });
         try {
           const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
           if (token) fetchHeaders['Authorization'] = `Bearer ${token}`;
