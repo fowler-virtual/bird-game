@@ -234,6 +234,13 @@ export const GameStore = {
     this.savedDeckSlots = [...this.state.deckSlots];
   },
 
+  /** 未保存のデッキ編集を破棄し、savedDeckSlots の状態に戻す */
+  revertDeckToSaved(): void {
+    if (!this.savedDeckSlots) return;
+    this.state = { ...this.state, deckSlots: [...this.savedDeckSlots] };
+    this.rebuildInventory();
+  },
+
   /** localStorage に現在のウォレット状態を書き込む（Disconnect 時も確実に反映） */
   persistWallet(): void {
     localStorage.setItem(

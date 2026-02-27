@@ -244,6 +244,11 @@ export function switchToTab(tabId: string): void {
 
   if (lastTabId === 'farming' && tabId !== 'farming') farmingView.stop();
   if (lastTabId === 'adopt' && tabId !== 'adopt') clearGachaResultsArea();
+  if (lastTabId === 'deck' && tabId !== 'deck') {
+    // 未保存のデッキ編集を破棄（Farming 等で確定済みデッキを表示するため）
+    GameStore.revertDeckToSaved();
+    GameStore.save();
+  }
   lastTabId = tabId;
 
   if (tabId === 'debug') refreshDebugPane();
