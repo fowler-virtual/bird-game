@@ -17,7 +17,7 @@
 |----|------|------|
 | 1 | **docs/README.md** | ドキュメント格納先の方針と一覧。 |
 | 2 | **docs/REQUIREMENTS.md** | 要件集約。対応環境・最優先目標・画面構成・$SEED 等の制約。 |
-| 3 | **docs/TODO.md** | 残タスク・将来実装候補。最優先は Git 版＋スマホメタマスクの parity。**Claim 根本原因の項目あり。** |
+| 3 | **docs/TODO.md** | 残タスク・将来実装候補。① (PC/スマホ parity) 達成済み。次はゲームバランス・エコノミクス。 |
 | 4 | **docs/RESPONSIBILITY_AND_RULES.md** | 製造責任と運用ルール。返答前に必ず参照する。 |
 
 **Claim 不具合に着手する場合**: 上記に加え **`docs/CLAIM_DEBUG_HANDOFF.md`** を読み、「6. 次のセッションで行うこと」から進める。
