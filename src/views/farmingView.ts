@@ -178,7 +178,7 @@ async function confirmUpgrade(): Promise<void> {
     context: 'loft',
     onSuccess: async () => {
       // Server-authoritative upgrade
-      const upgradeResult = await postLoftUpgrade(expectedLevel);
+      const upgradeResult = await postLoftUpgrade();
       if (!upgradeResult.ok) {
         void showMessageModal({ message: upgradeResult.error ?? 'Upgrade failed.', success: false });
         return;

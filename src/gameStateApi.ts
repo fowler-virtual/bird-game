@@ -324,9 +324,8 @@ export type PostLoftUpgradeResult =
 /**
  * POST /api/loft-upgrade — server-side loft upgrade.
  * Returns updated state and new loft level.
- * @param expectedLevel クライアントが認識しているレベル。サーバーと不一致なら reject。
  */
-export async function postLoftUpgrade(expectedLevel?: number): Promise<PostLoftUpgradeResult> {
+export async function postLoftUpgrade(): Promise<PostLoftUpgradeResult> {
   const base = getClaimApiBase();
   if (!base) return { ok: false, error: 'API not configured.' };
   try {
@@ -337,7 +336,6 @@ export async function postLoftUpgrade(expectedLevel?: number): Promise<PostLoftU
       method: 'POST',
       credentials,
       headers,
-      body: JSON.stringify({ expectedLevel }),
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.ok) {
