@@ -8,7 +8,7 @@ import { getActiveSlotIndices, getBirdById, getNextUnlockCost, getProductionRate
 import { COMMON_FRAME_SRCS } from '../assets';
 import { updateShellStatus, showMessageModal, runConfirmBurnThenSuccess, refreshNetworkStats, clearSuppressChainDisplay, showPlaceSuccessModal, updateDeckOnboardingPlaceOverlay, updateTabsForOnboarding, showSaveConfirmModal, showProcessingModal, hideProcessingModal } from '../domShell';
 import { hasNetworkStateContract, updatePowerOnChain, refreshNetworkStateFromChain, setLoftLevel, getLoftLevelRaw } from '../networkState';
-import { scheduleServerSync, flushServerSync, postLoftUpgrade } from '../gameStateApi';
+import { scheduleServerSync, flushServerSync, postLoftUpgrade, getGameState } from '../gameStateApi';
 import * as deckView from './deckView';
 
 const LOFT_GRID_ID = 'loft-grid';
@@ -153,6 +153,23 @@ async function confirmUpgrade(): Promise<void> {
     closeUpgradeModal();
     return;
   }
+
+  // Burn 前にサーバーの最新 state を確認（他タブでアップグレード済みの場合を防ぐ）
+  const expectedLevel = GameStore.state.loftLevel;
+  const gs = await getGameState();
+  if (gs.ok && gs.state.loftLevel !== expectedLevel) {
+    closeUpgradeModal();
+    GameStore.setStateFromServer(gs.state, gs.version);
+    GameStore.save();
+    refresh();
+    deckView.refresh();
+    void showMessageModal({
+      message: `Loft has already been upgraded on another tab (now Level ${gs.state.loftLevel}). Display has been refreshed.`,
+      success: false,
+    });
+    return;
+  }
+
   closeUpgradeModal();
 
   const result = await runConfirmBurnThenSuccess({
@@ -161,7 +178,7 @@ async function confirmUpgrade(): Promise<void> {
     context: 'loft',
     onSuccess: async () => {
       // Server-authoritative upgrade
-      const upgradeResult = await postLoftUpgrade();
+      const upgradeResult = await postLoftUpgrade(expectedLevel);
       if (!upgradeResult.ok) {
         void showMessageModal({ message: upgradeResult.error ?? 'Upgrade failed.', success: false });
         return;

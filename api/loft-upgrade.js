@@ -23,6 +23,10 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: "Not logged in." });
   }
 
+  // expectedLevel: クライアントが認識しているレベル。不一致なら reject（レースコンディション防止）
+  const body = typeof req.body === "object" && req.body ? req.body : {};
+  const expectedLevel = typeof body.expectedLevel === "number" ? body.expectedLevel : null;
+
   // CAS loop: read → check cost → update → write
   for (let attempt = 0; attempt <= MAX_CAS_RETRIES; attempt++) {
     const data = await getAsync(sessionAddress);
@@ -31,6 +35,17 @@ export default async function handler(req, res) {
     }
 
     const state = data.state;
+
+    // expectedLevel が指定されていて、サーバーの現在レベルと異なれば reject
+    if (expectedLevel != null && state.loftLevel !== expectedLevel) {
+      return res.status(409).json({
+        ok: false,
+        error: `Loft level has changed (expected ${expectedLevel}, current ${state.loftLevel}). Please refresh and try again.`,
+        code: "LEVEL_MISMATCH",
+        currentLevel: state.loftLevel,
+      });
+    }
+
     const cost = getNextUnlockCost(state.unlockedDeckCount);
     if (!cost) {
       return res.status(400).json({ error: "Already at max level." });
