@@ -13,11 +13,13 @@ setOnSyncSuccessCallback(() => refreshClaimable());
 setOnStateAdoptedCallback(() => {
   // サーバー state 採用後に UI を再描画（visibility sync / 409 採用時）
   const state = GameStore.state;
+  const savedDeck = GameStore.savedDeckSlots ?? state.deckSlots;
+  const rateState = { ...state, deckSlots: savedDeck };
   updateShellStatus({
     seed: state.seed,
-    seedPerDay: getProductionRatePerHour(state) * 24,
+    seedPerDay: getProductionRatePerHour(rateState) * 24,
     loftLevel: state.loftLevel,
-    networkSharePercent: getNetworkSharePercent(state),
+    networkSharePercent: getNetworkSharePercent(rateState),
   });
   refreshClaimable();
   refreshNetworkStats();
@@ -1276,11 +1278,13 @@ async function runGachaFromDom(count: 1 | 10): Promise<void> {
         // ステータス・NETWORKタブの更新はバックグラウンドで実行
         const applyStatus = () => {
           const state = GameStore.state;
+          const savedDeck = GameStore.savedDeckSlots ?? state.deckSlots;
+          const rateState = { ...state, deckSlots: savedDeck };
           updateShellStatus({
             seed: state.seed,
-            seedPerDay: getProductionRatePerHour(state) * 24,
+            seedPerDay: getProductionRatePerHour(rateState) * 24,
             loftLevel: state.loftLevel,
-            networkSharePercent: getNetworkSharePercent(state),
+            networkSharePercent: getNetworkSharePercent(rateState),
           });
           refreshNetworkStats();
         };
@@ -1811,11 +1815,13 @@ function initTabListeners(): void {
         GameStore.save();
 
         const postState = GameStore.state;
+        const postSavedDeck = GameStore.savedDeckSlots ?? postState.deckSlots;
+        const postRateState = { ...postState, deckSlots: postSavedDeck };
         updateShellStatus({
           seed: postState.seed,
-          seedPerDay: getProductionRatePerHour(postState) * 24,
+          seedPerDay: getProductionRatePerHour(postRateState) * 24,
           loftLevel: postState.loftLevel,
-          networkSharePercent: getNetworkSharePercent(postState),
+          networkSharePercent: getNetworkSharePercent(postRateState),
         });
         await refreshSeedTokenFromChain();
         updateAdoptPane();
@@ -1890,11 +1896,13 @@ export function showGameShell(): void {
   });
   refreshNetworkStateFromChain().then(() => {
     const state = GameStore.state;
+    const savedDeck = GameStore.savedDeckSlots ?? state.deckSlots;
+    const rateState = { ...state, deckSlots: savedDeck };
     updateShellStatus({
       seed: state.seed,
-      seedPerDay: getProductionRatePerHour(state) * 24,
+      seedPerDay: getProductionRatePerHour(rateState) * 24,
       loftLevel: state.loftLevel,
-      networkSharePercent: getNetworkSharePercent(state),
+      networkSharePercent: getNetworkSharePercent(rateState),
     });
     refreshNetworkStats();
     // 初回のオンチェーン書き込みはデッキ編成後の SAVE 時のみ（Connect 直後に MetaMask を出さない）

@@ -93,12 +93,15 @@ export function updateUpgradeButton(): void {
 
 function refreshShellStatus(): void {
   const state = GameStore.state;
-  const ratePerDay = getProductionRatePerHour(state) * 24;
+  // savedDeckSlots ベースで表示（applyAccrual と一致させる）
+  const savedDeck = GameStore.savedDeckSlots ?? state.deckSlots;
+  const rateState = { ...state, deckSlots: savedDeck };
+  const ratePerDay = getProductionRatePerHour(rateState) * 24;
   updateShellStatus({
     seed: state.seed,
     seedPerDay: ratePerDay,
     loftLevel: state.loftLevel,
-    networkSharePercent: getNetworkSharePercent(state),
+    networkSharePercent: getNetworkSharePercent(rateState),
   });
 }
 
