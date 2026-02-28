@@ -24,6 +24,7 @@
 |----------|------|
 | **`REQUIREMENTS.md`** | **要件の集約**。対応環境・最優先目標・製品仕様要約・DoR・監査合意方針・参照一覧。 |
 | `TODO.md` | 残タスク・将来実装候補。① (PC/スマホ parity) 達成済み。次はゲームバランス・エコノミクス。 |
+| `GAME_STATE_SYNC_SPEC.md` | ゲーム状態同期の設計仕様。サーバー権威化・CAS・409 処理。 |
 | `DEV_FLOW_AND_MOBILE.md` | 開発フローとスマホ・メタマスク検証の方針。エミュレーターでの確認手順など。 |
 | `DEV_PROCESSES.md` | 開発プロセス・進め方のメモ。 |
 | `ASSET_SPEC.md` | アセット仕様。 |
@@ -31,14 +32,20 @@
 | `SPRITE_LAYOUT_OPTIONS.md` | スプライトレイアウトの選択肢。 |
 | `CLAIM_SAFETY_DESIGN.md` | Claim まわりの安全設計・変更一覧。 |
 | `CLAIM_AND_DEPLOY.md` | Claim とデプロイに関するメモ。 |
-| **`CLAIM_DEBUG_HANDOFF.md`** | **Claim 不具合の引き継ぎ**。現状・試したこと・根本原因候補・次のセッションで行うこと。Claim 調査時に必ず参照。 |
+| `CLAIM_DEBUG_HANDOFF.md` | Claim 不具合の引き継ぎ（解決済み）。根本原因・対応内容の記録。 |
+| `CLAIM_ROOT_CAUSE_AND_E2E.md` | Claim 根本原因の詳細分析と E2E テスト設計。 |
 | `TOKEN_LOCAL.md` | トークン（ローカル）まわりの仕様・メモ。 |
+| `VERCEL_ENV_VARS.md` | Vercel 環境変数の一覧と説明。 |
+| `VERCEL_VITE_CLAIM_API_URL.md` | VITE_CLAIM_API_URL の設定手順。 |
 
-### 検証・監査
+### 検証・監査・E2E
 
 | ファイル | 概要 |
 |----------|------|
+| `PATH_TO_VERIFICATION.md` | ① チェックリスト（達成済み）とブロッカー対応の記録。 |
 | `VERIFICATION.md` | 修正後の検証チェックリスト。 |
+| `E2E_DEFINITION.md` | E2E テストの定義。シナリオ 1〜9 のカバー範囲。 |
+| `GAME_STATE_SYNC_VERIFICATION.md` | ゲーム状態同期の検証結果。 |
 | `AUDIT_RESPONSE.md` | 監査への対応。 |
 | `AUDIT_REMEDIATION_PLAN.md` | 監査の是正計画。 |
 | `FOR_REVIEWERS.md` | レビュアー向け説明。 |
@@ -51,20 +58,25 @@
 |----------|------|
 | `SESSION_START.md` | **新セッションで最初に読む一覧**。ルール・格納先・ToDoを読み込む順序とパス。 |
 | `RESPONSIBILITY_AND_RULES.md` | **製造責任と運用ルール**。返答前に必ず参照する。端末移行後も clone で同じ内容が使える。 |
-| **`HANDOVER.md`** | **開発引き継ぎ用**。プロジェクト格納場所・現在の動作環境（ローカル／Vercel／GitHub Pages）・動かし方・環境変数・把握しておくべき事象・最初に読むドキュメント。 |
+| **`HANDOVER.md`** | **開発引き継ぎ用**。プロジェクト格納場所・動作環境・動かし方・環境変数・アーキテクチャ概要。 |
 
 ### 進捗・確認・メモ
 
 | ファイル | 概要 |
 |----------|------|
 | `CONFIRMATION_2025-02-17.md` | 不具合3件（リセット・初回ガチャ暗転・初回デッキ SAVE）の確認結果。 |
-| `FIX_RESET_BUTTON_2025-02-17.md` | リセットボタン仕様（切断→タイトル、ゲームデータ初期化→次回接続で初回ガチャ）と実装の記録。 |
+| `FIX_RESET_BUTTON_2025-02-17.md` | リセットボタン仕様と実装の記録。 |
+| `CHANGE_CONFIRMATION_PENDING_NONCE.md` | pending nonce 対応の変更記録。 |
+| `SIWE_PENDING_NONCE_SERVER.md` | SIWE pending nonce のサーバー側対応。 |
+| `GAME_STATE_SYNC_EVALUATION.md` | ゲーム状態同期の評価・比較メモ。 |
+| `CHECK_GAME_STATE_ON_MOBILE.md` | モバイルでのゲーム状態確認手順。 |
 
 ### その他
 
 | ファイル | 概要 |
 |----------|------|
-| **`HANDOFF_TO_CLAUDE.md`** | **Claude への開発引き継ぎ用プロンプト**。プロジェクトルート・ドキュメント・ソースの格納先を明記した文面。そのままコピーして Claude に渡す。 |
+| **`HANDOFF_TO_CLAUDE.md`** | **Claude への開発引き継ぎ用プロンプト**。そのままコピーして Claude に渡す。 |
+| `PROJECT_STATE` | プロジェクト状態のスナップショット。 |
 | `GIT_IGNORE_UNTrack.md` | Git の ignore / 未追跡に関するメモ。 |
 | `why-hyperfarm-layout-works-vs-ours.md` | レイアウト比較のメモ。 |
 
