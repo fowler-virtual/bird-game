@@ -1185,7 +1185,7 @@
         padding: 6px 14px;
         font-size: 12px;
         font-weight: 500;
-        color: var(--text);
+        color: var(--text-muted);
         background: var(--bg-elevated);
         border: 1px solid var(--border);
         border-radius: var(--radius);
@@ -1199,14 +1199,14 @@
         padding: 0;
         font-size: 12px;
         font-weight: 500;
-        color: var(--text);
+        color: var(--text-muted);
         background: var(--bg-elevated);
         border: 1px solid var(--border);
         border-radius: var(--radius);
         cursor: pointer;
       }
       .debug-loft-btn:hover { background: var(--bg-hover); }
-      .debug-subtitle { margin: 0 0 8px; font-size: 1rem; }
+      .debug-subtitle { margin: 0 0 8px; font-size: 1rem; color: var(--text-muted); }
       .debug-note { margin: 0 0 12px; font-size: 0.85rem; color: var(--text-muted); max-width: 52ch; }
       .debug-section-reset { margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); }
       .debug-reset-btn {
@@ -1214,7 +1214,7 @@
         min-height: 44px;
         font-size: 14px;
         font-weight: 500;
-        color: var(--text);
+        color: var(--text-muted);
         background: var(--bg-elevated);
         border: 1px solid var(--border);
         border-radius: var(--radius);
@@ -1273,16 +1273,6 @@
         color: var(--text-muted);
       }
       .network-total strong { color: var(--text-muted); font-variant-numeric: tabular-nums; }
-      .network-demo-note {
-        margin-top: 16px;
-        font-size: 11px;
-        color: var(--text-muted);
-        opacity: 0.85;
-      }
-      .network-demo-note--error {
-        color: #f87171;
-      }
-
       /* ----- Gacha confirm modal ----- */
       .gacha-modal-backdrop {
         position: fixed;
@@ -1654,19 +1644,18 @@
         padding: 4px 10px;
         font-size: 11px;
         font-weight: 500;
-        color: var(--text);
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
+        color: #fff;
+        background: var(--accent);
+        border: none;
         border-radius: var(--radius);
         cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
+        transition: opacity 0.15s, transform 0.15s;
         user-select: none;
         -webkit-user-select: none;
-        caret-color: transparent;
       }
       .status-loft-upgrade-btn:hover:not(:disabled) {
-        background: var(--bg-card);
-        border-color: var(--text-muted);
+        opacity: 0.95;
+        transform: scale(1.02);
       }
       .status-loft-upgrade-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .status-loft-upgrade-btn:focus { outline: none; }
@@ -1684,19 +1673,18 @@
         padding: 4px 10px;
         font-size: 11px;
         font-weight: 500;
-        color: var(--text);
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
+        color: #fff;
+        background: var(--accent);
+        border: none;
         border-radius: var(--radius);
         cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
+        transition: opacity 0.15s, transform 0.15s;
         user-select: none;
         -webkit-user-select: none;
-        caret-color: transparent;
       }
       .status-claim-btn:hover:not(:disabled) {
-        background: var(--bg-card);
-        border-color: var(--text-muted);
+        opacity: 0.95;
+        transform: scale(1.02);
       }
       .status-claim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
       .status-claim-btn:focus { outline: none; }
@@ -1923,7 +1911,6 @@
                 </div>
                 <div class="network-total">Total companions adopted: <strong id="network-total-birds">—</strong></div>
               </section>
-              <p class="network-demo-note" id="network-demo-note">Demo data. Live stats when connected to network.</p>
             </div>
           </div>
           <div id="pane-debug" class="tab-pane">

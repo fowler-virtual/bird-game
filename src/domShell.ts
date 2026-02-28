@@ -1326,7 +1326,6 @@ export function refreshNetworkStats(): void {
   const levelList = document.getElementById('network-level-list');
   const distList = document.getElementById('network-dist-list');
   const totalEl = document.getElementById('network-total-birds');
-  const demoNote = document.getElementById('network-demo-note');
   const myShareEl = document.getElementById('network-my-share');
 
   const counts = getCachedLevelCounts();
@@ -1384,22 +1383,6 @@ export function refreshNetworkStats(): void {
   if (totalEl) {
     const totalBirds = getCachedRarityCounts().reduce((a, b) => a + b, 0);
     totalEl.textContent = String(totalBirds.toLocaleString());
-  }
-  if (demoNote) {
-    const err = getNetworkStateFetchError();
-    const totalBirds = getCachedRarityCounts().reduce((a, b) => a + b, 0);
-    if (err) {
-      demoNote.textContent = err;
-      demoNote.classList.add('network-demo-note--error');
-    } else {
-      const disclaimer = ' (表示は参考値です。公式の確定値ではありません。)';
-      demoNote.textContent = hasContract
-        ? (totalBirds === 0
-          ? 'On-chain data. Save your deck and pull gacha to update. Redeploy NetworkState (with getGlobalRarityCounts) to see rarity counts.'
-          : 'On-chain data. Refresh page to see latest from other users.') + disclaimer
-        : 'Connect wallet and deploy NetworkState to see live stats.';
-      demoNote.classList.remove('network-demo-note--error');
-    }
   }
 }
 
@@ -1961,7 +1944,6 @@ export function updateShellStatus(payload: {
   if (seedPerDayEl) seedPerDayEl.textContent = seedPerDayToShow.toFixed(2);
   if (networkEl) {
     networkEl.textContent = `${networkToShow.toFixed(5)}%`;
-    networkEl.title = '参考値。公式の確定値ではありません。';
   }
   if (loftEl) loftEl.textContent = String(payload.loftLevel);
   const networkErrorEl = document.getElementById('network-state-error');
