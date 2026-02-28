@@ -717,7 +717,7 @@
       .loft-save-btn {
         padding: 12px 32px;
         font-size: 16px;
-        font-weight: 500;
+        font-weight: 600;
         color: #fff;
         background: var(--accent);
         border: 1px solid transparent;
@@ -1185,13 +1185,14 @@
         padding: 6px 14px;
         font-size: 12px;
         font-weight: 500;
-        color: var(--text-muted);
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
+        color: #fff;
+        background: var(--accent);
+        border: none;
         border-radius: var(--radius);
         cursor: pointer;
+        transition: opacity 0.15s;
       }
-      .debug-set-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+      .debug-set-btn:hover { opacity: 0.9; }
       .debug-loft-btns { display: flex; gap: 8px; }
       .debug-loft-btn {
         width: 32px;
@@ -1199,13 +1200,14 @@
         padding: 0;
         font-size: 12px;
         font-weight: 500;
-        color: var(--text-muted);
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
+        color: #fff;
+        background: var(--accent);
+        border: none;
         border-radius: var(--radius);
         cursor: pointer;
+        transition: opacity 0.15s;
       }
-      .debug-loft-btn:hover { background: var(--bg-hover); }
+      .debug-loft-btn:hover { opacity: 0.9; }
       .debug-subtitle { margin: 0 0 8px; font-size: 1rem; color: var(--text-muted); }
       .debug-note { margin: 0 0 12px; font-size: 0.85rem; color: var(--text-muted); max-width: 52ch; }
       .debug-section-reset { margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); }
@@ -1214,14 +1216,14 @@
         min-height: 44px;
         font-size: 14px;
         font-weight: 500;
-        color: var(--text-muted);
-        background: var(--bg-elevated);
-        border: 1px solid var(--border);
+        color: #fff;
+        background: var(--accent);
+        border: none;
         border-radius: var(--radius);
         cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
+        transition: opacity 0.15s;
       }
-      .debug-reset-btn:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+      .debug-reset-btn:hover { opacity: 0.9; }
 
       /* ----- Network (flock stats) ----- */
       .network-pane-body { padding: 0; display: flex; flex-direction: column; gap: 24px; }
