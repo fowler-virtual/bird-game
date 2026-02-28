@@ -309,7 +309,7 @@
         margin: 0;
         font-size: 15px;
         font-weight: 500;
-        color: var(--text);
+        color: var(--text-muted);
         text-align: center;
       }
       .adopt-balance {
@@ -422,11 +422,6 @@
         border-radius: 2px;
         transition: width 0.3s ease;
       }
-      .adopt-stats {
-        font-size: 13px;
-        color: var(--text-muted);
-      }
-      .adopt-stats #adopt-total-count { font-weight: 600; color: var(--text); }
       .adopt-feedback {
         min-height: 0;
         font-size: 14px;
@@ -1246,7 +1241,7 @@
         margin: 0 0 14px 0;
         font-size: 15px;
         font-weight: 600;
-        color: var(--text);
+        color: var(--text-muted);
       }
       .network-stat-list { display: flex; flex-direction: column; gap: 12px; }
       .network-stat-row {
@@ -1255,7 +1250,7 @@
         align-items: center;
         gap: 10px 16px;
       }
-      .network-stat-label { font-size: 14px; font-weight: 500; color: var(--text); }
+      .network-stat-label { font-size: 14px; font-weight: 500; color: var(--text-muted); }
       .network-stat-count { font-size: 14px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
       .network-stat-bar-wrap {
         grid-column: 1 / -1;
@@ -1277,7 +1272,7 @@
         font-size: 13px;
         color: var(--text-muted);
       }
-      .network-total strong { color: var(--text); font-variant-numeric: tabular-nums; }
+      .network-total strong { color: var(--text-muted); font-variant-numeric: tabular-nums; }
       .network-demo-note {
         margin-top: 16px;
         font-size: 11px;
@@ -1882,9 +1877,6 @@
               <div class="adopt-rarity-card" id="adopt-rarity-card" aria-label="Possible rarities">
                 <h3 class="adopt-cta-title">Possible rarities</h3>
                 <div class="adopt-rarity-preview-list" id="adopt-rarity-preview-list"></div>
-              </div>
-              <div class="adopt-stats">
-                Total adopted: <span id="adopt-total-count">0</span>
               </div>
             </div>
           </div>
