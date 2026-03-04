@@ -107,16 +107,15 @@
         font-size: 14px;
         font-weight: 500;
         letter-spacing: 0.02em;
-        background: var(--bg-elevated);
-        color: var(--text);
-        border: 1px solid var(--border);
+        background: var(--accent);
+        color: #fff;
+        border: 1px solid var(--accent);
         border-radius: var(--radius);
         cursor: pointer;
-        transition: background 0.15s, border-color 0.15s;
+        transition: opacity 0.15s;
       }
       #connect-wallet-btn:hover {
-        background: var(--bg-card);
-        border-color: var(--text-muted);
+        opacity: 0.85;
       }
       #connect-wallet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
