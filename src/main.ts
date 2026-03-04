@@ -54,14 +54,58 @@ async function autoConnect(): Promise<void> {
     GameStore.serverStateVersion = 0;
   }
 
-  // 5. ゲーム画面表示
+  // 5. 参加費チェック（未払いならタイトル画面で支払いを待つ）
+  const { checkEntryFeePaid, payEntryFee } = await import('./entryFee');
+  const paid = await checkEntryFeePaid(address);
+  if (!paid) {
+    console.log('[AutoConnect] Entry fee not paid, showing fee payment UI');
+    // タイトル画面を参加費モードで表示
+    showTitleUI();
+    const connectBtn = document.getElementById('connect-wallet-btn') as HTMLButtonElement | null;
+    if (connectBtn) connectBtn.style.display = 'none';
+    const subtitle = document.querySelector<HTMLElement>('#title-ui .subtitle');
+    if (subtitle) subtitle.textContent = 'Pay entry fee to play';
+    const feeUI = document.getElementById('entry-fee-ui');
+    if (feeUI) feeUI.classList.add('visible');
+
+    // Pay ボタンで支払い完了を待つ
+    await new Promise<void>((resolve) => {
+      const payBtn = document.getElementById('pay-entry-fee-btn') as HTMLButtonElement | null;
+      const errorEl = document.getElementById('entry-fee-error') as HTMLElement | null;
+      if (!payBtn) { resolve(); return; }
+
+      const handler = async (): Promise<void> => {
+        payBtn.disabled = true;
+        payBtn.textContent = 'Paying...';
+        if (errorEl) errorEl.style.display = 'none';
+
+        const result = await payEntryFee();
+        if (result.ok) {
+          payBtn.removeEventListener('click', handler);
+          if (feeUI) feeUI.classList.remove('visible');
+          if (connectBtn) connectBtn.style.display = '';
+          resolve();
+        } else {
+          payBtn.disabled = false;
+          payBtn.textContent = 'Pay Entry Fee';
+          if (errorEl) {
+            errorEl.textContent = result.error;
+            errorEl.style.display = '';
+          }
+        }
+      };
+      payBtn.addEventListener('click', handler);
+    });
+  }
+
+  // 6. ゲーム画面表示
   document.getElementById('title-ui')?.classList.remove('visible');
   const { showGameShell, setSyncStatusGet } = await import('./domShell');
   setSyncStatusGet(gs.ok ? 'ok' : 'fail');
   showGameShell();
   createPhaserGame();
 
-  // 6. Sepolia ネットワーク確認（タイムアウト付き）
+  // 7. Sepolia ネットワーク確認（タイムアウト付き）
   const networkResult = await Promise.race([
     ensureSepolia(),
     new Promise<{ ok: false; error: string }>((resolve) =>

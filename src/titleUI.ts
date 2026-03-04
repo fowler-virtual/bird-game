@@ -10,6 +10,7 @@ import { createPhaserGame } from './phaserBoot';
 import { refreshSeedTokenFromChain } from './seedToken';
 import { getGameState, putGameState } from './gameStateApi';
 import { signInForClaim } from './claimApi';
+import { checkEntryFeePaid, payEntryFee } from './entryFee';
 
 const TITLE_UI_ID = 'title-ui';
 const CONNECT_BTN_ID = 'connect-wallet-btn';
@@ -27,6 +28,37 @@ function resetButton(btn: HTMLButtonElement | null): void {
     btn.disabled = false;
     btn.textContent = 'Connect Wallet';
   }
+}
+
+/**
+ * Pay Entry Fee ボタンのクリックを待ち、支払い成功まで resolve しない Promise を返す。
+ */
+function waitForEntryFeePayment(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const btn = document.getElementById('pay-entry-fee-btn') as HTMLButtonElement | null;
+    const errorEl = document.getElementById('entry-fee-error') as HTMLElement | null;
+    if (!btn) { resolve(); return; }
+
+    const handler = async (): Promise<void> => {
+      btn.disabled = true;
+      btn.textContent = 'Paying...';
+      if (errorEl) errorEl.style.display = 'none';
+
+      const result = await payEntryFee();
+      if (result.ok) {
+        btn.removeEventListener('click', handler);
+        resolve();
+      } else {
+        btn.disabled = false;
+        btn.textContent = 'Pay Entry Fee';
+        if (errorEl) {
+          errorEl.textContent = result.error;
+          errorEl.style.display = '';
+        }
+      }
+    };
+    btn.addEventListener('click', handler);
+  });
 }
 
 /** 接続成功後に GameScene へ遷移するフラグ（TitleScene.update で参照） */
@@ -80,6 +112,27 @@ function onConnectClick(): void {
       GameStore.serverStateVersion = 0;
     }
     setSyncStatusGet(gs.ok ? 'ok' : 'fail');
+
+    // --- 参加費チェック ---
+    const walletAddr = GameStore.walletAddress;
+    if (walletAddr) {
+      const paid = await checkEntryFeePaid(walletAddr);
+      if (!paid) {
+        // Connect ボタンを隠し、参加費 UI を表示して支払いを待つ
+        const connectBtn = document.getElementById(CONNECT_BTN_ID) as HTMLButtonElement | null;
+        if (connectBtn) connectBtn.style.display = 'none';
+        document.querySelector<HTMLElement>('#title-ui .subtitle')!.textContent = 'Pay entry fee to play';
+        const feeUI = document.getElementById('entry-fee-ui');
+        if (feeUI) feeUI.classList.add('visible');
+
+        await waitForEntryFeePayment();
+
+        // 支払い完了 → UI を戻す
+        if (feeUI) feeUI.classList.remove('visible');
+        if (connectBtn) connectBtn.style.display = '';
+      }
+    }
+
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
     showGameShell();
     createPhaserGame();

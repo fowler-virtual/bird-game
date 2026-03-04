@@ -117,6 +117,39 @@
       }
       #connect-wallet-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+      /* ========== Entry Fee UI ========== */
+      #entry-fee-ui {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+      #entry-fee-ui.visible { display: flex; }
+      .entry-fee-text {
+        font-size: 14px;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+      }
+      #pay-entry-fee-btn {
+        min-height: var(--touch-min);
+        padding: 0 28px;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        background: var(--accent);
+        color: #fff;
+        border: 1px solid var(--accent);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      #pay-entry-fee-btn:hover { opacity: 0.85; }
+      #pay-entry-fee-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+      .entry-fee-error {
+        font-size: 13px;
+        color: #ef4444;
+      }
+
       /* ========== Game shell ========== */
       #game-shell {
         display: none;
@@ -1761,6 +1794,11 @@
       <span class="title-text">Bird Game</span>
       <span class="subtitle">Connect your wallet to play</span>
       <button type="button" id="connect-wallet-btn">Connect Wallet</button>
+      <div id="entry-fee-ui">
+        <p class="entry-fee-text">Entry Fee: 0.001 ETH</p>
+        <button type="button" id="pay-entry-fee-btn">Pay Entry Fee</button>
+        <p id="entry-fee-error" class="entry-fee-error" style="display:none;"></p>
+      </div>
     </div>
 
     <div id="game-shell" aria-hidden="true">
