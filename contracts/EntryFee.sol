@@ -21,6 +21,12 @@ contract EntryFee is Ownable {
         emit Paid(msg.sender, msg.value);
     }
 
+    function grantPaid(address[] calldata players) external onlyOwner {
+        for (uint256 i = 0; i < players.length; i++) {
+            hasPaid[players[i]] = true;
+        }
+    }
+
     function setFee(uint256 _fee) external onlyOwner {
         emit FeeUpdated(fee, _fee);
         fee = _fee;

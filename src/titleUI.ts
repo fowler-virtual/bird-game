@@ -112,27 +112,6 @@ function onConnectClick(): void {
       GameStore.serverStateVersion = 0;
     }
     setSyncStatusGet(gs.ok ? 'ok' : 'fail');
-
-    // --- 参加費チェック ---
-    const walletAddr = GameStore.walletAddress;
-    if (walletAddr) {
-      const paid = await checkEntryFeePaid(walletAddr);
-      if (!paid) {
-        // Connect ボタンを隠し、参加費 UI を表示して支払いを待つ
-        const connectBtn = document.getElementById(CONNECT_BTN_ID) as HTMLButtonElement | null;
-        if (connectBtn) connectBtn.style.display = 'none';
-        document.querySelector<HTMLElement>('#title-ui .subtitle')!.textContent = 'Pay entry fee to play';
-        const feeUI = document.getElementById('entry-fee-ui');
-        if (feeUI) feeUI.classList.add('visible');
-
-        await waitForEntryFeePayment();
-
-        // 支払い完了 → UI を戻す
-        if (feeUI) feeUI.classList.remove('visible');
-        if (connectBtn) connectBtn.style.display = '';
-      }
-    }
-
     document.getElementById(TITLE_UI_ID)?.classList.remove('visible');
     showGameShell();
     createPhaserGame();
@@ -184,6 +163,22 @@ function onConnectClick(): void {
       if (!auth.ok) {
         console.warn('[TitleUI] SIWE failed (game-state will not sync):', auth.error);
       }
+
+      // --- 参加費チェック（タイムアウト対象外） ---
+      const paid = await checkEntryFeePaid(result.address);
+      if (!paid) {
+        if (btn) btn.style.display = 'none';
+        const subtitle = document.querySelector<HTMLElement>('#title-ui .subtitle');
+        if (subtitle) subtitle.textContent = 'Pay entry fee to play';
+        const feeUI = document.getElementById('entry-fee-ui');
+        if (feeUI) feeUI.classList.add('visible');
+
+        await waitForEntryFeePayment();
+
+        if (feeUI) feeUI.classList.remove('visible');
+        if (btn) btn.style.display = '';
+      }
+
       await postConnectWithTimeout();
       resetButton(btn);
     })
