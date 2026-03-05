@@ -5,7 +5,15 @@
  */
 
 // --- Constants (mirrored from src/types.ts) ---
-const BASE_RATE_PER_HOUR = 60;
+const GAME_START_MS = Date.UTC(2026, 2, 5); // 2026-03-05T00:00:00Z (month is 0-indexed)
+const HALVING_INTERVAL_DAYS = 14;
+const INITIAL_BASE_RATE = 120;
+
+function getBaseRateAt(ms) {
+  const daysSinceStart = Math.max(0, ms - GAME_START_MS) / 86400000;
+  const epoch = Math.floor(daysSinceStart / HALVING_INTERVAL_DAYS);
+  return INITIAL_BASE_RATE / Math.pow(2, epoch);
+}
 
 const RARITY_COEFFICIENTS = {
   Common: 1.0,
@@ -85,7 +93,7 @@ export function computeMaxSeedIncrease(prevState, newState, nowMs) {
 
   if (rarityCoeffSum <= 0) return FIXED_TOLERANCE;
 
-  const maxRate = BASE_RATE_PER_HOUR * rarityCoeffSum * MAX_SET_BONUS;
+  const maxRate = getBaseRateAt(nowMs) * rarityCoeffSum * MAX_SET_BONUS;
 
   // Elapsed time from last accrual, with clock drift tolerance
   let lastAccrualMs;

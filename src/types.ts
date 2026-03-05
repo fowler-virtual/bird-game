@@ -144,11 +144,11 @@ export { DECK_SLOT_IDS };
 
 /** Loft解放コスト（$SEED のみ。ウォレット接続後、残高不足なら処理エラーで返す）2→4→6→8→10→12枠の5回解放 */
 export const DECK_UNLOCK_COSTS: { bird: number }[] = [
-  { bird: 200 },   // 2→4
-  { bird: 500 },   // 4→6
-  { bird: 1200 },  // 6→8
-  { bird: 2500 },  // 8→10
-  { bird: 5000 },  // 10→12
+  { bird: 400 },   // 2→4
+  { bird: 1000 },  // 4→6
+  { bird: 2400 },  // 6→8
+  { bird: 5000 },  // 8→10
+  { bird: 10000 }, // 10→12
 ];
 
 export function getNextUnlockCost(unlockedDeckCount: number): { bird: number } | null {
@@ -181,7 +181,23 @@ export function getActiveSlotIndices(state: GameState): number[] {
   return Array.from({ length: count }, (_, i) => i);
 }
 
-const BASE_RATE_PER_HOUR = 60;
+export const GAME_START_DATE = new Date('2026-03-05T00:00:00Z');
+export const HALVING_INTERVAL_DAYS = 14;
+const INITIAL_BASE_RATE = 120;
+
+export function getEpochInfo(time: Date = new Date()): {
+  epoch: number;
+  daysRemaining: number;
+  baseRate: number;
+} {
+  const msSinceStart = Math.max(0, time.getTime() - GAME_START_DATE.getTime());
+  const daysSinceStart = msSinceStart / 86_400_000;
+  const epoch = Math.floor(daysSinceStart / HALVING_INTERVAL_DAYS) + 1;
+  const daysIntoEpoch = daysSinceStart % HALVING_INTERVAL_DAYS;
+  const daysRemaining = Math.ceil(HALVING_INTERVAL_DAYS - daysIntoEpoch);
+  const baseRate = INITIAL_BASE_RATE / Math.pow(2, epoch - 1);
+  return { epoch, daysRemaining, baseRate };
+}
 
 /** セットボーナス種別（UI発光用） */
 export type SetBonusKind = 'none' | 'species' | 'color' | 'speciesColor';
@@ -253,7 +269,7 @@ export function applyAccrualPure(
   }
 
   const { multiplier } = evaluateSetBonus(activeBirds);
-  const sumRate = BASE_RATE_PER_HOUR * rarityCoeffSum * multiplier;
+  const sumRate = getEpochInfo(now).baseRate * rarityCoeffSum * multiplier;
 
   const delta = Math.floor(elapsedHours * sumRate);
   if (delta <= 0) {
@@ -285,7 +301,7 @@ export function getProductionRatePerHour(state: GameState): number {
   }
   if (activeBirds.length === 0 || rarityCoeffSum <= 0) return 0;
   const { multiplier } = evaluateSetBonus(activeBirds);
-  return BASE_RATE_PER_HOUR * rarityCoeffSum * multiplier;
+  return getEpochInfo().baseRate * rarityCoeffSum * multiplier;
 }
 
 /** プロトタイプ用：ネットワーク全体の生産レート（仮）。本番ではAPIから取得 */

@@ -5,7 +5,7 @@
 
 import { GameStore, GACHA_COST } from './store/GameStore';
 import { flushServerSync, getGameState, setOnSyncSuccessCallback, setOnStateAdoptedCallback, initVisibilitySync, initBeforeUnloadSync, postGacha } from './gameStateApi';
-import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES } from './types';
+import { getProductionRatePerHour, getNetworkSharePercent, MAX_LOFT_LEVEL, RARITY_COLUMN_ORDER, RARITY_DROP_RATES, getEpochInfo } from './types';
 import { refreshSeedTokenFromChain, burnSeedForAction } from './seedToken';
 import { requestClaim, signInForClaim, postClaimConfirm, getClaimApiBase, getClaimable } from './claimApi';
 
@@ -1957,6 +1957,11 @@ export function updateShellStatus(payload: {
       networkErrorEl.style.display = 'none';
     }
   }
+  const { epoch, daysRemaining, baseRate } = getEpochInfo();
+  const epochEl = document.getElementById('dom-epoch');
+  if (epochEl) epochEl.textContent = `${epoch} (${daysRemaining}d left)`;
+  const rateEl = document.getElementById('dom-base-rate');
+  if (rateEl) rateEl.textContent = `${baseRate}/h`;
   farmingView.updateUpgradeButton();
   updateClaimButton();
 }

@@ -12,7 +12,7 @@ import {
   rollGachaRarity,
 } from '../types';
 
-export const GACHA_COST = 10;
+export const GACHA_COST = 50;
 
 const GAME_STATE_KEY = 'bird-game-state';
 /** 本番ではウォレット接続時にチェーンから $SEED トークン残高を取得。現状はゲーム内で消費・保存する値。 */

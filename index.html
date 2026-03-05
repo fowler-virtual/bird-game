@@ -1604,9 +1604,9 @@
         gap: 10px;
         width: 100%;
       }
-      /* 幅が十分あるときだけ4列。狭いときは2x2で見やすく */
+      /* 幅が十分あるときだけ3列。狭いときは2列で見やすく */
       @media (min-width: 640px) {
-        .status-cards { grid-template-columns: repeat(4, 1fr); }
+        .status-cards { grid-template-columns: repeat(3, 1fr); }
       }
       .status-cards-global {
         /* No sticky: status bar is outside scroll area, so position is always the same */
@@ -1858,6 +1858,14 @@
                   <button type="button" class="status-loft-upgrade-btn" id="status-loft-upgrade-btn">Upgrade</button>
                 </div>
               </div>
+              <div class="status-card">
+                <div class="status-card-label">Epoch</div>
+                <div class="status-card-value" id="dom-epoch">1</div>
+              </div>
+              <div class="status-card">
+                <div class="status-card-label">Base Rate</div>
+                <div class="status-card-value" id="dom-base-rate">120/h</div>
+              </div>
             </div>
             <p class="network-state-error" id="network-state-error" aria-live="polite" style="display: none;"></p>
           </div>
@@ -1876,7 +1884,7 @@
               <div class="adopt-balance">
                 Balance: <span id="adopt-balance-value">0</span> $SEED
               </div>
-              <p class="adopt-description">10 $SEED per adoption. Place birds on your Loft to earn SEED.</p>
+              <p class="adopt-description">50 $SEED per adoption. Place birds on your Loft to earn SEED.</p>
               <div class="adopt-cta-card" id="adopt-cta-card">
                 <h3 class="adopt-cta-title">Adoption</h3>
                 <div class="gacha-cta-wrap">

@@ -15,11 +15,11 @@ export const BIRD_SPECIES = ["bengalese", "parrot"];
 export const BIRD_COLORS = ["white", "brown", "blue", "gold"];
 
 export const DECK_UNLOCK_COSTS = [
-  { bird: 200 },   // 2→4
-  { bird: 500 },   // 4→6
-  { bird: 1200 },  // 6→8
-  { bird: 2500 },  // 8→10
-  { bird: 5000 },  // 10→12
+  { bird: 400 },   // 2→4
+  { bird: 1000 },  // 4→6
+  { bird: 2400 },  // 6→8
+  { bird: 5000 },  // 8→10
+  { bird: 10000 }, // 10→12
 ];
 
 const INITIAL_UNLOCKED_DECK_COUNT = 2;
