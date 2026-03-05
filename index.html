@@ -1639,7 +1639,53 @@
         line-height: 1.2;
         flex-shrink: 0;
         margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
+      .status-info-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 1px solid var(--text-muted);
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+        flex-shrink: 0;
+        position: relative;
+      }
+      .status-info-btn:hover { border-color: var(--accent); color: var(--accent); }
+      .status-info-tooltip {
+        display: none;
+        position: absolute;
+        bottom: calc(100% + 8px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-weight: 400;
+        color: var(--text);
+        text-transform: none;
+        letter-spacing: 0;
+        white-space: normal;
+        width: max-content;
+        max-width: 200px;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        pointer-events: none;
+        line-height: 1.4;
+      }
+      .status-info-btn.active .status-info-tooltip { display: block; }
       .status-card-value {
         font-size: 18px;
         font-weight: 600;
@@ -1834,7 +1880,9 @@
           <div class="status-panel" id="status-panel">
             <div class="status-cards status-cards-global">
               <div class="status-card status-card-seed">
-                <div class="status-card-label">Current SEED</div>
+                <div class="status-card-label">Current SEED
+                  <button type="button" class="status-info-btn" aria-label="Info">i<span class="status-info-tooltip">Unclaimed SEED earned by your Loft birds. Claim to send to your wallet.</span></button>
+                </div>
                 <div class="status-card-value-row">
                   <div class="status-card-seed-row">
                     <div class="status-card-value" id="dom-seed">0</div>
@@ -1844,26 +1892,36 @@
                 </div>
               </div>
               <div class="status-card">
-                <div class="status-card-label">SEED/day</div>
+                <div class="status-card-label">SEED/day
+                  <button type="button" class="status-info-btn" aria-label="Info">i<span class="status-info-tooltip">Daily SEED production based on your Loft birds, their rarity, and set bonuses.</span></button>
+                </div>
                 <div class="status-card-value" id="dom-seed-per-day">0</div>
               </div>
               <div class="status-card">
-                <div class="status-card-label">Network Share</div>
+                <div class="status-card-label">Network Share
+                  <button type="button" class="status-info-btn" aria-label="Info">i<span class="status-info-tooltip">Your share of the total network production. Higher share = more rewards.</span></button>
+                </div>
                 <div class="status-card-value" id="dom-network-share">—%</div>
               </div>
               <div class="status-card status-card-loft">
-                <div class="status-card-label">Loft Lv</div>
+                <div class="status-card-label">Loft Lv
+                  <button type="button" class="status-info-btn" aria-label="Info">i<span class="status-info-tooltip">Your Loft level. Upgrade to unlock more bird slots (2 per level).</span></button>
+                </div>
                 <div class="status-card-value-row">
                   <div class="status-card-value" id="dom-loft-level">1</div>
                   <button type="button" class="status-loft-upgrade-btn" id="status-loft-upgrade-btn">Upgrade</button>
                 </div>
               </div>
               <div class="status-card">
-                <div class="status-card-label">Epoch</div>
+                <div class="status-card-label">Epoch
+                  <button type="button" class="status-info-btn" aria-label="Info">i<span class="status-info-tooltip">Current halving epoch. Base Rate halves every 14 days. Earlier epochs earn more SEED.</span></button>
+                </div>
                 <div class="status-card-value" id="dom-epoch">1</div>
               </div>
               <div class="status-card">
-                <div class="status-card-label">Base Rate</div>
+                <div class="status-card-label">Base Rate
+                  <button type="button" class="status-info-btn" aria-label="Info">i<span class="status-info-tooltip">SEED per hour for one Common bird. Multiplied by rarity and set bonuses.</span></button>
+                </div>
                 <div class="status-card-value" id="dom-base-rate">120/h</div>
               </div>
             </div>

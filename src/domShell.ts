@@ -1680,6 +1680,18 @@ function initTabListeners(): void {
     });
   }
   farmingView.init();
+  // Info tooltip toggle (event delegation on status panel)
+  document.addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest('.status-info-btn') as HTMLElement | null;
+    // Close all open tooltips first
+    document.querySelectorAll('.status-info-btn.active').forEach((el) => {
+      if (el !== btn) el.classList.remove('active');
+    });
+    if (btn) {
+      e.stopPropagation();
+      btn.classList.toggle('active');
+    }
+  });
   const claimBtn = document.getElementById(STATUS_CLAIM_BTN_ID) as HTMLButtonElement | null;
   if (claimBtn) {
     claimBtn.addEventListener('click', () => {
